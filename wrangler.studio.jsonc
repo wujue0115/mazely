@@ -1,0 +1,8 @@
+{
+  "name": "mazely-studio",
+  "compatibility_date": "2026-07-29",
+  "assets": {
+    "directory": "./apps/studio/dist",
+    "not_found_handling": "single-page-application"
+  }
+}

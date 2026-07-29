@@ -1,0 +1,51 @@
+{
+  "name": "mazely-monorepo",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "prepare": "TSX_DISABLE_CACHE=1 tsx scripts/prepare.ts",
+    "build": "pnpm -r run build",
+    "dev": "pnpm -r --parallel run dev",
+    "lint": "eslint --cache .",
+    "lint:fix": "pnpm lint --fix",
+    "typecheck": "pnpm -r run typecheck",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ci": "pnpm build && pnpm docs:build && pnpm typecheck && pnpm lint && pnpm test && pnpm test:packages",
+    "test:packages": "node scripts/inspect-packages.mjs && node scripts/test-packages.mjs",
+    "studio:dev": "pnpm --filter @mazely/studio dev",
+    "studio:build": "pnpm --filter @mazely/studio build",
+    "studio:preview": "pnpm --filter @mazely/studio preview",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs"
+  },
+  "devDependencies": {
+    "@antfu/eslint-config": "catalog:eslint",
+    "@types/node": "catalog:types",
+    "eslint": "catalog:eslint",
+    "eslint-plugin-format": "catalog:eslint",
+    "execa": "catalog:utils",
+    "lint-staged": "catalog:utils",
+    "simple-git-hooks": "catalog:utils",
+    "tsdown": "catalog:build",
+    "tsx": "catalog:typescript",
+    "typescript": "catalog:typescript",
+    "vite": "catalog:vite",
+    "vitepress": "catalog:",
+    "vitest": "catalog:testing"
+  },
+  "simple-git-hooks": {
+    "pre-commit": "pnpm lint-staged"
+  },
+  "lint-staged": {
+    "*.{js,mjs,cjs,ts,mts,cts,tsx,json,md,yml,yaml}": [
+      "eslint --fix"
+    ]
+  }
+}

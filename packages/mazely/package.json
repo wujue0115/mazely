@@ -1,0 +1,51 @@
+{
+  "name": "mazely",
+  "type": "module",
+  "version": "0.1.0",
+  "private": false,
+  "description": "TypeScript toolkit for deterministic maze generation, solving, editing, and serialization.",
+  "license": "MIT",
+  "homepage": "https://mazely.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wujue0115/mazely.git",
+    "directory": "packages/mazely"
+  },
+  "bugs": {
+    "url": "https://github.com/wujue0115/mazely/issues"
+  },
+  "keywords": [
+    "maze",
+    "maze-generator",
+    "maze-solver",
+    "maze-generation",
+    "maze-solving",
+    "maze-algorithms",
+    "pathfinding",
+    "procedural-generation",
+    "maze-editor",
+    "grid",
+    "typescript",
+    "seeded-random"
+  ],
+  "sideEffects": false,
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./package.json": "./package.json"
+  },
+  "types": "./dist/index.d.mts",
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@mazely/core": "workspace:*"
+  }
+}

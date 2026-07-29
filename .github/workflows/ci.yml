@@ -1,0 +1,234 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  merge_group:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      docs: ${{ steps.filter.outputs.docs }}
+      packages: ${{ steps.filter.outputs.packages }}
+      studio: ${{ steps.filter.outputs.studio }}
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Detect affected projects
+        id: filter
+        shell: bash
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          MERGE_GROUP_BASE_SHA: ${{ github.event.merge_group.base_sha }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+
+          case "$GITHUB_EVENT_NAME" in
+            pull_request)
+              BASE_SHA="$PR_BASE_SHA"
+              ;;
+            merge_group)
+              BASE_SHA="$MERGE_GROUP_BASE_SHA"
+              ;;
+            push)
+              BASE_SHA="$BEFORE_SHA"
+              ;;
+            *)
+              echo "::error::Unsupported event: $GITHUB_EVENT_NAME"
+              exit 1
+              ;;
+          esac
+
+          DOCS=false
+          PACKAGES=false
+          STUDIO=false
+
+          if [[ -z "$BASE_SHA" || "$BASE_SHA" =~ ^0+$ ]]; then
+            DOCS=true
+            PACKAGES=true
+            STUDIO=true
+          else
+            while IFS= read -r FILE; do
+              case "$FILE" in
+                docs/*|packages/mazely/package.json|package.json|pnpm-lock.yaml|pnpm-workspace.yaml|.node-version|scripts/prepare.ts|.github/workflows/ci.yml)
+                  DOCS=true
+                  ;;
+              esac
+
+              case "$FILE" in
+                packages/core/*|packages/mazely/*|CHANGELOG.md|package.json|pnpm-lock.yaml|pnpm-workspace.yaml|tsconfig.json|scripts/changelog.mjs|scripts/inspect-packages.mjs|scripts/prepare.ts|scripts/publish-packages.mjs|scripts/test-packages.mjs|.node-version|.github/workflows/ci.yml|.github/workflows/release.yml)
+                  PACKAGES=true
+                  ;;
+              esac
+
+              case "$FILE" in
+                apps/studio/*|packages/core/*|packages/mazely/*|package.json|pnpm-lock.yaml|pnpm-workspace.yaml|tsconfig.json|vitest.config.ts|scripts/prepare.ts|.node-version|.github/workflows/ci.yml)
+                  STUDIO=true
+                  ;;
+              esac
+            done < <(git diff --name-only "$BASE_SHA" "$GITHUB_SHA")
+          fi
+
+          {
+            echo "docs=$DOCS"
+            echo "packages=$PACKAGES"
+            echo "studio=$STUDIO"
+          } >> "$GITHUB_OUTPUT"
+
+  quality:
+    name: Quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Test
+        run: pnpm test
+
+  packages:
+    name: Packages CI
+    needs: changes
+    if: needs.changes.outputs.packages == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm --filter @mazely/core --filter mazely build
+
+      - name: Test packaged installation
+        run: pnpm test:packages
+
+  docs:
+    name: Docs CI
+    needs: changes
+    if: needs.changes.outputs.docs == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Docs
+        run: pnpm docs:build
+
+  studio:
+    name: Studio CI
+    needs: changes
+    if: needs.changes.outputs.studio == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck Studio
+        run: pnpm --filter @mazely/studio typecheck
+
+      - name: Test Studio
+        run: pnpm exec vitest run apps/studio/test
+
+      - name: Build Studio
+        run: pnpm studio:build
+
+  gate:
+    name: CI Gate
+    needs: [changes, quality, packages, docs, studio]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Require successful checks
+        shell: bash
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          DOCS_RESULT: ${{ needs.docs.result }}
+          PACKAGES_RESULT: ${{ needs.packages.result }}
+          QUALITY_RESULT: ${{ needs.quality.result }}
+          STUDIO_RESULT: ${{ needs.studio.result }}
+        run: |
+          set -euo pipefail
+
+          test "$CHANGES_RESULT" = "success"
+          test "$QUALITY_RESULT" = "success"
+
+          for RESULT in "$DOCS_RESULT" "$PACKAGES_RESULT" "$STUDIO_RESULT"; do
+            if [[ "$RESULT" != "success" && "$RESULT" != "skipped" ]]; then
+              echo "::error::A required CI job ended with status: $RESULT"
+              exit 1
+            fi
+          done

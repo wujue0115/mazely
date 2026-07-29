@@ -1,0 +1,13 @@
+node_modules
+.pnpm-store
+
+dist
+coverage
+.vite
+docs/.vitepress/cache
+docs/.vitepress/dist
+
+.eslintcache
+*.tsbuildinfo
+
+.DS_Store

@@ -1,0 +1,697 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mazely Studio</title>
+    <link rel="icon" href="/favicon.png" type="image/png" />
+    <link rel="stylesheet" href="./src/style.css" />
+  </head>
+  <body>
+    <div id="canvas-wrap" class="canvas-stage" aria-label="Maze workspace">
+      <canvas id="maze-canvas" aria-label="Maze canvas"></canvas>
+    </div>
+
+    <header
+      id="top-nav"
+      class="top-nav"
+      aria-label="Mazely Studio"
+      role="button"
+      tabindex="0"
+      aria-expanded="false"
+      title="Expand Mazely Studio header"
+    >
+      <span class="top-nav-brand">
+        <img class="top-nav-logo" src="/logo.svg" alt="" aria-hidden="true" />
+        <span>Mazely Studio</span>
+      </span>
+      <span class="top-nav-sep" aria-hidden="true"></span>
+      <span id="package-version" class="top-nav-version">v0.1.0</span>
+      <a
+        class="top-nav-github"
+        href="https://github.com/wujue0115/mazely"
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="View Mazely on GitHub"
+        title="View Mazely on GitHub"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path
+            d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"
+          ></path>
+        </svg>
+      </a>
+    </header>
+
+    <div class="view-toggle" role="group" aria-label="View mode">
+      <button id="view-2d-btn" class="view-toggle-btn is-active" type="button">2D</button>
+      <button
+        id="view-3d-btn"
+        class="view-toggle-btn"
+        type="button"
+        title="Drag to rotate, scroll to zoom, WASD / arrow keys to move"
+      >
+        3D
+      </button>
+      <span class="view-toggle-indicator" aria-hidden="true"></span>
+    </div>
+
+    <nav class="panel-rail" aria-label="Panels">
+      <button id="rail-workbench-btn" class="rail-btn is-active" type="button" title="Maze" aria-label="Maze">
+        <span class="icon icon-grid-view" aria-hidden="true"></span>
+      </button>
+      <span class="rail-sep" aria-hidden="true"></span>
+      <button id="rail-themes-btn" class="rail-btn" type="button" title="Appearance" aria-label="Appearance">
+        <span class="icon icon-palette" aria-hidden="true"></span>
+      </button>
+      <span class="rail-sep" aria-hidden="true"></span>
+      <button
+        id="panel-collapse-btn"
+        class="rail-btn rail-collapse-btn"
+        type="button"
+        title="Collapse panel"
+        aria-label="Collapse panel"
+        aria-expanded="true"
+      >
+        <span class="icon icon-expand-more" aria-hidden="true"></span>
+      </button>
+    </nav>
+
+    <div class="control-bar" aria-label="Playback controls">
+      <div class="bar-cluster playback-cluster">
+        <button id="focus-view-btn" class="bar-btn" type="button" title="Focus maze" aria-label="Focus maze">
+          <span class="icon icon-focus" aria-hidden="true"></span>
+        </button>
+        <button id="reset-btn" class="bar-btn" type="button" title="Reset" aria-label="Reset">
+          <span class="icon icon-renew" aria-hidden="true"></span>
+        </button>
+        <button id="step-btn" class="bar-btn" type="button" title="Step" aria-label="Step">
+          <span class="icon icon-step" aria-hidden="true"></span>
+        </button>
+        <button id="run-btn" class="bar-btn bar-btn-primary" type="button" title="Run" aria-label="Run">
+          <span class="icon icon-play run-icon-play" aria-hidden="true"></span>
+          <span class="icon icon-pause run-icon-pause" aria-hidden="true"></span>
+        </button>
+      </div>
+
+      <div class="dock-details">
+        <div class="dock-details-inner">
+          <div class="speed-cluster">
+            <div class="speed-cluster-head">
+              <label class="micro-label" for="speed-range">Speed</label>
+              <span id="speed-label" class="readout">20 ms / step</span>
+            </div>
+            <input id="speed-range" type="range" min="1" max="3000" step="1" value="20" />
+          </div>
+
+          <div class="bar-cluster stats-cluster" aria-label="System status">
+            <div class="stat stat-state">
+              <span class="micro-label">State</span>
+              <strong id="status-text" class="readout readout-accent">idle</strong>
+            </div>
+            <div class="stat">
+              <span class="micro-label">Visited</span>
+              <strong id="stat-visited" class="readout">0</strong>
+            </div>
+            <div class="stat">
+              <span class="micro-label">Path</span>
+              <strong id="stat-path" class="readout">0</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <button
+        id="play-dock-toggle"
+        class="bar-btn dock-toggle-btn"
+        type="button"
+        title="Collapse playback dock"
+        aria-label="Collapse playback dock"
+        aria-expanded="true"
+      >
+        <span class="icon icon-expand-more" aria-hidden="true"></span>
+      </button>
+    </div>
+
+    <aside id="workbench-panel" class="side-panel" aria-label="Maze">
+      <header class="side-panel-header">
+        <h2>Maze</h2>
+      </header>
+
+      <nav class="panel-tabs" aria-label="Panel modes">
+        <button id="tab-generate" class="panel-tab is-active" type="button">Generate</button>
+        <button id="tab-solve" class="panel-tab" type="button">Solve</button>
+        <button id="tab-edit" class="panel-tab" type="button">Edit</button>
+      </nav>
+
+      <div class="side-panel-body">
+        <section id="tab-panel-generate" class="tab-panel is-active" aria-label="Generate settings">
+          <section class="field-group">
+            <label class="micro-label" for="generation-algorithm">Algorithm</label>
+            <select id="generation-algorithm">
+              <option value="aldous-broder">Aldous-Broder</option>
+              <option value="binary-tree">Binary Tree</option>
+              <option value="eller">Eller's</option>
+              <option value="growing-tree">Growing Tree</option>
+              <option value="hunt-and-kill">Hunt-and-Kill</option>
+              <option value="traversal">Random Traversal</option>
+              <option value="kruskal">Randomized Kruskal</option>
+              <option value="prim">Randomized Prim</option>
+              <option value="dfs" selected>Recursive Backtracker</option>
+              <option value="recursive-division">Recursive Division</option>
+              <option value="sidewinder">Sidewinder</option>
+              <option value="wilson">Wilson's</option>
+            </select>
+          </section>
+
+          <section class="field-group">
+            <div class="field-head">
+              <span class="micro-label">Grid Geometry</span>
+              <label class="micro-check" for="use-viewport-ratio">
+                <input id="use-viewport-ratio" type="checkbox" />
+                <span>Viewport ratio</span>
+              </label>
+            </div>
+            <div id="dimension-grid" class="dimension-grid">
+              <label id="maze-width-field" class="dimension-field" for="maze-width">
+                <span id="maze-width-label" class="micro-label">Width</span>
+                <input id="maze-width" type="number" min="1" max="500" step="1" value="20" />
+              </label>
+              <label class="link-toggle" for="lock-grid-ratio" title="Lock aspect ratio">
+                <input id="lock-grid-ratio" type="checkbox" />
+                <span class="icon icon-unlock" aria-hidden="true"></span>
+              </label>
+              <label id="maze-height-field" class="dimension-field" for="maze-height">
+                <span class="micro-label">Height</span>
+                <input id="maze-height" type="number" min="1" max="500" step="1" value="20" />
+              </label>
+            </div>
+          </section>
+
+          <div class="info-card">
+            <span class="icon icon-info" aria-hidden="true"></span>
+            <span>Automatic start point selection</span>
+          </div>
+
+          <section class="field-group shape-group" aria-label="Image shape">
+            <span class="micro-label">Image Shape</span>
+            <button id="shape-upload-btn" class="wide-btn" type="button">
+              <span class="icon icon-upload" aria-hidden="true"></span>
+              Upload image
+            </button>
+            <div class="shape-actions">
+              <button id="shape-edit-btn" class="mini-btn is-hidden" type="button">Edit shape</button>
+              <button id="shape-clear-btn" class="mini-btn is-hidden" type="button">Clear</button>
+            </div>
+            <div class="shape-foot">
+              <p id="shape-status" class="shape-status">Full rectangle — upload an image to shape the maze.</p>
+              <label class="micro-check shape-colors-toggle is-hidden" for="shape-colors-visible">
+                <span>Show colors</span>
+                <input id="shape-colors-visible" type="checkbox" checked />
+              </label>
+            </div>
+            <input id="shape-file-input" type="file" accept="image/*" class="sr-only" tabindex="-1" />
+          </section>
+        </section>
+
+        <section id="tab-panel-solve" class="tab-panel" aria-label="Solve settings">
+          <section class="field-group">
+            <label class="micro-label" for="solving-algorithm">Algorithm</label>
+            <select id="solving-algorithm">
+              <option value="a-star">A* Search</option>
+              <option value="bfs">Breadth-First Search</option>
+              <option value="dfs">Depth-First Search</option>
+              <option value="flood">Flood Fill</option>
+              <option value="best-first">Greedy Best-First Search</option>
+            </select>
+          </section>
+
+          <section class="field-group">
+            <span id="solve-points-label" class="micro-label">Start / End Points</span>
+            <div class="info-card info-card-block">
+              <div id="solve-points-info" class="info-card-row">
+                <span class="icon icon-info" aria-hidden="true"></span>
+                <span>Automatic detection: max distance</span>
+              </div>
+              <div id="solve-points-grid" class="maze-points-grid">
+                <div class="maze-point">
+                  <span class="maze-point-dot maze-point-dot-start" aria-hidden="true"></span>
+                  <div class="maze-point-text">
+                    <span class="micro-label">Start</span>
+                    <code id="solve-start-readout" class="readout">0, 0</code>
+                  </div>
+                </div>
+                <div id="solve-end-point" class="maze-point">
+                  <span class="maze-point-dot maze-point-dot-end" aria-hidden="true"></span>
+                  <div class="maze-point-text">
+                    <span class="micro-label">End</span>
+                    <code id="solve-end-readout" class="readout">0, 0</code>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+        </section>
+
+        <section id="tab-panel-edit" class="tab-panel" aria-label="Edit settings">
+          <section class="field-group">
+            <span class="micro-label">Brush</span>
+            <div class="tab-nav edit-tool-grid animated-tool-nav" role="group" aria-label="Maze edit tool">
+              <button id="edit-tool-pan" class="tab-btn tool-tab-btn is-active" type="button" aria-pressed="true">
+                <span class="icon icon-pan" aria-hidden="true"></span>
+                View
+              </button>
+              <button id="edit-tool-edge" class="tab-btn tool-tab-btn" type="button" aria-pressed="false">
+                <span class="icon icon-wall" aria-hidden="true"></span>
+                Wall
+              </button>
+              <button id="edit-tool-start" class="tab-btn tool-tab-btn" type="button" aria-pressed="false">
+                <span class="maze-point-dot maze-point-dot-start" aria-hidden="true"></span>
+                Start
+              </button>
+              <button id="edit-tool-end" class="tab-btn tool-tab-btn" type="button" aria-pressed="false">
+                <span class="maze-point-dot maze-point-dot-end" aria-hidden="true"></span>
+                End
+              </button>
+              <span class="tool-tab-indicator" aria-hidden="true"></span>
+            </div>
+          </section>
+
+          <section class="field-group">
+            <span class="micro-label">Maze Actions</span>
+            <div class="edit-actions">
+              <div class="edit-action-grid">
+                <button id="edit-open-all-btn" class="mini-btn" type="button">
+                  <span class="icon icon-open-all" aria-hidden="true"></span>
+                  Open all
+                </button>
+                <button id="edit-close-all-btn" class="mini-btn" type="button">
+                  <span class="icon icon-close-all" aria-hidden="true"></span>
+                  Close all
+                </button>
+              </div>
+              <button id="edit-clear-solve-btn" class="wide-btn" type="button">
+                <span class="icon icon-clear-solve" aria-hidden="true"></span>
+                Clear solve state
+              </button>
+            </div>
+          </section>
+
+          <div class="info-card info-card-block">
+            <div class="info-card-row">
+              <span class="icon icon-info" aria-hidden="true"></span>
+              <span>2D pointer editing</span>
+            </div>
+            <div class="maze-points-grid">
+              <div class="maze-point">
+                <span class="maze-point-dot maze-point-dot-start" aria-hidden="true"></span>
+                <div class="maze-point-text">
+                  <span class="micro-label">Start</span>
+                  <code id="edit-start-readout" class="readout">0, 0</code>
+                </div>
+              </div>
+              <div class="maze-point">
+                <span class="maze-point-dot maze-point-dot-end" aria-hidden="true"></span>
+                <div class="maze-point-text">
+                  <span class="micro-label">End</span>
+                  <code id="edit-end-readout" class="readout">0, 0</code>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <footer class="side-panel-footer">
+        <button id="save-maze-btn" class="cta-btn" type="button" title="Save maze file">
+          <span class="icon icon-download" aria-hidden="true"></span>
+          Save
+        </button>
+        <div class="footer-action-grid">
+          <button id="load-maze-btn" class="wide-btn" type="button" title="Open maze file">
+            <span class="icon icon-upload" aria-hidden="true"></span>
+            Open
+          </button>
+          <button id="export-svg-btn" class="wide-btn" type="button" title="Export SVG">
+            <span class="icon icon-export" aria-hidden="true"></span>
+            SVG
+          </button>
+        </div>
+        <input
+          id="load-maze-input"
+          type="file"
+          accept=".maze,application/vnd.mazely.maze"
+          class="sr-only"
+          tabindex="-1"
+        />
+      </footer>
+    </aside>
+
+    <aside id="themes-panel" class="side-panel is-closed" aria-label="Appearance">
+      <header class="side-panel-header">
+        <h2>Appearance</h2>
+      </header>
+
+      <div class="side-panel-body">
+        <section class="field-group">
+          <span class="micro-label">Maze Elements</span>
+          <div class="swatch-list">
+            <div class="swatch-row" data-style-key="grid">
+              <button
+                class="visibility-btn"
+                type="button"
+                data-style-visible="grid"
+                title="Toggle grid visibility"
+                aria-label="Toggle grid visibility"
+              >
+                <span class="icon icon-eye" aria-hidden="true"></span>
+              </button>
+              <input id="style-grid" type="color" value="#b8c2c7" />
+              <label class="swatch-name" for="style-grid">Grid</label>
+              <code class="swatch-hex" data-style-hex="grid">#b8c2c7</code>
+            </div>
+            <div class="swatch-row" data-style-key="wall">
+              <button
+                class="visibility-btn is-visible"
+                type="button"
+                data-style-visible="wall"
+                title="Toggle wall visibility"
+                aria-label="Toggle wall visibility"
+              >
+                <span class="icon icon-eye" aria-hidden="true"></span>
+              </button>
+              <input id="style-wall" type="color" value="#767575" />
+              <label class="swatch-name" for="style-wall">Wall</label>
+              <code class="swatch-hex" data-style-hex="wall">#767575</code>
+            </div>
+            <div class="swatch-row" data-style-key="cell">
+              <button
+                class="visibility-btn is-visible"
+                type="button"
+                data-style-visible="cell"
+                title="Toggle cell visibility"
+                aria-label="Toggle cell visibility"
+              >
+                <span class="icon icon-eye" aria-hidden="true"></span>
+              </button>
+              <input id="style-cell" type="color" value="#0e0e0e" />
+              <label class="swatch-name" for="style-cell">Cell</label>
+              <code class="swatch-hex" data-style-hex="cell">#0e0e0e</code>
+            </div>
+            <div class="swatch-row" data-style-key="unlinkedCell">
+              <button
+                class="visibility-btn is-visible"
+                type="button"
+                data-style-visible="unlinkedCell"
+                title="Toggle unlink cell visibility"
+                aria-label="Toggle unlink cell visibility"
+              >
+                <span class="icon icon-eye" aria-hidden="true"></span>
+              </button>
+              <input id="style-unlinked-cell" type="color" value="#767575" />
+              <label class="swatch-name" for="style-unlinked-cell">Unlink Cell</label>
+              <code class="swatch-hex" data-style-hex="unlinkedCell">#767575</code>
+            </div>
+            <div class="swatch-row" data-style-key="visit">
+              <button
+                class="visibility-btn is-visible"
+                type="button"
+                data-style-visible="visit"
+                title="Toggle visit visibility"
+                aria-label="Toggle visit visibility"
+              >
+                <span class="icon icon-eye" aria-hidden="true"></span>
+              </button>
+              <input id="style-visit" type="color" value="#264054" />
+              <label class="swatch-name" for="style-visit">Visit</label>
+              <code class="swatch-hex" data-style-hex="visit">#264054</code>
+            </div>
+            <div class="swatch-row" data-style-key="path">
+              <button
+                class="visibility-btn is-visible"
+                type="button"
+                data-style-visible="path"
+                title="Toggle path visibility"
+                aria-label="Toggle path visibility"
+              >
+                <span class="icon icon-eye" aria-hidden="true"></span>
+              </button>
+              <input id="style-path" type="color" value="#8ff5ff" />
+              <label class="swatch-name" for="style-path">Path</label>
+              <code class="swatch-hex" data-style-hex="path">#8ff5ff</code>
+            </div>
+            <div class="swatch-row" data-style-key="subPath">
+              <button
+                class="visibility-btn is-visible"
+                type="button"
+                data-style-visible="subPath"
+                title="Toggle sub path visibility"
+                aria-label="Toggle sub path visibility"
+              >
+                <span class="icon icon-eye" aria-hidden="true"></span>
+              </button>
+              <input id="style-sub-path" type="color" value="#181818" />
+              <label class="swatch-name" for="style-sub-path">Sub Path</label>
+              <code class="swatch-hex" data-style-hex="subPath">#181818</code>
+            </div>
+            <div class="swatch-row" data-style-key="head">
+              <button
+                class="visibility-btn is-visible"
+                type="button"
+                data-style-visible="head"
+                title="Toggle head visibility"
+                aria-label="Toggle head visibility"
+              >
+                <span class="icon icon-eye" aria-hidden="true"></span>
+              </button>
+              <input id="style-head" type="color" value="#00deec" />
+              <label class="swatch-name" for="style-head">Head</label>
+              <code class="swatch-hex" data-style-hex="head">#00deec</code>
+            </div>
+            <div class="swatch-row" data-style-key="frontier">
+              <button
+                class="visibility-btn is-visible"
+                type="button"
+                data-style-visible="frontier"
+                title="Toggle frontier visibility"
+                aria-label="Toggle frontier visibility"
+              >
+                <span class="icon icon-eye" aria-hidden="true"></span>
+              </button>
+              <input id="style-frontier" type="color" value="#6798a2" />
+              <label class="swatch-name" for="style-frontier">Frontier</label>
+              <code class="swatch-hex" data-style-hex="frontier">#6798a2</code>
+            </div>
+            <div class="swatch-row" data-style-key="start">
+              <button
+                class="visibility-btn is-visible"
+                type="button"
+                data-style-visible="start"
+                title="Toggle start visibility"
+                aria-label="Toggle start visibility"
+              >
+                <span class="icon icon-eye" aria-hidden="true"></span>
+              </button>
+              <input id="style-start" type="color" value="#5df0c0" />
+              <label class="swatch-name" for="style-start">Start</label>
+              <code class="swatch-hex" data-style-hex="start">#5df0c0</code>
+            </div>
+            <div class="swatch-row" data-style-key="end">
+              <button
+                class="visibility-btn is-visible"
+                type="button"
+                data-style-visible="end"
+                title="Toggle end visibility"
+                aria-label="Toggle end visibility"
+              >
+                <span class="icon icon-eye" aria-hidden="true"></span>
+              </button>
+              <input id="style-end" type="color" value="#ffa1d4" />
+              <label class="swatch-name" for="style-end">End</label>
+              <code class="swatch-hex" data-style-hex="end">#ffa1d4</code>
+            </div>
+          </div>
+        </section>
+
+        <section id="flood-theme-field" class="field-group is-hidden">
+          <label class="micro-label" for="flood-theme-select">Flood Theme</label>
+          <select id="flood-theme-select">
+            <option value="pccs-pale">PCCS Pale</option>
+            <option value="pccs-pale+">PCCS Pale+</option>
+            <option value="pccs-light">PCCS Light</option>
+            <option value="pccs-light+">PCCS Light+</option>
+            <option value="pccs-bright" selected>PCCS Bright</option>
+            <option value="pccs-light-grayish">PCCS Light Grayish</option>
+            <option value="pccs-soft">PCCS Soft</option>
+            <option value="pccs-strong">PCCS Strong</option>
+            <option value="pccs-vivid">PCCS Vivid</option>
+            <option value="pccs-grayish">PCCS Grayish</option>
+            <option value="pccs-dull">PCCS Dull</option>
+            <option value="pccs-deep">PCCS Deep</option>
+            <option value="pccs-dark">PCCS Dark</option>
+            <option value="pccs-dark-grayish">PCCS Dark Grayish</option>
+            <option value="gray">Gray</option>
+          </select>
+        </section>
+
+        <section class="field-group">
+          <span class="micro-label">Engine Props</span>
+          <div class="slider-field">
+            <div class="field-head">
+              <label class="slider-name" for="wall-range">Wall Thickness</label>
+              <span id="wall-label" class="readout">2.0 px</span>
+            </div>
+            <input id="wall-range" type="range" min="1" max="8" step="0.1" value="2" />
+          </div>
+          <div id="wall-height-field" class="slider-field is-hidden">
+            <div class="field-head">
+              <label class="slider-name" for="wall-height-range">3D Wall Height</label>
+              <span id="wall-height-label" class="readout">14 px</span>
+            </div>
+            <input id="wall-height-range" type="range" min="0" max="60" step="1" value="14" />
+          </div>
+        </section>
+      </div>
+
+      <footer class="side-panel-footer">
+        <button id="style-reset-btn" class="ghost-btn" type="button">
+          <span class="icon icon-renew" aria-hidden="true"></span>
+          Reset Theme
+        </button>
+      </footer>
+    </aside>
+
+    <div id="shape-editor" class="shape-editor is-hidden" role="dialog" aria-modal="true" aria-label="Shape studio">
+      <div id="shape-editor-backdrop" class="shape-editor-backdrop"></div>
+      <div class="shape-editor-window">
+        <header class="shape-editor-header">
+          <span class="shape-editor-brand">SHAPE STUDIO</span>
+          <span id="shape-editor-meta" class="shape-editor-meta"></span>
+          <button
+            id="shape-zoom-chip"
+            class="shape-zoom-chip"
+            type="button"
+            title="Reset view (scroll or pinch to zoom; drag in View mode to pan)"
+          >
+            100%
+          </button>
+          <button id="shape-editor-close" class="shape-editor-close" type="button" title="Close" aria-label="Close">
+            ✕
+          </button>
+        </header>
+
+        <div class="shape-editor-main">
+          <div id="shape-editor-stage" class="shape-editor-stage">
+            <canvas id="shape-editor-canvas"></canvas>
+          </div>
+
+          <aside class="shape-editor-side">
+            <section class="shape-editor-group">
+              <h2>BACKGROUND REMOVAL</h2>
+              <p id="shape-alpha-note" class="shape-note is-hidden">
+                Alpha channel detected — transparency defines the shape.
+              </p>
+              <div id="shape-threshold-field">
+                <label class="range-label" for="shape-threshold-range">COLOR THRESHOLD</label>
+                <input id="shape-threshold-range" type="range" min="0" max="120" step="1" value="32" />
+                <p id="shape-threshold-label" class="speed-label">32</p>
+              </div>
+            </section>
+
+            <section class="shape-editor-group">
+              <h2>TOOLS</h2>
+              <div class="tab-nav shape-brush-nav animated-tool-nav">
+                <button id="shape-tool-view" class="tab-btn tool-tab-btn" type="button">
+                  <span class="icon icon-pan" aria-hidden="true"></span>
+                  View
+                </button>
+                <button id="shape-brush-keep" class="tab-btn tool-tab-btn is-active" type="button">
+                  <span class="icon icon-check" aria-hidden="true"></span>
+                  Keep
+                </button>
+                <button id="shape-brush-remove" class="tab-btn tool-tab-btn" type="button">
+                  <span class="icon icon-close" aria-hidden="true"></span>
+                  Remove
+                </button>
+                <button id="shape-tool-wand" class="tab-btn tool-tab-btn" type="button">
+                  <span class="icon icon-wand" aria-hidden="true"></span>
+                  Wand
+                </button>
+                <span class="tool-tab-indicator" aria-hidden="true"></span>
+              </div>
+              <div id="shape-brush-field">
+                <label class="range-label" for="shape-brush-range">BRUSH SIZE (CELLS)</label>
+                <input id="shape-brush-range" type="range" min="1" max="10" step="1" value="1" />
+                <p id="shape-brush-label" class="speed-label">1 × 1 cells</p>
+              </div>
+              <div id="shape-wand-field" class="is-hidden">
+                <label class="range-label" for="shape-wand-range">COLOR SIMILARITY</label>
+                <input id="shape-wand-range" type="range" min="0" max="120" step="1" value="32" />
+                <p id="shape-wand-label" class="speed-label">32</p>
+                <p class="shape-note">Click a cell to remove connected similar-colored cells.</p>
+              </div>
+              <div class="shape-editor-actions">
+                <button id="shape-select-all-btn" class="mini-btn" type="button">
+                  <span class="icon icon-select-all" aria-hidden="true"></span>
+                  Select all
+                </button>
+                <button id="shape-invert-btn" class="mini-btn" type="button">
+                  <span class="icon icon-invert" aria-hidden="true"></span>
+                  Invert
+                </button>
+                <button id="shape-reset-btn" class="mini-btn" type="button">
+                  <span class="icon icon-renew" aria-hidden="true"></span>
+                  Reset
+                </button>
+              </div>
+              <div class="shape-editor-actions">
+                <button id="shape-undo-btn" class="mini-btn" type="button" disabled>
+                  <span class="icon icon-undo" aria-hidden="true"></span>
+                  Undo
+                </button>
+                <button id="shape-redo-btn" class="mini-btn" type="button" disabled>
+                  <span class="icon icon-redo" aria-hidden="true"></span>
+                  Redo
+                </button>
+              </div>
+            </section>
+
+            <section class="shape-editor-group">
+              <h2>SOURCE</h2>
+              <button id="shape-replace-btn" class="mini-btn" type="button">
+                <span class="icon icon-upload" aria-hidden="true"></span>
+                Replace image
+              </button>
+            </section>
+
+            <section class="shape-editor-group">
+              <h2>MAZE GRID</h2>
+              <label class="dimension-field" for="shape-cols-input">
+                <span class="field-label">WIDTH (CELLS)</span>
+                <input id="shape-cols-input" type="number" min="4" max="500" step="1" value="60" />
+              </label>
+              <p id="shape-grid-label" class="speed-label"></p>
+            </section>
+          </aside>
+        </div>
+
+        <footer class="shape-editor-footer">
+          <div class="shape-editor-stats">
+            <span class="shape-stat">CELLS <b id="shape-stat-cells">0</b></span>
+            <span class="shape-stat">REGIONS <b id="shape-stat-regions">0</b></span>
+            <span id="shape-connectivity" class="shape-connectivity"></span>
+          </div>
+          <div class="shape-editor-footer-actions">
+            <button id="shape-keep-largest-btn" class="mini-btn is-hidden" type="button">Keep largest region</button>
+            <button id="shape-cancel-btn" class="mini-btn" type="button">Cancel</button>
+            <button id="shape-apply-btn" class="shape-apply-btn" type="button" disabled>Apply shape</button>
+          </div>
+        </footer>
+      </div>
+    </div>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>
