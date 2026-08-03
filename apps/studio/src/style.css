@@ -2242,7 +2242,7 @@ input[type='checkbox'].switch:checked::before {
 
   .top-nav.is-expanded {
     top: 16px;
-    width: min(256px, calc(100vw - 32px));
+    width: min(268px, calc(100vw - 32px));
     height: 43px;
     gap: var(--ui-gap-md);
     padding: var(--ui-pad-xs) var(--ui-pad-md);
@@ -2260,7 +2260,8 @@ input[type='checkbox'].switch:checked::before {
   }
 
   .top-nav.is-expanded .top-nav-brand {
-    max-width: 148px;
+    max-width: none;
+    flex-shrink: 0;
   }
 
   .top-nav.is-expanded .top-nav-sep {

@@ -68,8 +68,8 @@ main
 → studio.mazely.dev
 ```
 
-The deployed Studio displays the current `packages/mazely/package.json` version
-as `vX.Y.Z`.
+The deployed Studio displays its current `apps/studio/package.json` version as
+`vX.Y.Z`. Studio versions may advance independently from the npm packages.
 
 ## Package Release Flow
 

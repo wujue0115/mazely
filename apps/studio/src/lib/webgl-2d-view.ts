@@ -107,6 +107,7 @@ export class Webgl2dMazeView {
   private readonly startMesh = new THREE.Mesh(this.discGeometry, this.startMaterial)
   private readonly endMesh = new THREE.Mesh(this.discGeometry, this.endMaterial)
   private cellRuntime: Maze | null = null
+  private wallRuntime: Maze | null = null
   private lastWallKey = ''
   private lastCellKey = ''
   private lastOverlayKey = ''
@@ -302,9 +303,10 @@ export class Webgl2dMazeView {
       state.runtime.grid.rows,
       state.runtime.grid.cols,
     ].join('|')
-    if (this.lastWallKey === wallKey) {
+    if (this.wallRuntime === state.runtime && this.lastWallKey === wallKey) {
       return
     }
+    this.wallRuntime = state.runtime
     this.lastWallKey = wallKey
 
     const mesh = this.wallMesh!
