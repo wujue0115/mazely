@@ -1,6 +1,6 @@
 import type { StyleKey } from './lib/types'
 import { MAZELY_DEFAULTS } from 'mazely'
-import { version as mazelyVersion } from '../../../packages/mazely/package.json'
+import { version as studioVersion } from '../package.json'
 import {
   getGenerationAlgorithm,
   getPointMarkerVisibility,
@@ -122,7 +122,7 @@ import '@fontsource/inter/700.css'
 import '@fontsource/jetbrains-mono/500.css'
 import '@fontsource/jetbrains-mono/700.css'
 
-packageVersion.textContent = `v${mazelyVersion}`
+packageVersion.textContent = `v${studioVersion}`
 
 generationSelect.value = MAZELY_DEFAULTS.generationAlgorithm
 solvingSelect.value = MAZELY_DEFAULTS.solvingAlgorithm
