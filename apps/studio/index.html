@@ -3,9 +3,82 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Mazely Studio</title>
+    <title>Mazely Studio — Free Online Maze Generator</title>
+    <meta
+      name="description"
+      content="Generate, solve, edit, visualize, and export mazes in your browser with multiple algorithms, custom image shapes, and interactive 2D and 3D views."
+    />
+    <meta name="application-name" content="Mazely Studio" />
+    <meta name="author" content="Wujue" />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+    <meta name="theme-color" content="#111317" />
+    <link rel="canonical" href="https://studio.mazely.dev/" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Mazely" />
+    <meta property="og:title" content="Mazely Studio — Free Online Maze Generator" />
+    <meta
+      property="og:description"
+      content="Generate, solve, edit, visualize, and export mazes with multiple algorithms and interactive 2D and 3D views."
+    />
+    <meta property="og:url" content="https://studio.mazely.dev/" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:image" content="https://studio.mazely.dev/og-image.png" />
+    <meta property="og:image:secure_url" content="https://studio.mazely.dev/og-image.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Mazely cyan maze logo on a dark background" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@wujue0115" />
+    <meta name="twitter:creator" content="@wujue0115" />
+    <meta name="twitter:title" content="Mazely Studio — Free Online Maze Generator" />
+    <meta
+      name="twitter:description"
+      content="Generate, solve, edit, visualize, and export mazes with multiple algorithms and interactive 2D and 3D views."
+    />
+    <meta name="twitter:image" content="https://studio.mazely.dev/og-image.png" />
+    <meta name="twitter:image:alt" content="Mazely cyan maze logo on a dark background" />
+
     <link rel="icon" href="/favicon.png" type="image/png" />
+    <link rel="apple-touch-icon" href="/favicon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
     <link rel="stylesheet" href="./src/style.css" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "@id": "https://studio.mazely.dev/#application",
+        "name": "Mazely Studio",
+        "url": "https://studio.mazely.dev/",
+        "description": "A free browser-based tool for generating, solving, editing, visualizing, and exporting mazes.",
+        "image": "https://studio.mazely.dev/og-image.png",
+        "applicationCategory": "DesignApplication",
+        "operatingSystem": "Any",
+        "browserRequirements": "Requires JavaScript and a modern web browser.",
+        "inLanguage": "en-US",
+        "isAccessibleForFree": true,
+        "sameAs": "https://github.com/wujue0115/mazely",
+        "author": {
+          "@type": "Person",
+          "name": "Wujue",
+          "url": "https://github.com/wujue0115"
+        },
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        },
+        "featureList": [
+          "Twelve maze generation algorithms",
+          "Five maze solving algorithms",
+          "Interactive 2D and 3D visualization",
+          "Custom image-shaped mazes",
+          "Maze file and SVG export"
+        ]
+      }
+    </script>
   </head>
   <body>
     <div id="canvas-wrap" class="canvas-stage" aria-label="Maze workspace">
@@ -21,10 +94,10 @@
       aria-expanded="false"
       title="Expand Mazely Studio header"
     >
-      <span class="top-nav-brand">
+      <h1 class="top-nav-brand">
         <img class="top-nav-logo" src="/logo.svg" alt="" aria-hidden="true" />
         <span>Mazely Studio</span>
-      </span>
+      </h1>
       <span class="top-nav-sep" aria-hidden="true"></span>
       <span id="package-version" class="top-nav-version">v0.1.0</span>
       <a
@@ -691,6 +764,10 @@
     </div>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <noscript>
+      Mazely Studio requires JavaScript to generate, solve, edit, visualize, and export mazes in your browser.
+    </noscript>
 
     <script type="module" src="./src/main.ts"></script>
   </body>
