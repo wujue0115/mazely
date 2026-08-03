@@ -1,0 +1,18 @@
+{
+  "name": "Mazely Studio",
+  "short_name": "Mazely",
+  "description": "Generate, solve, edit, visualize, and export mazes in your browser.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#111317",
+  "theme_color": "#111317",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
