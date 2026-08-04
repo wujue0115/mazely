@@ -122,6 +122,8 @@ describe('buildMazeSvg', () => {
       },
       runtime,
       solve: {
+        frontierHeads: [{ x: 0, y: 0 }],
+        frontierTrails: [[{ x: 0, y: 0 }, { x: 1, y: 0 }]],
         heads: [{ x: 1, y: 0 }],
         path: [{ x: 0, y: 0 }, { x: 1, y: 0 }],
         trails: [],
@@ -132,7 +134,9 @@ describe('buildMazeSvg', () => {
     })
 
     expect(svg).toContain(`fill="${DEFAULT_STYLE_THEME.visit}"`)
+    expect(svg).toContain(`stroke="${DEFAULT_STYLE_THEME.subPath}" stroke-width="2.8"`)
     expect(svg).toContain(`stroke="${DEFAULT_STYLE_THEME.path}" stroke-width="3.6"`)
+    expect(svg).toContain(`fill="${DEFAULT_STYLE_THEME.frontier}"`)
     expect(svg).toContain(`fill="${DEFAULT_STYLE_THEME.head}"`)
   })
 

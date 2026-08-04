@@ -1,6 +1,6 @@
 import type { MazeAlgorithm, MazeContext, MazePoint, MazeSolvingStep, SquareCell } from '../types'
 import { PriorityQueue } from '../utils'
-import { buildExpandStep, buildVisitStartStep, getOpenNeighbors, getSolveStartAndEndCells } from './shared'
+import { buildProcessStep, buildVisitStartStep, getOpenNeighbors, getSolveStartAndEndCells } from './shared'
 
 interface FrontierNode {
   cell: SquareCell
@@ -27,16 +27,20 @@ class SolveBestFirstAlgorithm implements MazeAlgorithm<SquareCell, MazeSolvingSt
 
     while (!frontier.isEmpty()) {
       const current = frontier.pop()!.cell
-      if (current.id === endCell.id)
+      if (current.id === endCell.id) {
+        yield buildProcessStep(current, [])
         break
+      }
 
+      const added: SquareCell[] = []
       for (const next of getOpenNeighbors(context, current)) {
         if (visited.has(next.id))
           continue
         visited.add(next.id)
         frontier.push({ cell: next, score: heuristic(next) })
-        yield buildExpandStep(current, next)
+        added.push(next)
       }
+      yield buildProcessStep(current, added.map(cell => ({ cell })))
     }
   }
 }

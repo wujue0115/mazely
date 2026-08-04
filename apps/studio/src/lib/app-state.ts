@@ -129,6 +129,7 @@ export function createInitialSolveState(
     algorithm,
     cameFrom: {},
     end,
+    frontier: new Set<string>(),
     frontierSize: 0,
     path: [],
     start,

@@ -28,6 +28,10 @@ export function isGenerationVisibleMultiHeadMode(algorithm: MazeGenerationAlgori
   return algorithm === 'prim' || algorithm === 'traversal'
 }
 
+export function isSolveVisibleMultiHeadMode(algorithm: MazeSolvingAlgorithm): boolean {
+  return algorithm === 'bfs' || algorithm === 'best-first' || algorithm === 'a-star'
+}
+
 export function shouldShowGenerationTrail(algorithm: MazeGenerationAlgorithm): boolean {
   return algorithm !== 'aldous-broder'
 }

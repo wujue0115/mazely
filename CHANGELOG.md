@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added bundled `solve.process` steps for BFS, Greedy Best-First, and A\* so
+  visualizers can atomically track the active node and all cells added to the
+  logical frontier. DFS continues to emit `solve.expand` steps.
+- Added precise multi-frontier Studio animations for BFS, Greedy Best-First,
+  and A\*, matching the path, head, sub-path, and frontier visual language used
+  by Prim and Random Traversal.
+
 ## [0.1.0] - 2026-07-31
 
 ### Added

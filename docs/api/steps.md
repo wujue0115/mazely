@@ -119,28 +119,51 @@ row.
 ## Solving Steps
 
 ```ts
+interface MazeSolveProcessPayload extends MazeStepPayload {
+  current: CellId
+  added: CellId[]
+}
+
 type MazeSolvingStep
   = | MazePayloadStep<'solve.visit', MazeCellTransitionPayload>
+    | MazePayloadStep<'solve.process', MazeSolveProcessPayload>
     | MazePayloadStep<'solve.expand', MazeCellTransitionPayload>
     | MazePayloadStep<'solve.flood', MazeFloodPayload>
 ```
 
-| Type           | Payload                | Meaning                                            |
-| -------------- | ---------------------- | -------------------------------------------------- |
-| `solve.visit`  | `{ to }`               | Marks the initial point-to-point solver cell       |
-| `solve.expand` | `{ from, to }`         | Discovers `to` from `from` and records its parent  |
-| `solve.flood`  | `{ from?, to, depth }` | Visits one flood cell with its breadth-first depth |
+| Type            | Payload                | Meaning                                            |
+| --------------- | ---------------------- | -------------------------------------------------- |
+| `solve.visit`   | `{ to }`               | Marks the initial point-to-point solver cell       |
+| `solve.process` | `{ current, added }`   | Processes one frontier cell and its discoveries    |
+| `solve.expand`  | `{ from, to }`         | Discovers `to` from `from` during DFS              |
+| `solve.flood`   | `{ from?, to, depth }` | Visits one flood cell with its breadth-first depth |
 
-A\*, Best-First, BFS, and DFS emit `solve.visit` followed by zero or more
-`solve.expand` steps. Flood emits only `solve.flood`.
+A\*, Best-First, and BFS emit `solve.visit` followed by `solve.process` steps.
+Each process payload names the selected frontier cell in `current` and every
+cell discovered while expanding it in `added`. Its patches apply the visited,
+parent, and algorithm-specific metadata for all added cells atomically. DFS
+emits `solve.visit` followed by `solve.expand` steps. Flood emits only
+`solve.flood`.
 
 You can fold the transition payloads into application-owned visual state:
 
 ```ts
 const parentById = new Map<string, string | null>()
 const visited = new Set<string>()
+const frontier = new Set<string>()
 
 function consume(step: MazeSolvingStep) {
+  if (step.type === 'solve.process') {
+    showActiveHead(step.payload.current)
+    frontier.delete(step.payload.current)
+    for (const cellId of step.payload.added) {
+      visited.add(cellId)
+      parentById.set(cellId, step.payload.current)
+      frontier.add(cellId)
+    }
+    return
+  }
+
   const { from = null, to } = step.payload
   visited.add(to)
   parentById.set(to, from)

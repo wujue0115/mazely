@@ -1,5 +1,5 @@
 import type { StyleKey, StyleTheme } from '../types'
-import { getGenerationAlgorithm, isGenerationVisibleMultiHeadMode } from '../algorithms'
+import { getGenerationAlgorithm, isGenerationVisibleMultiHeadMode, isSolveVisibleMultiHeadMode } from '../algorithms'
 import { app } from '../app-state'
 import {
   floodThemeField,
@@ -59,6 +59,10 @@ function getVisibleStyleKeys(): Set<StyleKey> {
   visible.add('start')
   visible.add('end')
   visible.add('head')
+  if (isSolveVisibleMultiHeadMode(app.stepState.algorithm)) {
+    visible.add('frontier')
+    visible.add('subPath')
+  }
   return visible
 }
 

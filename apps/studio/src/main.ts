@@ -50,10 +50,10 @@ import {
   syncShapePanel,
 } from './lib/controllers/workbench'
 import {
-  getSolvePriorityHeads,
-  getSolvePriorityHeadTrails,
+  getSolveFrontierHeads,
+  getSolveFrontierTrails,
   getSolveTrailPoints,
-  isSolvePriorityMode,
+  isSolveMultiHeadMode,
 } from './lib/derived'
 import {
   canvas,
@@ -112,7 +112,7 @@ import {
 } from './lib/dom'
 import { buildMazeSvg } from './lib/export-svg'
 import { isFloodTheme } from './lib/flood'
-import { parsePointKey } from './lib/point'
+import { key, parsePointKey } from './lib/point'
 import { ensureThreeView, fitMazeInView, render, resetView } from './lib/renderer'
 import { parseRange, resizeHighResCanvas } from './lib/utils'
 import '@fontsource/inter/400.css'
@@ -313,6 +313,8 @@ exportSvgButton.addEventListener('click', () => {
       runtime,
       solve: app.activeTab === 'solve' && app.stepState.algorithm !== 'flood'
         ? {
+            frontierHeads: getExportSolveFrontierHeads(),
+            frontierTrails: getExportSolveFrontierTrails(),
             heads: getExportSolveHeads(),
             path: app.stepState.path,
             trails: getExportSolveTrails(),
@@ -330,9 +332,6 @@ function getExportSolveHeads() {
   if (app.stepState.status !== 'running') {
     return []
   }
-  if (isSolvePriorityMode()) {
-    return getSolvePriorityHeads()
-  }
   return app.solveCurrentHeadKey ? [parsePointKey(app.solveCurrentHeadKey)] : []
 }
 
@@ -340,10 +339,21 @@ function getExportSolveTrails() {
   if (app.stepState.status !== 'running') {
     return []
   }
-  if (isSolvePriorityMode()) {
-    return getSolvePriorityHeadTrails(getSolvePriorityHeads())
-  }
   return [getSolveTrailPoints()]
+}
+
+function getExportSolveFrontierHeads() {
+  if (!isSolveMultiHeadMode()) {
+    return []
+  }
+  const activeTrailKeys = new Set(getSolveTrailPoints().map(point => key(point.x, point.y)))
+  return getSolveFrontierHeads()
+    .filter(point => !activeTrailKeys.has(key(point.x, point.y)))
+}
+
+function getExportSolveFrontierTrails() {
+  const heads = getExportSolveFrontierHeads()
+  return getSolveFrontierTrails(heads)
 }
 
 shapeUploadButton.addEventListener('click', () => shapeFileInput.click())

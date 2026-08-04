@@ -176,6 +176,11 @@ export interface MazeFloodPayload extends MazeCellTransitionPayload {
   depth: number
 }
 
+export interface MazeSolveProcessPayload extends MazeStepPayload {
+  current: CellId
+  added: CellId[]
+}
+
 export type MazePayloadStep<
   Type extends string,
   Payload extends MazeStepPayload,
@@ -190,6 +195,7 @@ export type MazeGenerationStep
 export type MazeSolvingStep
   = | MazePayloadStep<'solve.expand', MazeCellTransitionPayload>
     | MazePayloadStep<'solve.flood', MazeFloodPayload>
+    | MazePayloadStep<'solve.process', MazeSolveProcessPayload>
     | MazePayloadStep<'solve.visit', MazeCellTransitionPayload>
 
 export type MazelyStep = MazeGenerationStep | MazeSolvingStep
