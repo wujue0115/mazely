@@ -286,6 +286,7 @@ exportSvgButton.addEventListener('click', () => {
     activeTab: app.activeTab,
     previewingGeneration: activePreview !== null,
     solvingAlgorithm: app.stepState.algorithm,
+    solveStarted: app.stepState.visitedCount > 0,
     solveStatus: app.stepState.status,
   })
   const pointMarkers = getPointMarkerVisibility({

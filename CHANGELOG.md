@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and A\*, matching the path, head, sub-path, and frontier visual language used
   by Prim and Random Traversal.
 
+### Changed
+
+- Mazely Studio now keeps an active solve visualization on the canvas when
+  switching to Generate, until a generation run or step actually begins.
+
 ## [0.1.0] - 2026-07-31
 
 ### Added

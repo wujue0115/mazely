@@ -9,6 +9,7 @@ import {
   isGenerationVisibleMultiHeadMode,
   shouldShowFloodVisualization,
   shouldShowGenerationTrail,
+  shouldShowSolveProgress,
 } from './algorithms'
 import { app } from './app-state'
 import { getHuntScanSegment } from './controllers/generation'
@@ -208,6 +209,13 @@ function renderWebgl2dView(
     activeTab: app.activeTab,
     previewingGeneration: previewing,
     solvingAlgorithm: app.stepState.algorithm,
+    solveStarted: app.stepState.visitedCount > 0,
+    solveStatus: app.stepState.status,
+  })
+  const solveProgressVisible = shouldShowSolveProgress({
+    activeTab: app.activeTab,
+    previewingGeneration: previewing,
+    solveStarted: app.stepState.visitedCount > 0,
     solveStatus: app.stepState.status,
   })
   const showingSolveResult = shouldShowSolveResult(previewing)
@@ -311,7 +319,7 @@ function renderWebgl2dView(
     if (app.visibleElements.path) {
       pushPolyline(app.stepState.path, app.styleTheme.path, THREE_PATH_WIDTH)
     }
-    if (app.activeTab === 'solve' && app.stepState.status === 'running') {
+    if (solveProgressVisible) {
       if (isSolveMultiHeadMode()) {
         const activeTrail = getSolveTrailPoints()
         const activeTrailKeys = new Set(activeTrail.map(point => key(point.x, point.y)))
@@ -361,7 +369,7 @@ function renderWebgl2dView(
 
   const floodStarted = floodActive && (app.running || app.stepState.visitedCount > 0)
   const pointMarkers = getPointMarkerVisibility({
-    activeTab: app.activeTab,
+    activeTab: solveProgressVisible ? 'solve' : app.activeTab,
     floodActive,
     floodStarted,
     generationAlgorithm: getGenerationAlgorithm(generationSelect.value),
@@ -607,6 +615,13 @@ function renderThreeView(
     activeTab: app.activeTab,
     previewingGeneration: previewing,
     solvingAlgorithm: app.stepState.algorithm,
+    solveStarted: app.stepState.visitedCount > 0,
+    solveStatus: app.stepState.status,
+  })
+  const solveProgressVisible = shouldShowSolveProgress({
+    activeTab: app.activeTab,
+    previewingGeneration: previewing,
+    solveStarted: app.stepState.visitedCount > 0,
     solveStatus: app.stepState.status,
   })
   const showingSolveResult = shouldShowSolveResult(previewing)
@@ -709,7 +724,7 @@ function renderThreeView(
       pushPolyline(app.stepState.path, app.styleTheme.path, THREE_PATH_WIDTH)
     }
 
-    if (app.activeTab === 'solve' && app.stepState.status === 'running') {
+    if (solveProgressVisible) {
       if (isSolveMultiHeadMode()) {
         const activeTrail = getSolveTrailPoints()
         const activeTrailKeys = new Set(activeTrail.map(point => key(point.x, point.y)))
@@ -753,7 +768,7 @@ function renderThreeView(
 
   const floodStarted = floodActive && (app.running || app.stepState.visitedCount > 0)
   const pointMarkers = getPointMarkerVisibility({
-    activeTab: app.activeTab,
+    activeTab: solveProgressVisible ? 'solve' : app.activeTab,
     floodActive,
     floodStarted,
     generationAlgorithm: getGenerationAlgorithm(generationSelect.value),

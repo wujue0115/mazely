@@ -40,6 +40,7 @@ export function shouldShowFloodVisualization(options: {
   activeTab: PanelTab
   previewingGeneration: boolean
   solvingAlgorithm: MazeSolvingAlgorithm
+  solveStarted: boolean
   solveStatus: SolveState['status']
 }): boolean {
   if (options.solvingAlgorithm !== 'flood' || options.previewingGeneration) {
@@ -47,7 +48,23 @@ export function shouldShowFloodVisualization(options: {
   }
 
   return options.activeTab === 'solve'
-    || (options.activeTab === 'generate' && options.solveStatus !== 'running')
+    || (options.activeTab === 'generate' && (
+      options.solveStatus !== 'running' || options.solveStarted
+    ))
+}
+
+export function shouldShowSolveProgress(options: {
+  activeTab: PanelTab
+  previewingGeneration: boolean
+  solveStarted: boolean
+  solveStatus: SolveState['status']
+}): boolean {
+  if (options.previewingGeneration || options.solveStatus !== 'running') {
+    return false
+  }
+
+  return options.activeTab === 'solve'
+    || (options.activeTab === 'generate' && options.solveStarted)
 }
 
 export function shouldShowGenerationStartMarker(

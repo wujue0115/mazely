@@ -1,6 +1,6 @@
 import { createMaze } from 'mazely'
 import { describe, expect, it } from 'vitest'
-import { getPointMarkerVisibility, shouldShowFloodVisualization } from '../src/lib/algorithms'
+import { getPointMarkerVisibility, shouldShowFloodVisualization, shouldShowSolveProgress } from '../src/lib/algorithms'
 import { buildMazeSvg } from '../src/lib/export-svg'
 import { DEFAULT_STYLE_THEME, DEFAULT_STYLE_VISIBILITY } from '../src/lib/types'
 
@@ -10,6 +10,7 @@ describe('buildMazeSvg', () => {
       activeTab: 'generate',
       previewingGeneration: false,
       solvingAlgorithm: 'flood',
+      solveStarted: false,
       solveStatus: 'solved',
     })).toBe(true)
 
@@ -17,8 +18,33 @@ describe('buildMazeSvg', () => {
       activeTab: 'generate',
       previewingGeneration: true,
       solvingAlgorithm: 'flood',
+      solveStarted: false,
       solveStatus: 'solved',
     })).toBe(false)
+  })
+
+  it('keeps running solve visuals on Generate until generation starts', () => {
+    expect(shouldShowSolveProgress({
+      activeTab: 'generate',
+      previewingGeneration: false,
+      solveStarted: true,
+      solveStatus: 'running',
+    })).toBe(true)
+
+    expect(shouldShowSolveProgress({
+      activeTab: 'generate',
+      previewingGeneration: true,
+      solveStarted: true,
+      solveStatus: 'running',
+    })).toBe(false)
+
+    expect(shouldShowFloodVisualization({
+      activeTab: 'generate',
+      previewingGeneration: false,
+      solvingAlgorithm: 'flood',
+      solveStarted: true,
+      solveStatus: 'running',
+    })).toBe(true)
   })
 
   it('matches the hidden point markers of a completed generation view', () => {
