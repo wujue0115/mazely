@@ -2,7 +2,7 @@ import type { Maze } from 'mazely'
 import type { MazePoint, MazeViewState } from '../maze-types'
 import type { SolveState } from '../solver-state'
 import type { GenerationPreview } from './generation'
-import { cellIdToPoint, createMaze } from 'mazely'
+import { createMaze } from 'mazely'
 import {
   getGenerationAlgorithm,
   getSolvingAlgorithm,
@@ -18,6 +18,7 @@ import { generationSelect, solvingSelect, speedRange } from '../dom'
 import { key } from '../point'
 import { render } from '../renderer'
 import { getRandomMaskPoint } from '../shape-mask'
+import { applySolveStepToState } from '../solver-state'
 import { getRandomMazePoint, parseRange } from '../utils'
 import {
   advanceGenerationPreview,
@@ -66,24 +67,11 @@ function advanceSolveState(): boolean {
     return false
   }
 
-  const payload = app.solvePlayer.steps[stepIndex].payload
-  if (payload.to) {
-    const toPoint = cellIdToPoint(payload.to)
-    const toKey = key(toPoint.x, toPoint.y)
-    if (!app.stepState.visited[toKey]) {
-      app.stepState.visited[toKey] = true
-      app.stepState.visitedCount += 1
-    }
-    app.stepState.cameFrom[toKey] = payload.from
-      ? cellIdToPoint(payload.from)
-      : null
-    if (app.solvePlayer.steps[stepIndex].type === 'solve.flood') {
-      app.floodDepthByKey[toKey] = app.solvePlayer.steps[stepIndex].payload.depth
-      app.solveCurrentHeadKey = null
-    }
-    else {
-      app.solveCurrentHeadKey = toKey
-    }
+  const step = app.solvePlayer.steps[stepIndex]
+  const visual = applySolveStepToState(app.stepState, step, app.solveCurrentHeadKey)
+  app.solveCurrentHeadKey = visual.currentHeadKey
+  if (visual.floodVisit) {
+    app.floodDepthByKey[visual.floodVisit.pointKey] = visual.floodVisit.depth
   }
 
   if (app.solvePlayer.done) {
@@ -95,6 +83,8 @@ function advanceSolveState(): boolean {
 
 function finalizeSolveState(): void {
   const result = app.solveRuntime?.getSolveResult()
+  app.stepState.frontier.clear()
+  app.stepState.frontierSize = 0
   app.stepState.path = result?.path ?? []
   app.stepState.status = result?.solved ? 'solved' : 'unsolved'
   if (!result?.solved) {

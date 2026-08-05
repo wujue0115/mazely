@@ -156,6 +156,7 @@ async function loadMazeFile(file: File): Promise<void> {
         algorithm: loaded.solve.algorithm,
         cameFrom: {},
         end: { ...loaded.maze.end },
+        frontier: new Set<string>(),
         frontierSize: 0,
         path: loaded.solve.path,
         start: { ...loaded.maze.start },

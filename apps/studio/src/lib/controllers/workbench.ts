@@ -41,10 +41,6 @@ export function setActiveTab(tab: PanelTab): void {
   if (app.running && tab === 'edit') {
     stopSolveAnimation()
   }
-  else if (app.running && tab !== app.activeTab) {
-    showToast('Please stop solving before switching tabs.')
-    return
-  }
 
   if ((tab === 'solve' || tab === 'edit') && !app.hasGeneratedMaze && tab !== 'edit') {
     showToast('Please generate or edit a maze first.')

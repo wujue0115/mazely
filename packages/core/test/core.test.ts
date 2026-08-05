@@ -308,6 +308,66 @@ describe('@mazely/core', () => {
     }
   })
 
+  it('emits process steps when queue-based solvers select an active node', () => {
+    for (const algorithm of ['bfs', 'best-first', 'a-star'] as const) {
+      const maze = new Mazely({ grid: { cols: 2, rows: 2, type: 'square' } })
+      maze.openAllEdges()
+      const player = maze.solve(algorithm, {
+        end: { x: 1, y: 1 },
+        start: { x: 0, y: 0 },
+      })
+
+      player.finish()
+
+      const processSteps = player.steps.filter(step => step.type === 'solve.process')
+      expect(processSteps.length).toBeGreaterThan(0)
+      expect(processSteps[0].payload.current).toBe('0:0')
+      expect(processSteps[0].payload.added.length).toBeGreaterThan(0)
+      expect(player.steps.some(step => step.type === 'solve.expand')).toBe(false)
+    }
+  })
+
+  it('keeps DFS on visit and expand steps without a frontier process step', () => {
+    const maze = new Mazely({ grid: { cols: 2, rows: 2, type: 'square' } })
+    maze.openAllEdges()
+    const player = maze.solve('dfs', {
+      end: { x: 1, y: 1 },
+      start: { x: 0, y: 0 },
+    })
+
+    player.finish()
+
+    expect(player.steps.some(step => step.type === 'solve.expand')).toBe(true)
+    expect(player.steps.some(step => step.type === 'solve.process')).toBe(false)
+  })
+
+  it('applies and reverses all discoveries in one process step', () => {
+    const maze = new Mazely({ grid: { cols: 2, rows: 2, type: 'square' } })
+    maze.openAllEdges()
+    const player = maze.solve('bfs', {
+      end: { x: 1, y: 1 },
+      start: { x: 0, y: 0 },
+    })
+
+    player.next()
+    player.next()
+    const process = player.lastStep!
+    expect(process.type).toBe('solve.process')
+    if (process.type !== 'solve.process')
+      return
+
+    for (const cellId of process.payload.added) {
+      expect(maze.grid.getCell(cellId)?.getMeta('solve.visited')).toBe(true)
+      expect(maze.grid.getCell(cellId)?.getMeta('solve.parentId')).toBe(process.payload.current)
+    }
+
+    player.prev()
+    for (const cellId of process.payload.added) {
+      expect(maze.grid.getCell(cellId)?.getMeta('solve.visited')).toBeUndefined()
+      expect(maze.grid.getCell(cellId)?.getMeta('solve.parentId')).toBeUndefined()
+    }
+  })
+
   it('floods every reachable cell with BFS depth and no end point', () => {
     const maze = new Mazely({ grid: { cols: 3, rows: 2, type: 'square' } })
     maze.openAllEdges()

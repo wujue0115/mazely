@@ -9,6 +9,7 @@ import {
   isGenerationVisibleMultiHeadMode,
   shouldShowFloodVisualization,
   shouldShowGenerationTrail,
+  shouldShowSolveProgress,
 } from './algorithms'
 import { app } from './app-state'
 import { getHuntScanSegment } from './controllers/generation'
@@ -21,10 +22,10 @@ import {
   getGenerationTrailPoints,
   getPathSet,
   getShapeCellColor,
-  getSolvePriorityHeads,
-  getSolvePriorityHeadTrails,
+  getSolveFrontierHeads,
+  getSolveFrontierTrailEdges,
   getSolveTrailPoints,
-  isSolvePriorityMode,
+  isSolveMultiHeadMode,
 } from './derived'
 import { canvasWrap, ctx, generationSelect } from './dom'
 import { getFloodDepthColor } from './flood'
@@ -208,6 +209,13 @@ function renderWebgl2dView(
     activeTab: app.activeTab,
     previewingGeneration: previewing,
     solvingAlgorithm: app.stepState.algorithm,
+    solveStarted: app.stepState.visitedCount > 0,
+    solveStatus: app.stepState.status,
+  })
+  const solveProgressVisible = shouldShowSolveProgress({
+    activeTab: app.activeTab,
+    previewingGeneration: previewing,
+    solveStarted: app.stepState.visitedCount > 0,
     solveStatus: app.stepState.status,
   })
   const showingSolveResult = shouldShowSolveResult(previewing)
@@ -311,18 +319,35 @@ function renderWebgl2dView(
     if (app.visibleElements.path) {
       pushPolyline(app.stepState.path, app.styleTheme.path, THREE_PATH_WIDTH)
     }
-    if (app.activeTab === 'solve' && app.stepState.status === 'running') {
-      if (isSolvePriorityMode()) {
-        const priorityHeads = getSolvePriorityHeads()
-        if (app.visibleElements.path) {
-          for (const trail of getSolvePriorityHeadTrails(priorityHeads)) {
-            pushPolyline(trail, app.styleTheme.path, THREE_TRAIL_WIDTH)
+    if (solveProgressVisible) {
+      if (isSolveMultiHeadMode()) {
+        const activeTrail = getSolveTrailPoints()
+        const activeTrailKeys = new Set(activeTrail.map(point => key(point.x, point.y)))
+        const frontierHeads = getSolveFrontierHeads()
+          .filter(point => !activeTrailKeys.has(key(point.x, point.y)))
+        if (app.visibleElements.subPath) {
+          for (const edgeKey of getSolveFrontierTrailEdges(frontierHeads)) {
+            const [left, right] = edgeKey.split('>')
+            if (left && right) {
+              segments.push({
+                color: app.styleTheme.subPath,
+                from: parsePointKey(left),
+                to: parsePointKey(right),
+                width: THREE_TRAIL_WIDTH,
+              })
+            }
           }
         }
-        if (app.visibleElements.head) {
-          for (const point of priorityHeads) {
-            dots.push({ color: app.styleTheme.head, point, radius: THREE_HEAD_RADIUS })
+        if (app.visibleElements.frontier) {
+          for (const point of frontierHeads) {
+            dots.push({ color: app.styleTheme.frontier, point, radius: THREE_HEAD_RADIUS })
           }
+        }
+        if (app.visibleElements.path) {
+          pushPolyline(activeTrail, app.styleTheme.path, THREE_TRAIL_WIDTH)
+        }
+        if (app.visibleElements.head && app.solveCurrentHeadKey) {
+          dots.push({ color: app.styleTheme.head, point: parsePointKey(app.solveCurrentHeadKey), radius: THREE_HEAD_RADIUS })
         }
       }
       else {
@@ -344,7 +369,7 @@ function renderWebgl2dView(
 
   const floodStarted = floodActive && (app.running || app.stepState.visitedCount > 0)
   const pointMarkers = getPointMarkerVisibility({
-    activeTab: app.activeTab,
+    activeTab: solveProgressVisible ? 'solve' : app.activeTab,
     floodActive,
     floodStarted,
     generationAlgorithm: getGenerationAlgorithm(generationSelect.value),
@@ -590,6 +615,13 @@ function renderThreeView(
     activeTab: app.activeTab,
     previewingGeneration: previewing,
     solvingAlgorithm: app.stepState.algorithm,
+    solveStarted: app.stepState.visitedCount > 0,
+    solveStatus: app.stepState.status,
+  })
+  const solveProgressVisible = shouldShowSolveProgress({
+    activeTab: app.activeTab,
+    previewingGeneration: previewing,
+    solveStarted: app.stepState.visitedCount > 0,
     solveStatus: app.stepState.status,
   })
   const showingSolveResult = shouldShowSolveResult(previewing)
@@ -692,18 +724,35 @@ function renderThreeView(
       pushPolyline(app.stepState.path, app.styleTheme.path, THREE_PATH_WIDTH)
     }
 
-    if (app.activeTab === 'solve' && app.stepState.status === 'running') {
-      if (isSolvePriorityMode()) {
-        const priorityHeads = getSolvePriorityHeads()
-        if (app.visibleElements.path) {
-          for (const trail of getSolvePriorityHeadTrails(priorityHeads)) {
-            pushPolyline(trail, app.styleTheme.path, THREE_TRAIL_WIDTH)
+    if (solveProgressVisible) {
+      if (isSolveMultiHeadMode()) {
+        const activeTrail = getSolveTrailPoints()
+        const activeTrailKeys = new Set(activeTrail.map(point => key(point.x, point.y)))
+        const frontierHeads = getSolveFrontierHeads()
+          .filter(point => !activeTrailKeys.has(key(point.x, point.y)))
+        if (app.visibleElements.subPath) {
+          for (const edgeKey of getSolveFrontierTrailEdges(frontierHeads)) {
+            const [left, right] = edgeKey.split('>')
+            if (left && right) {
+              segments.push({
+                color: app.styleTheme.subPath,
+                from: parsePointKey(left),
+                to: parsePointKey(right),
+                width: THREE_TRAIL_WIDTH,
+              })
+            }
           }
         }
-        if (app.visibleElements.head) {
-          for (const point of priorityHeads) {
-            dots.push({ color: app.styleTheme.head, point, radius: THREE_HEAD_RADIUS })
+        if (app.visibleElements.frontier) {
+          for (const point of frontierHeads) {
+            dots.push({ color: app.styleTheme.frontier, point, radius: THREE_HEAD_RADIUS })
           }
+        }
+        if (app.visibleElements.path) {
+          pushPolyline(activeTrail, app.styleTheme.path, THREE_TRAIL_WIDTH)
+        }
+        if (app.visibleElements.head && app.solveCurrentHeadKey) {
+          dots.push({ color: app.styleTheme.head, point: parsePointKey(app.solveCurrentHeadKey), radius: THREE_HEAD_RADIUS })
         }
       }
       else {
@@ -719,7 +768,7 @@ function renderThreeView(
 
   const floodStarted = floodActive && (app.running || app.stepState.visitedCount > 0)
   const pointMarkers = getPointMarkerVisibility({
-    activeTab: app.activeTab,
+    activeTab: solveProgressVisible ? 'solve' : app.activeTab,
     floodActive,
     floodStarted,
     generationAlgorithm: getGenerationAlgorithm(generationSelect.value),

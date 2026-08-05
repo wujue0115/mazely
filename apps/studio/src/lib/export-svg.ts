@@ -24,6 +24,8 @@ interface ExportSvgOptions {
 }
 
 interface ExportSvgSolveState {
+  frontierHeads?: MazePoint[]
+  frontierTrails?: MazePoint[][]
   heads: MazePoint[]
   path: MazePoint[]
   trails: MazePoint[][]
@@ -77,9 +79,21 @@ export function buildMazeSvg(options: ExportSvgOptions): string {
     parts.push(...buildWallSegments(grid).map(segment => line(segment, theme.wall)))
   }
 
+  if (visibleElements.subPath && options.solve?.frontierTrails) {
+    parts.push(...buildPolylineSegments(options.solve.frontierTrails, theme.subPath, 0.14))
+  }
+
   if (visibleElements.path && options.solve) {
     parts.push(...buildPolylineSegments([options.solve.path], theme.path, 0.18))
     parts.push(...buildPolylineSegments(options.solve.trails, theme.path, 0.14))
+  }
+
+  if (visibleElements.frontier && options.solve?.frontierHeads) {
+    for (const point of options.solve.frontierHeads) {
+      if (grid.getCell(pointToCellId(point))) {
+        parts.push(pointMarker(point, theme.frontier, 0.22))
+      }
+    }
   }
 
   if (visibleElements.head && options.solve) {

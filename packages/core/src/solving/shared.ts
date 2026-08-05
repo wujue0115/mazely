@@ -22,24 +22,55 @@ export function buildVisitStartStep(startCell: SquareCell): MazeSolvingStep {
   }
 }
 
+interface ExpandStepOptions {
+  prevVisited?: unknown
+  prevParent?: CellId
+  extraPatches?: MazePatch[]
+}
+
+interface ProcessAddition {
+  cell: SquareCell
+  options?: ExpandStepOptions
+}
+
+/** Selects a frontier cell and applies all discoveries made while expanding it. */
+export function buildProcessStep(
+  current: SquareCell,
+  additions: ProcessAddition[],
+): MazeSolvingStep {
+  return {
+    type: 'solve.process',
+    patches: additions.flatMap(({ cell, options }) =>
+      buildExpandPatches(current, cell, options)),
+    payload: {
+      added: additions.map(({ cell }) => cell.id),
+      current: current.id,
+    },
+  }
+}
+
 export function buildExpandStep(
   current: SquareCell,
   next: SquareCell,
-  options: {
-    prevVisited?: unknown
-    prevParent?: CellId
-    extraPatches?: MazePatch[]
-  } = {},
+  options: ExpandStepOptions = {},
 ): MazeSolvingStep {
   return {
     type: 'solve.expand',
-    patches: [
-      { type: 'setCellMeta', cellId: next.id, key: 'solve.visited', from: options.prevVisited, to: true },
-      { type: 'setCellMeta', cellId: next.id, key: 'solve.parentId', from: options.prevParent, to: current.id },
-      ...(options.extraPatches ?? []),
-    ],
+    patches: buildExpandPatches(current, next, options),
     payload: { from: current.id, to: next.id },
   }
+}
+
+function buildExpandPatches(
+  current: SquareCell,
+  next: SquareCell,
+  options: ExpandStepOptions = {},
+): MazePatch[] {
+  return [
+    { type: 'setCellMeta', cellId: next.id, key: 'solve.visited', from: options.prevVisited, to: true },
+    { type: 'setCellMeta', cellId: next.id, key: 'solve.parentId', from: options.prevParent, to: current.id },
+    ...(options.extraPatches ?? []),
+  ]
 }
 
 export function getOpenNeighbors(context: MazeContext<SquareCell>, current: SquareCell): SquareCell[] {

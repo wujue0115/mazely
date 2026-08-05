@@ -1,6 +1,6 @@
 import type { CellId, MazeAlgorithm, MazeContext, MazePoint, MazeSolvingStep, SquareCell } from '../types'
 import { PriorityQueue } from '../utils'
-import { buildExpandStep, buildVisitStartStep, getOpenNeighbors, getSolveStartAndEndCells } from './shared'
+import { buildProcessStep, buildVisitStartStep, getOpenNeighbors, getSolveStartAndEndCells } from './shared'
 
 interface OpenNode {
   cell: SquareCell
@@ -32,9 +32,12 @@ class SolveAStarAlgorithm implements MazeAlgorithm<SquareCell, MazeSolvingStep> 
       // Stale entry: a shorter path to this cell was found after it was queued.
       if (node.g > (gScore.get(node.cell.id) ?? Number.POSITIVE_INFINITY))
         continue
-      if (node.cell.id === endCell.id)
+      if (node.cell.id === endCell.id) {
+        yield buildProcessStep(node.cell, [])
         break
+      }
 
+      const added: Parameters<typeof buildProcessStep>[1] = []
       for (const next of getOpenNeighbors(context, node.cell)) {
         const tentative = node.g + 1
         const known = gScore.get(next.id)
@@ -46,14 +49,18 @@ class SolveAStarAlgorithm implements MazeAlgorithm<SquareCell, MazeSolvingStep> 
         parentById.set(next.id, node.cell.id)
         open.push({ cell: next, f: tentative + heuristic(next), g: tentative })
 
-        yield buildExpandStep(node.cell, next, {
-          extraPatches: [
-            { type: 'setCellMeta', cellId: next.id, key: 'solve.g', from: known, to: tentative },
-          ],
-          prevParent,
-          prevVisited: known != null ? true : undefined,
+        added.push({
+          cell: next,
+          options: {
+            extraPatches: [
+              { type: 'setCellMeta', cellId: next.id, key: 'solve.g', from: known, to: tentative },
+            ],
+            prevParent,
+            prevVisited: known != null ? true : undefined,
+          },
         })
       }
+      yield buildProcessStep(node.cell, added)
     }
   }
 }

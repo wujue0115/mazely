@@ -1,7 +1,6 @@
 import type { MazePoint } from './maze-types'
-import { getSolvingAlgorithm, isGenerationVisibleMultiHeadMode } from './algorithms'
+import { isGenerationVisibleMultiHeadMode, isSolveVisibleMultiHeadMode } from './algorithms'
 import { app } from './app-state'
-import { solvingSelect } from './dom'
 import {
   buildEdgeKeysFromPoints,
   buildTrailKeysFromParentKey,
@@ -9,11 +8,10 @@ import {
   key,
   parsePointKey,
 } from './point'
-import { getAllNeighborPoints, getOpenNeighborPoints } from './runtime'
+import { getAllNeighborPoints } from './runtime'
 
-export function isSolvePriorityMode(): boolean {
-  const algorithm = getSolvingAlgorithm(solvingSelect.value)
-  return algorithm === 'a-star' || algorithm === 'best-first'
+export function isSolveMultiHeadMode(): boolean {
+  return isSolveVisibleMultiHeadMode(app.stepState.algorithm)
 }
 
 export function isGenerationPreviewVisible(): boolean {
@@ -128,34 +126,27 @@ export function getSolveTrailPoints(): MazePoint[] {
   return trailPoints
 }
 
-export function getSolvePriorityHeads(): MazePoint[] {
-  if (!isSolvePriorityMode() || app.stepState.status !== 'running' || !app.solveRuntime) {
+export function getSolveFrontierHeads(): MazePoint[] {
+  if (!isSolveMultiHeadMode() || app.stepState.status !== 'running') {
     return []
   }
 
-  const heads: MazePoint[] = []
-  const endKey = key(app.stepState.end.x, app.stepState.end.y)
-  for (const pointKey of Object.keys(app.stepState.visited)) {
-    if (pointKey === endKey) {
-      continue
-    }
-    const point = parsePointKey(pointKey)
-    const hasUnvisitedNeighbor = getOpenNeighborPoints(app.solveRuntime, point)
-      .some(neighbor => !app.stepState.visited[key(neighbor.x, neighbor.y)])
-    if (hasUnvisitedNeighbor) {
-      heads.push(point)
-    }
-  }
-  return heads
+  return [...app.stepState.frontier].map(parsePointKey)
 }
 
-export function getSolvePriorityHeadTrails(heads: MazePoint[]): MazePoint[][] {
-  if (!isSolvePriorityMode() || app.stepState.status !== 'running') {
-    return []
+export function getSolveFrontierTrailEdges(heads: MazePoint[]): Set<string> {
+  const edgeKeys = new Set<string>()
+
+  for (const trailPoints of getSolveFrontierTrails(heads)) {
+    for (const edgeKey of buildEdgeKeysFromPoints(trailPoints)) {
+      edgeKeys.add(edgeKey)
+    }
   }
+  return edgeKeys
+}
 
+export function getSolveFrontierTrails(heads: MazePoint[]): MazePoint[][] {
   const parentByKey = getStepParentByKey()
-
   return heads.map(head => buildTrailPointsFromParentKey(parentByKey, key(head.x, head.y)))
 }
 

@@ -46,6 +46,7 @@ export type {
   MazePatch,
   MazePayloadStep,
   MazePoint,
+  MazeSolveProcessPayload,
   MazeSolvingAlgorithm,
   MazeSolvingAlgorithmCapabilities,
   MazeSolvingStep,
