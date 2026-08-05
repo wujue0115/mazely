@@ -53,6 +53,10 @@ body {
   -webkit-mask-image: url('../assets/icons/step.svg');
 }
 
+.icon-step-previous {
+  transform: rotate(180deg);
+}
+
 .icon-play {
   mask-image: url('../assets/icons/play.svg');
   -webkit-mask-image: url('../assets/icons/play.svg');

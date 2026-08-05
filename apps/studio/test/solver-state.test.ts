@@ -3,7 +3,7 @@ import type { SolveState } from '../src/lib/solver-state'
 import { cellIdToPoint, createMaze } from 'mazely'
 import { describe, expect, it } from 'vitest'
 import { key } from '../src/lib/point'
-import { applySolveStepToState } from '../src/lib/solver-state'
+import { applySolveStepToState, rebuildSolveVisualState } from '../src/lib/solver-state'
 
 const FRONTIER_ALGORITHMS = ['bfs', 'best-first', 'a-star'] as const
 
@@ -70,6 +70,74 @@ describe('solve frontier animation state', () => {
   })
 })
 
+describe('solve animation rewind', () => {
+  it('rebuilds the BFS frontier, parents, visits, and head at the previous cursor', () => {
+    const runtime = createBranchedMaze()
+    const player = runtime.solve('bfs', {
+      end: { x: 2, y: 1 },
+      start: { x: 0, y: 0 },
+    })
+    const snapshots = []
+    const state = createSolveState('bfs')
+    let currentHeadKey: string | null = key(0, 0)
+
+    while (player.next()) {
+      currentHeadKey = applySolveStepToState(
+        state,
+        player.lastStep!,
+        currentHeadKey,
+      ).currentHeadKey
+      snapshots[player.index] = snapshotSolveVisual(state, currentHeadKey, {})
+    }
+
+    expect(player.prev()).toBe(true)
+    const rebuilt = rebuildSolveVisualState({
+      algorithm: 'bfs',
+      end: { x: 2, y: 1 },
+      start: { x: 0, y: 0 },
+      steps: player.steps.slice(0, player.index),
+    })
+
+    expect(snapshotSolveVisual(
+      rebuilt.state,
+      rebuilt.currentHeadKey,
+      rebuilt.floodDepthByKey,
+    )).toEqual(snapshots[player.index])
+  })
+
+  it('rebuilds flood depths after stepping backward from completion', () => {
+    const runtime = createBranchedMaze()
+    const player = runtime.solve('flood', { start: { x: 0, y: 0 } })
+    const snapshots = []
+    const state = createSolveState('flood')
+    const floodDepthByKey: Record<string, number> = {}
+    let currentHeadKey: string | null = key(0, 0)
+
+    while (player.next()) {
+      const visual = applySolveStepToState(state, player.lastStep!, currentHeadKey)
+      currentHeadKey = visual.currentHeadKey
+      if (visual.floodVisit) {
+        floodDepthByKey[visual.floodVisit.pointKey] = visual.floodVisit.depth
+      }
+      snapshots[player.index] = snapshotSolveVisual(state, currentHeadKey, floodDepthByKey)
+    }
+
+    expect(player.prev()).toBe(true)
+    const rebuilt = rebuildSolveVisualState({
+      algorithm: 'flood',
+      end: { x: 2, y: 1 },
+      start: { x: 0, y: 0 },
+      steps: player.steps.slice(0, player.index),
+    })
+
+    expect(snapshotSolveVisual(
+      rebuilt.state,
+      rebuilt.currentHeadKey,
+      rebuilt.floodDepthByKey,
+    )).toEqual(snapshots[player.index])
+  })
+})
+
 function createBranchedMaze() {
   const runtime = createMaze({ grid: { cols: 3, rows: 2, type: 'square' } })
   runtime.setEdgeOpenedBetween({ x: 0, y: 0 }, { x: 1, y: 0 }, true)
@@ -91,5 +159,21 @@ function createSolveState(algorithm: MazeSolvingAlgorithm): SolveState {
     status: 'running',
     visited: {},
     visitedCount: 0,
+  }
+}
+
+function snapshotSolveVisual(
+  state: SolveState,
+  currentHeadKey: string | null,
+  floodDepthByKey: Record<string, number>,
+) {
+  return {
+    cameFrom: { ...state.cameFrom },
+    currentHeadKey,
+    floodDepthByKey: { ...floodDepthByKey },
+    frontier: [...state.frontier].sort(),
+    frontierSize: state.frontierSize,
+    visited: { ...state.visited },
+    visitedCount: state.visitedCount,
   }
 }

@@ -5,7 +5,48 @@ import {
   advanceGenerationPreview,
   createGenerationPreview,
   getHuntScanSegment,
+  rebuildGenerationPreview,
+  shouldRenderGenerationPreview,
 } from '../src/lib/controllers/generation'
+
+describe('generation preview rewind', () => {
+  it('restores visual and maze state after stepping backward', () => {
+    const preview = createPreview('dfs', 'rewind-generation')
+    for (let index = 0; index < 12; index += 1) {
+      expect(advanceGenerationPreview(preview)).not.toBeNull()
+    }
+    const expectedVisual = snapshotPreview(preview)
+    const expectedEdges = snapshotOpenedEdges(preview)
+
+    expect(advanceGenerationPreview(preview)).not.toBeNull()
+    expect(preview.player.prev()).toBe(true)
+    rebuildGenerationPreview(preview)
+
+    expect(snapshotPreview(preview)).toEqual(expectedVisual)
+    expect(snapshotOpenedEdges(preview)).toEqual(expectedEdges)
+  })
+
+  it('can leave and re-enter the completed generation state', () => {
+    const preview = createPreview('dfs', 'rewind-complete-generation')
+    while (advanceGenerationPreview(preview) !== null) {
+      // finish
+    }
+    const completedVisual = snapshotPreview(preview)
+    const completedEdges = snapshotOpenedEdges(preview)
+    preview.committed = true
+    expect(shouldRenderGenerationPreview(preview)).toBe(false)
+
+    expect(preview.player.prev()).toBe(true)
+    rebuildGenerationPreview(preview)
+    expect(preview.player.done).toBe(false)
+    expect(shouldRenderGenerationPreview(preview)).toBe(true)
+
+    expect(advanceGenerationPreview(preview)).not.toBeNull()
+    expect(preview.player.done).toBe(true)
+    expect(snapshotPreview(preview)).toEqual(completedVisual)
+    expect(snapshotOpenedEdges(preview)).toEqual(completedEdges)
+  })
+})
 
 describe('hunt-and-kill generation preview', () => {
   it('shows a full-width scan line, then returns to carving', () => {
@@ -81,4 +122,41 @@ function advanceUntil(
     }
   }
   expect(condition()).toBe(true)
+}
+
+function createPreview(algorithm: 'dfs', seed: string) {
+  const runtime = createMaze({
+    grid: { cols: 5, rows: 5, type: 'square' },
+    seed,
+  })
+  return createGenerationPreview({
+    algorithm,
+    player: runtime.generate(algorithm),
+    runtime,
+    view: {
+      algorithm,
+      cols: 5,
+      end: { x: 4, y: 4 },
+      rows: 5,
+      start: { x: 0, y: 0 },
+    },
+  })
+}
+
+function snapshotPreview(preview: ReturnType<typeof createPreview>) {
+  return {
+    currentHeadKey: preview.currentHeadKey,
+    discoveredCount: preview.discoveredCount,
+    discoveredKeys: [...preview.discoveredKeys].sort(),
+    huntScanRow: preview.huntScanRow,
+    lastCarveKeys: [...preview.lastCarveKeys],
+    parentByKey: { ...preview.parentByKey },
+  }
+}
+
+function snapshotOpenedEdges(preview: ReturnType<typeof createPreview>): string[] {
+  return preview.runtime.grid.edges
+    .filter(edge => edge.opened)
+    .map(edge => edge.id)
+    .sort()
 }

@@ -12,7 +12,7 @@ import {
   shouldShowSolveProgress,
 } from './algorithms'
 import { app } from './app-state'
-import { getHuntScanSegment } from './controllers/generation'
+import { getHuntScanSegment, shouldRenderGenerationPreview } from './controllers/generation'
 import { maybeSyncUi, syncUi } from './controllers/status'
 import {
   getGenerationActiveSegmentPoints,
@@ -135,7 +135,10 @@ export function render(): void {
     return
   }
 
-  const preview = app.activeTab === 'generate' ? app.generationPreview : null
+  const generationPreview = app.activeTab === 'generate' ? app.generationPreview : null
+  const preview = generationPreview && shouldRenderGenerationPreview(generationPreview)
+    ? generationPreview
+    : null
   const previewingGeneration = preview !== null
   const activeMaze = preview ? preview.view : app.maze
   const activeRuntime = preview ? preview.runtime : app.mazeRuntime
@@ -393,7 +396,7 @@ function renderWebgl2dView(
     hintDots,
     hintRings,
     hintSegments,
-    overlayKey: getWebgl2dOverlayKey(activeRuntime),
+    overlayKey: getWebgl2dOverlayKey(activeRuntime, previewing),
     panX: app.panX,
     panY: app.panY,
     runtime: activeRuntime,
@@ -441,13 +444,14 @@ function getWebgl2dCellKey(activeRuntime: Maze, previewing: boolean): string {
   ].join('|')
 }
 
-function getWebgl2dOverlayKey(activeRuntime: Maze): string {
+function getWebgl2dOverlayKey(activeRuntime: Maze, previewing: boolean): string {
   const state = activeRuntime.getState()
   return [
     state.phase,
     state.index,
     state.done,
     app.activeTab,
+    previewing ? `generation:${app.generationCacheVersion}` : 'maze',
     app.stepState.status,
     app.stepState.path.length,
     app.stepState.algorithm,

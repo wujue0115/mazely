@@ -14,6 +14,7 @@ import {
   mazeHeightInput,
   mazeWidthInput,
   pathText,
+  previousStepButton,
   resetButton,
   runButton,
   saveMazeButton,
@@ -67,16 +68,19 @@ export function syncUi(): void {
     ? app.generationPreview.runtime.grid.cells.length
     : 0
   const partialSolve = app.stepState.status === 'running' && app.stepState.visitedCount > 0
+  const partialGeneration = app.generationPreview !== null
+    && !app.generationPreview.player.done
   loadMazeButton.disabled = app.generating || app.running
   saveMazeButton.disabled = app.generating
     || app.running
     || !app.hasGeneratedMaze
-    || app.generationPreview !== null
+    || partialGeneration
     || partialSolve
 
   syncUiState({
     activeTab: app.activeTab,
     generating: app.generating,
+    generationDone: app.generationPreview?.player.done ?? false,
     generationPreviewAlgorithm: app.generationPreview?.algorithm ?? getGenerationAlgorithm(generationSelect.value),
     generationStepIndex: app.generationPreview?.player.index ?? 0,
     generationStepTotal: app.generationPreview?.player.total ?? 0,
@@ -84,12 +88,15 @@ export function syncUi(): void {
     floodAlgorithm,
     exportSvgButton,
     getGenerationTrailKeysSize: () => getGenerationTrailKeys().size,
+    hasGeneratedMaze: app.hasGeneratedMaze,
     hasGenerationPreviewVisible: isGenerationPreviewVisible(),
     heightInput: mazeHeightInput,
     lockRatioInput: lockGridRatioInput,
     resetButton,
+    previousStepButton,
     runButton,
     running: app.running,
+    solveStepIndex: app.solvePlayer?.index ?? 0,
     shapeLocked: app.shape !== null,
     solvingSelect,
     speedLabel,

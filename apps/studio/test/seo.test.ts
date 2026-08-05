@@ -17,6 +17,7 @@ describe('studio SEO metadata', () => {
     expect(html).toContain('<meta property="og:image:height" content="630" />')
     expect(html).toContain('<script type="application/ld+json">')
     expect(html).toContain('<h1 class="top-nav-brand">')
+    expect(html).toContain('<span id="package-version" class="top-nav-version">v0.3.0</span>')
   })
 
   it('publishes crawler discovery files for the production origin', async () => {
