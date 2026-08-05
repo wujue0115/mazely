@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-05
+
 ### Added
 
 - Added bundled `solve.process` steps for BFS, Greedy Best-First, and A\* so
@@ -35,5 +37,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with ESM output and TypeScript declarations.
 - Added Mazely Studio and the VitePress documentation site.
 
-[Unreleased]: https://github.com/wujue0115/mazely/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/wujue0115/mazely/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/wujue0115/mazely/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/wujue0115/mazely/releases/tag/v0.1.0
