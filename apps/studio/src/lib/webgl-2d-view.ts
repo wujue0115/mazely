@@ -149,6 +149,18 @@ export class Webgl2dMazeView {
     this.renderFrame()
   }
 
+  getCaptureSize(): { height: number, width: number } {
+    return {
+      height: this.renderer.domElement.height,
+      width: this.renderer.domElement.width,
+    }
+  }
+
+  captureTo(context: CanvasRenderingContext2D): void {
+    this.renderer.render(this.scene, this.camera)
+    context.drawImage(this.renderer.domElement, 0, 0)
+  }
+
   sync(state: Webgl2dViewState): void {
     const { cols, rows } = state.runtime.grid
     this.ensureCellMesh(state.runtime.grid.cells.length)

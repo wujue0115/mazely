@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added a previous-step control to Mazely Studio for rewinding paused Generate
   and Solve animations, including completed animations.
+- Added current-view image export in Mazely Studio for PNG, JPEG, and WebP,
+  including the active 2D or 3D camera, plus the existing 2D SVG vector export.
 
 ### Changed
 
