@@ -32,9 +32,9 @@ short-lived workflow.
 
 - Restrict creation and deletion of release tags to maintainers.
 - Create a tag only from the exact `main` commit that passed `CI Gate`.
-- Use the npm token in GitHub Actions secrets for the first publication.
-- After both packages exist, configure npm Trusted Publishing for
-  `.github/workflows/release.yml`, verify an OIDC release, and remove the
-  long-lived token.
+- Configure npm Trusted Publishing for both packages with this repository and
+  `.github/workflows/release.yml` before creating the release tag.
+- Keep `id-token: write` enabled for the release job; do not store a long-lived
+  npm publishing token in GitHub Actions secrets.
 - Do not require Cloudflare deployment checks for tag creation; tags publish
   npm packages and do not deploy Docs or Studio.
