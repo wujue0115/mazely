@@ -17,6 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Mazely Studio's forward-step control now restarts a completed Solve animation
   and advances its first step.
 
+### Fixed
+
+- Corrected Binary Tree generation step direction, including masked mazes, so
+  animation heads move from the north or west neighbor toward the current cell.
+
 ## [0.2.0] - 2026-08-05
 
 ### Added

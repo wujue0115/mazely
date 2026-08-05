@@ -112,6 +112,48 @@ describe('aldous-broder generation preview', () => {
   })
 })
 
+describe('binary-tree generation preview', () => {
+  it('keeps masked-maze heads moving toward the current cell', () => {
+    const T = true
+    const F = false
+    const mask = [
+      [F, F, T, F, F],
+      [F, F, T, F, F],
+      [T, T, T, T, T],
+      [F, F, T, F, F],
+      [F, F, T, F, F],
+    ]
+    const runtime = createMaze({
+      grid: { cols: 5, mask, rows: 5, type: 'square' },
+      seed: 'masked-binary-tree-direction',
+    })
+    const preview = createGenerationPreview({
+      algorithm: 'binary-tree',
+      player: runtime.generate('binary-tree'),
+      runtime,
+      view: {
+        algorithm: 'binary-tree',
+        cols: 5,
+        end: { x: 4, y: 2 },
+        rows: 5,
+        start: { x: 0, y: 2 },
+      },
+    })
+
+    while (advanceGenerationPreview(preview) !== null) {
+      const step = preview.player.lastStep
+      if (step?.type !== 'carve') {
+        continue
+      }
+      const from = cellIdToPoint(step.payload.from!)
+      const to = cellIdToPoint(step.payload.to)
+      expect(to.y > from.y || (to.y === from.y && to.x > from.x)).toBe(true)
+      expect(preview.currentHeadKey).toBe(`${to.x},${to.y}`)
+      expect(preview.parentByKey[`${to.x},${to.y}`]).toBe(`${from.x},${from.y}`)
+    }
+  })
+})
+
 function advanceUntil(
   condition: () => boolean,
   preview: Parameters<typeof advanceGenerationPreview>[0],
