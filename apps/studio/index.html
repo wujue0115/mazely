@@ -408,9 +408,9 @@
             <span class="icon icon-upload" aria-hidden="true"></span>
             Open
           </button>
-          <button id="export-svg-btn" class="wide-btn" type="button" title="Export SVG">
+          <button id="export-btn" class="wide-btn" type="button" title="Export image">
             <span class="icon icon-export" aria-hidden="true"></span>
-            SVG
+            Export
           </button>
         </div>
         <input
@@ -636,6 +636,67 @@
         </button>
       </footer>
     </aside>
+
+    <div
+      id="export-dialog"
+      class="export-dialog is-hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="export-dialog-title"
+    >
+      <button
+        id="export-dialog-backdrop"
+        class="export-dialog-backdrop"
+        type="button"
+        aria-label="Close export dialog"
+      ></button>
+      <section class="export-dialog-window">
+        <header class="export-dialog-header">
+          <div>
+            <span class="export-dialog-eyebrow">CURRENT VIEW</span>
+            <h2 id="export-dialog-title">Export image</h2>
+          </div>
+          <button id="export-dialog-close" class="export-dialog-close" type="button" title="Close" aria-label="Close">
+            ✕
+          </button>
+        </header>
+
+        <div class="export-dialog-body">
+          <label class="export-field" for="export-format">
+            <span>Format</span>
+            <select id="export-format">
+              <option value="png">PNG</option>
+              <option value="jpeg">JPEG</option>
+              <option value="webp">WebP</option>
+              <option id="export-svg-option" value="svg">SVG · 2D vector</option>
+            </select>
+          </label>
+
+          <label id="export-background-field" class="export-field" for="export-background">
+            <span>Background</span>
+            <select id="export-background">
+              <option value="as-shown">As shown</option>
+              <option value="transparent">Transparent</option>
+            </select>
+          </label>
+
+          <label id="export-quality-field" class="export-field is-hidden" for="export-quality">
+            <span>Quality</span>
+            <input id="export-quality" type="range" min="10" max="100" step="1" value="90" />
+            <output id="export-quality-label" for="export-quality">90%</output>
+          </label>
+
+          <p id="export-meta" class="export-meta"></p>
+        </div>
+
+        <footer class="export-dialog-footer">
+          <button id="export-download-btn" class="cta-btn" type="button">
+            <span class="icon icon-download" aria-hidden="true"></span>
+            Download
+          </button>
+        </footer>
+      </section>
+    </div>
 
     <div id="shape-editor" class="shape-editor is-hidden" role="dialog" aria-modal="true" aria-label="Shape studio">
       <div id="shape-editor-backdrop" class="shape-editor-backdrop"></div>

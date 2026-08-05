@@ -93,7 +93,7 @@ export interface SyncUiParams {
   getGenerationTrailKeysSize: () => number
   hasGenerationPreviewVisible: boolean
   hasGeneratedMaze: boolean
-  exportSvgButton: HTMLButtonElement
+  exportButton: HTMLButtonElement
   floodAlgorithm: boolean
   resetButton: HTMLButtonElement
   previousStepButton: HTMLButtonElement
@@ -134,7 +134,7 @@ export function syncUiState(params: SyncUiParams): void {
   params.styleEditingVisibility()
   params.speedLabel.textContent = `${params.stepDelay} ms / step`
   params.wallLabel.textContent = `${params.wallThickness.toFixed(1)} px`
-  params.exportSvgButton.disabled = params.generating || params.running
+  params.exportButton.disabled = params.generating || params.running
 
   if (params.activeTab === 'generate') {
     if (params.generating && params.generationTotalCells > 0) {

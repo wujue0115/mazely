@@ -7,6 +7,7 @@ import {
   shouldShowFloodVisualization,
 } from './lib/algorithms'
 import { app, initAppState } from './lib/app-state'
+import { initImageExport } from './lib/controllers/image-export'
 import {
   initMazeEditor,
   onMazeEditPointerDown,
@@ -61,7 +62,6 @@ import {
   canvasWrap,
   controlBar,
   ctx,
-  exportSvgButton,
   floodThemeSelect,
   focusViewButton,
   generationSelect,
@@ -112,6 +112,7 @@ import {
   wallRange,
   workbenchPanel,
 } from './lib/dom'
+import { buildExportFilename, downloadBlob } from './lib/export-image'
 import { buildMazeSvg } from './lib/export-svg'
 import { isFloodTheme } from './lib/flood'
 import { key, parsePointKey } from './lib/point'
@@ -270,13 +271,9 @@ app.shapeEditor = initShapeEditor({
 })
 initMazeEditor()
 initMazeFileActions()
+initImageExport({ exportSvg, showToast })
 
-exportSvgButton.addEventListener('click', () => {
-  if (app.generating || app.running) {
-    showToast('Stop the animation before exporting.')
-    return
-  }
-
+function exportSvg(): void {
   const activePreview = app.activeTab === 'generate' ? app.generationPreview : null
   const maze = activePreview?.view ?? app.maze
   const runtime = activePreview?.runtime ?? app.mazeRuntime
@@ -302,34 +299,34 @@ exportSvgButton.addEventListener('click', () => {
     visibleStart: app.visibleElements.start,
   })
 
-  downloadTextFile(
-    `mazely-${maze.cols}x${maze.rows}.svg`,
-    buildMazeSvg({
-      flood: floodActive
-        ? {
-            depthByKey: app.floodDepthByKey,
-            theme: app.floodTheme,
-          }
-        : undefined,
-      maze,
-      pointMarkers,
-      runtime,
-      solve: app.activeTab === 'solve' && app.stepState.algorithm !== 'flood'
-        ? {
-            frontierHeads: getExportSolveFrontierHeads(),
-            frontierTrails: getExportSolveFrontierTrails(),
-            heads: getExportSolveHeads(),
-            path: app.stepState.path,
-            trails: getExportSolveTrails(),
-            visited: Object.keys(app.stepState.visited).map(parsePointKey),
-          }
-        : undefined,
-      theme: app.styleTheme,
-      visibleElements: app.visibleElements,
-    }),
-    'image/svg+xml;charset=utf-8',
+  const svg = buildMazeSvg({
+    flood: floodActive
+      ? {
+          depthByKey: app.floodDepthByKey,
+          theme: app.floodTheme,
+        }
+      : undefined,
+    maze,
+    pointMarkers,
+    runtime,
+    solve: app.activeTab === 'solve' && app.stepState.algorithm !== 'flood'
+      ? {
+          frontierHeads: getExportSolveFrontierHeads(),
+          frontierTrails: getExportSolveFrontierTrails(),
+          heads: getExportSolveHeads(),
+          path: app.stepState.path,
+          trails: getExportSolveTrails(),
+          visited: Object.keys(app.stepState.visited).map(parsePointKey),
+        }
+      : undefined,
+    theme: app.styleTheme,
+    visibleElements: app.visibleElements,
+  })
+  downloadBlob(
+    buildExportFilename(maze.cols, maze.rows, 'svg'),
+    new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }),
   )
-})
+}
 
 function getExportSolveHeads() {
   if (app.stepState.status !== 'running') {
@@ -479,14 +476,4 @@ function resizeCanvas(): void {
     hasFocusedInitialView = true
   }
   render()
-}
-
-function downloadTextFile(filename: string, contents: string, type: string): void {
-  const blob = new Blob([contents], { type })
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  link.click()
-  URL.revokeObjectURL(url)
 }

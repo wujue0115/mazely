@@ -1653,6 +1653,115 @@ input[type='checkbox'].switch:checked::before {
   color: var(--primary-fixed-dim);
 }
 
+/* ---------- Image export ---------- */
+
+.export-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--ui-pad-lg);
+}
+
+.export-dialog.is-hidden {
+  display: none;
+}
+
+.export-dialog-backdrop {
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  border: 0;
+  background: rgba(0, 0, 0, 0.6);
+  cursor: default;
+}
+
+.export-dialog-window {
+  position: relative;
+  width: min(420px, calc(100vw - 32px));
+  overflow: hidden;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-container);
+  box-shadow: var(--shadow-float);
+}
+
+.export-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 72px;
+  padding: var(--ui-pad-lg);
+  border-bottom: 1px solid var(--hairline);
+  background: var(--surface);
+}
+
+.export-dialog-header h2 {
+  margin: 3px 0 0;
+  font: var(--text-headline-md);
+}
+
+.export-dialog-eyebrow {
+  color: var(--primary-fixed-dim);
+  font: var(--text-label-xs);
+  letter-spacing: var(--tracking-label);
+}
+
+.export-dialog-close {
+  width: var(--ui-control-height-sm);
+  height: var(--ui-control-height-sm);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--on-surface-variant);
+  cursor: pointer;
+}
+
+.export-dialog-close:hover {
+  background: var(--surface-bright);
+  color: var(--error);
+}
+
+.export-dialog-body {
+  display: grid;
+  gap: var(--ui-gap-lg);
+  padding: var(--ui-pad-lg);
+}
+
+.export-field {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--ui-gap-md);
+  color: var(--on-surface-variant);
+  font: var(--text-code-sm);
+}
+
+.export-field.is-hidden {
+  display: none;
+}
+
+.export-field output {
+  min-width: 38px;
+  color: var(--primary-fixed-dim);
+  text-align: right;
+}
+
+.export-meta {
+  min-height: 18px;
+  margin: 0;
+  color: var(--on-surface-variant);
+  font: var(--text-code-sm);
+}
+
+.export-dialog-footer {
+  padding: var(--ui-pad-lg);
+  border-top: 1px solid var(--hairline);
+}
+
 /* ---------- Shape Studio (floating editor window) ---------- */
 
 .shape-editor-window .is-hidden {

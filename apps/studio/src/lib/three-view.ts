@@ -200,6 +200,18 @@ export class ThreeMazeView {
     this.renderFrame()
   }
 
+  getCaptureSize(): { height: number, width: number } {
+    return {
+      height: this.renderer.domElement.height,
+      width: this.renderer.domElement.width,
+    }
+  }
+
+  captureTo(context: CanvasRenderingContext2D): void {
+    this.renderer.render(this.scene, this.camera)
+    context.drawImage(this.renderer.domElement, 0, 0)
+  }
+
   resetCamera(): void {
     if (this.syncedRows > 0 && this.syncedCols > 0) {
       this.fitCameraToMaze(this.syncedRows, this.syncedCols)

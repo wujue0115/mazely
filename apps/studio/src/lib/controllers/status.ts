@@ -7,7 +7,7 @@ import {
 import {
   editEndReadout,
   editStartReadout,
-  exportSvgButton,
+  exportButton,
   generationSelect,
   loadMazeButton,
   lockGridRatioInput,
@@ -86,7 +86,7 @@ export function syncUi(): void {
     generationStepTotal: app.generationPreview?.player.total ?? 0,
     generationTotalCells,
     floodAlgorithm,
-    exportSvgButton,
+    exportButton,
     getGenerationTrailKeysSize: () => getGenerationTrailKeys().size,
     hasGeneratedMaze: app.hasGeneratedMaze,
     hasGenerationPreviewVisible: isGenerationPreviewVisible(),
