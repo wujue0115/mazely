@@ -18,7 +18,7 @@ class BinaryTreeSquareAlgorithm implements MazeAlgorithm<SquareCell, MazeGenerat
       const next = context.random.pick(candidates)
       const edge = edgeBetween(cell, next)
       if (edge) {
-        yield buildCarveStep(edge, cell, next)
+        yield buildCarveStep(edge, next, cell)
       }
     }
   }

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   applySerializedGrid,
   areCellsDirectlyLinked,
+  cellIdToPoint,
   getReachableCellIds,
   isMazeGenerationAlgorithm,
   isMazeSolvingAlgorithm,
@@ -121,6 +122,33 @@ describe('@mazely/core', () => {
       index: player.steps.length,
       totalSteps: player.steps.length,
     })
+  })
+
+  it('reports binary-tree carve steps toward the current cell inside a mask', () => {
+    const T = true
+    const F = false
+    const mask = [
+      [F, F, T, F, F],
+      [F, F, T, F, F],
+      [T, T, T, T, T],
+      [F, F, T, F, F],
+      [F, F, T, F, F],
+    ]
+    const maze = new Mazely({
+      grid: { cols: 5, mask, rows: 5, type: 'square' },
+      seed: 'binary-tree-direction',
+    })
+    const player = maze.generate('binary-tree')
+
+    player.finish()
+
+    const carveSteps = player.steps.filter(step => step.type === 'carve')
+    expect(carveSteps).toHaveLength(8)
+    for (const step of carveSteps) {
+      const from = cellIdToPoint(step.payload.from!)
+      const to = cellIdToPoint(step.payload.to)
+      expect(to.y > from.y || (to.y === from.y && to.x > from.x)).toBe(true)
+    }
   })
 
   it('restores the exact initial state after a full round trip', () => {

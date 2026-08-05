@@ -105,10 +105,53 @@ function applyGenerationStepToPreview(
     discovered.push(toPoint)
   }
 
-  preview.parentByKey[toKey] ??= fromKey
+  if (fromKey) {
+    connectGenerationTrees(preview.parentByKey, fromKey, toKey)
+  }
+  else {
+    preview.parentByKey[toKey] ??= null
+  }
   preview.currentHeadKey = toKey
   preview.lastCarveKeys = fromKey ? [fromKey, toKey] : [toKey]
   return discovered
+}
+
+/** Connects two preview trees while keeping the step's `to` cell as the head. */
+function connectGenerationTrees(
+  parentByKey: Record<string, string | null>,
+  fromKey: string,
+  toKey: string,
+): void {
+  if (fromKey === toKey) {
+    return
+  }
+
+  const fromAncestors = new Set(collectAncestors(parentByKey, fromKey))
+  const toAncestors = collectAncestors(parentByKey, toKey)
+  if (toAncestors.some(ancestor => fromAncestors.has(ancestor))) {
+    return
+  }
+
+  let parent: string | null = fromKey
+  for (const child of toAncestors) {
+    parentByKey[child] = parent
+    parent = child
+  }
+}
+
+function collectAncestors(
+  parentByKey: Record<string, string | null>,
+  startKey: string,
+): string[] {
+  const ancestors: string[] = []
+  const seen = new Set<string>()
+  let currentKey: string | null = startKey
+  while (currentKey && !seen.has(currentKey)) {
+    ancestors.push(currentKey)
+    seen.add(currentKey)
+    currentKey = parentByKey[currentKey] ?? null
+  }
+  return ancestors
 }
 
 export function isGenerationPreviewDone(preview: GenerationPreview): boolean {
