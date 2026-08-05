@@ -19,6 +19,7 @@ import {
   togglePanel,
 } from './lib/controllers/panels'
 import {
+  onPreviousStepAction,
   onResetAction,
   onRunAction,
   onStepAction,
@@ -71,6 +72,7 @@ import {
   panelCollapseButton,
   panelRail,
   playDockToggleButton,
+  previousStepButton,
   railThemesButton,
   railWorkbenchButton,
   resetButton,
@@ -434,6 +436,7 @@ document.addEventListener('pointerdown', (event) => {
 })
 
 runButton.addEventListener('click', onRunAction)
+previousStepButton.addEventListener('click', onPreviousStepAction)
 stepButton.addEventListener('click', onStepAction)
 resetButton.addEventListener('click', onResetAction)
 focusViewButton.addEventListener('click', resetView)

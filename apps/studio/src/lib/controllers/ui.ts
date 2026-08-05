@@ -19,6 +19,54 @@ export function computeLoopSpeed(rawValue: number): LoopSpeedResult {
 }
 
 export type SolveRunAction = 'pause' | 'restart' | 'start'
+export type SolveStepAction = 'restart' | 'step'
+
+export interface StepButtonState {
+  previousDisabled: boolean
+  stepDisabled: boolean
+}
+
+export type GenerationPlaybackStatus = 'generated' | 'generating' | 'generation-ready' | 'idle'
+
+export function getGenerationPlaybackStatus(options: {
+  generating: boolean
+  generationDone: boolean
+  hasGeneratedMaze: boolean
+  hasGenerationPreview: boolean
+}): GenerationPlaybackStatus {
+  if (options.generating) {
+    return 'generating'
+  }
+  if (options.hasGeneratedMaze && (!options.hasGenerationPreview || options.generationDone)) {
+    return 'generated'
+  }
+  return options.hasGenerationPreview ? 'generation-ready' : 'idle'
+}
+
+export function getStepButtonState(options: {
+  activeTab: PanelTab
+  generating: boolean
+  generationDone: boolean
+  generationStepIndex: number
+  running: boolean
+  solveStepIndex: number
+}): StepButtonState {
+  if (options.activeTab === 'edit') {
+    return { previousDisabled: true, stepDisabled: true }
+  }
+
+  if (options.activeTab === 'generate') {
+    return {
+      previousDisabled: options.generating || options.generationStepIndex === 0,
+      stepDisabled: options.generating,
+    }
+  }
+
+  return {
+    previousDisabled: options.running || options.solveStepIndex === 0,
+    stepDisabled: options.running,
+  }
+}
 
 export function getSolveRunAction(
   running: boolean,
@@ -31,19 +79,27 @@ export function getSolveRunAction(
   return status === 'running' ? 'start' : 'restart'
 }
 
+export function getSolveStepAction(status: SolveState['status']): SolveStepAction {
+  return status === 'running' ? 'step' : 'restart'
+}
+
 export interface SyncUiParams {
   activeTab: PanelTab
   generating: boolean
+  generationDone: boolean
   generationPreviewAlgorithm: MazeGenerationAlgorithm
   generationStepIndex: number
   generationStepTotal: number
   getGenerationTrailKeysSize: () => number
   hasGenerationPreviewVisible: boolean
+  hasGeneratedMaze: boolean
   exportSvgButton: HTMLButtonElement
   floodAlgorithm: boolean
   resetButton: HTMLButtonElement
+  previousStepButton: HTMLButtonElement
   runButton: HTMLButtonElement
   running: boolean
+  solveStepIndex: number
   /** True while an image shape fixes the grid dimensions. */
   shapeLocked: boolean
   solvingSelect: HTMLSelectElement
@@ -68,6 +124,13 @@ export interface SyncUiParams {
 }
 
 export function syncUiState(params: SyncUiParams): void {
+  const stepButtons = getStepButtonState(params)
+  const generationStatus = getGenerationPlaybackStatus({
+    generating: params.generating,
+    generationDone: params.generationDone,
+    hasGeneratedMaze: params.hasGeneratedMaze,
+    hasGenerationPreview: params.hasGenerationPreviewVisible,
+  })
   params.styleEditingVisibility()
   params.speedLabel.textContent = `${params.stepDelay} ms / step`
   params.wallLabel.textContent = `${params.wallThickness.toFixed(1)} px`
@@ -88,7 +151,7 @@ export function syncUiState(params: SyncUiParams): void {
     }
     else {
       params.statusText.classList.remove('is-progress')
-      params.statusText.textContent = params.hasGenerationPreviewVisible ? 'generation-ready' : 'idle'
+      params.statusText.textContent = generationStatus
     }
 
     params.statVisited.textContent = params.hasGenerationPreviewVisible ? String(params.visitedGenerationCount) : '0'
@@ -101,7 +164,8 @@ export function syncUiState(params: SyncUiParams): void {
 
     params.runButton.classList.toggle('is-running', params.generating)
     params.runButton.disabled = false
-    params.stepButton.disabled = params.generating
+    params.previousStepButton.disabled = stepButtons.previousDisabled
+    params.stepButton.disabled = stepButtons.stepDisabled
     params.resetButton.disabled = false
 
     params.widthInput.disabled = params.generating || params.shapeLocked
@@ -119,7 +183,8 @@ export function syncUiState(params: SyncUiParams): void {
     params.statPath.textContent = '0'
     params.runButton.classList.toggle('is-running', false)
     params.runButton.disabled = true
-    params.stepButton.disabled = true
+    params.previousStepButton.disabled = stepButtons.previousDisabled
+    params.stepButton.disabled = stepButtons.stepDisabled
     params.resetButton.disabled = false
     params.widthInput.disabled = params.shapeLocked
     params.heightInput.disabled = params.useViewportRatio || params.shapeLocked
@@ -142,9 +207,9 @@ export function syncUiState(params: SyncUiParams): void {
   params.statPath.textContent = String(params.stepState.path.length)
 
   params.runButton.classList.toggle('is-running', params.running)
-  const solveDone = params.stepState.status !== 'running'
   params.runButton.disabled = false
-  params.stepButton.disabled = params.running || solveDone
+  params.previousStepButton.disabled = stepButtons.previousDisabled
+  params.stepButton.disabled = stepButtons.stepDisabled
   params.resetButton.disabled = false
 
   params.widthInput.disabled = params.generating || params.shapeLocked

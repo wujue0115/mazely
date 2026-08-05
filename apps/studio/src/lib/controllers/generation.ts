@@ -9,6 +9,7 @@ import { key } from '../point'
  */
 export interface GenerationPreview {
   algorithm: MazeGenerationAlgorithm
+  committed: boolean
   runtime: Maze
   player: StepPlayer<MazeGenerationStep>
   view: MazeViewState
@@ -28,6 +29,7 @@ export function createGenerationPreview(options: {
 }): GenerationPreview {
   return {
     algorithm: options.algorithm,
+    committed: false,
     currentHeadKey: null,
     discoveredCount: 0,
     discoveredKeys: new Set<string>(),
@@ -51,7 +53,27 @@ export function advanceGenerationPreview(preview: GenerationPreview): MazePoint[
     return null
   }
 
-  const step = preview.player.steps[stepIndex]
+  return applyGenerationStepToPreview(preview, preview.player.steps[stepIndex])
+}
+
+/** Rebuilds Studio-owned generation visuals at the player's current cursor. */
+export function rebuildGenerationPreview(preview: GenerationPreview): void {
+  preview.currentHeadKey = null
+  preview.discoveredCount = 0
+  preview.discoveredKeys.clear()
+  preview.huntScanRow = null
+  preview.lastCarveKeys = []
+  preview.parentByKey = {}
+
+  for (let index = 0; index < preview.player.index; index += 1) {
+    applyGenerationStepToPreview(preview, preview.player.steps[index])
+  }
+}
+
+function applyGenerationStepToPreview(
+  preview: GenerationPreview,
+  step: MazeGenerationStep,
+): MazePoint[] {
   if (step.type === 'hunt-scan') {
     const row = step.payload.row
     preview.currentHeadKey = null
@@ -91,6 +113,11 @@ export function advanceGenerationPreview(preview: GenerationPreview): MazePoint[
 
 export function isGenerationPreviewDone(preview: GenerationPreview): boolean {
   return preview.player.done
+}
+
+/** Completed previews retain history but render as the committed maze. */
+export function shouldRenderGenerationPreview(preview: GenerationPreview): boolean {
+  return !preview.committed || !preview.player.done
 }
 
 export function getHuntScanSegment(

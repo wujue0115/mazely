@@ -22,6 +22,45 @@ export interface SolveStepVisualResult {
   floodVisit?: { depth: number, pointKey: string }
 }
 
+export interface RebuiltSolveVisualState {
+  currentHeadKey: string | null
+  floodDepthByKey: Record<string, number>
+  state: SolveState
+}
+
+/** Replays buffered steps into fresh Studio-owned solve animation state. */
+export function rebuildSolveVisualState(options: {
+  algorithm: MazeSolvingAlgorithm
+  end: MazePoint
+  start: MazePoint
+  steps: MazeSolvingStep[]
+}): RebuiltSolveVisualState {
+  const state: SolveState = {
+    algorithm: options.algorithm,
+    cameFrom: {},
+    end: { ...options.end },
+    frontier: new Set<string>(),
+    frontierSize: 0,
+    path: [],
+    start: { ...options.start },
+    status: 'running',
+    visited: {},
+    visitedCount: 0,
+  }
+  const floodDepthByKey: Record<string, number> = {}
+  let currentHeadKey: string | null = key(state.start.x, state.start.y)
+
+  for (const step of options.steps) {
+    const visual = applySolveStepToState(state, step, currentHeadKey)
+    currentHeadKey = visual.currentHeadKey
+    if (visual.floodVisit) {
+      floodDepthByKey[visual.floodVisit.pointKey] = visual.floodVisit.depth
+    }
+  }
+
+  return { currentHeadKey, floodDepthByKey, state }
+}
+
 /** Folds one public solving step into Studio-owned animation state. */
 export function applySolveStepToState(
   state: SolveState,

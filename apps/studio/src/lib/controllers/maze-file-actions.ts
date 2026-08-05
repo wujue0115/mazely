@@ -53,7 +53,7 @@ export function getMazeSaveBlocker(): string | null {
   if (app.generating || app.running) {
     return 'Stop the animation before saving.'
   }
-  if (app.generationPreview) {
+  if (app.generationPreview && !app.generationPreview.player.done) {
     return 'Finish or reset generation before saving.'
   }
   if (!app.hasGeneratedMaze || !app.mazeRuntime) {

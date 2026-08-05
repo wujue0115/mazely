@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added a previous-step control to Mazely Studio for rewinding paused Generate
+  and Solve animations, including completed animations.
+
+### Changed
+
+- Mazely Studio's forward-step control now restarts a completed Solve animation
+  and advances its first step.
+
 ## [0.2.0] - 2026-08-05
 
 ### Added

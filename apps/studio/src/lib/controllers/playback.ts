@@ -15,19 +15,20 @@ import {
 } from '../app-state'
 import { bumpGenerationCacheVersion, bumpSolveCacheVersion } from '../derived'
 import { generationSelect, solvingSelect, speedRange } from '../dom'
-import { key } from '../point'
+import { key, parsePointKey } from '../point'
 import { render } from '../renderer'
 import { getRandomMaskPoint } from '../shape-mask'
-import { applySolveStepToState } from '../solver-state'
+import { applySolveStepToState, rebuildSolveVisualState } from '../solver-state'
 import { getRandomMazePoint, parseRange } from '../utils'
 import {
   advanceGenerationPreview,
   createGenerationPreview,
   isGenerationPreviewDone,
+  rebuildGenerationPreview,
 } from './generation'
 import { showToast, syncUi } from './status'
 import { syncStyleEditingVisibility } from './theme-panel'
-import { computeLoopSpeed, getSolveRunAction } from './ui'
+import { computeLoopSpeed, getSolveRunAction, getSolveStepAction } from './ui'
 import { syncGridDimensionInputs } from './workbench'
 
 export function syncLoopSpeed(): void {
@@ -173,6 +174,15 @@ export function onStepAction(): void {
   stepSolveOnce()
 }
 
+export function onPreviousStepAction(): void {
+  if (app.activeTab === 'generate') {
+    stepGeneratePreviousOnce()
+    return
+  }
+
+  stepSolvePreviousOnce()
+}
+
 export function onResetAction(): void {
   if (app.activeTab === 'generate') {
     resetGenerationPreview()
@@ -193,6 +203,10 @@ function toggleGenerateRun(): void {
     stopSolveAnimation()
   }
 
+  if (app.generationPreview?.committed && isGenerationAnimationDone()) {
+    clearGenerationPreviewState()
+  }
+
   ensureGenerationPreview()
   startGenerationAnimation()
 }
@@ -204,6 +218,10 @@ function stepGenerateOnce(): void {
 
   if (app.running) {
     stopSolveAnimation()
+  }
+
+  if (app.generationPreview?.committed && isGenerationAnimationDone()) {
+    clearGenerationPreviewState()
   }
 
   ensureGenerationPreview()
@@ -218,6 +236,29 @@ function stepGenerateOnce(): void {
     return
   }
 
+  render()
+}
+
+function stepGeneratePreviousOnce(): void {
+  const preview = app.generationPreview
+  if (app.generating || !preview || preview.player.index === 0) {
+    return
+  }
+
+  if (app.running) {
+    stopSolveAnimation()
+  }
+
+  if (!preview.player.prev()) {
+    return
+  }
+
+  rebuildGenerationPreview(preview)
+  rebuildGenerationDiscoveredMask(preview)
+  if (preview.committed) {
+    app.mazeEditVersion += 1
+  }
+  bumpGenerationCacheVersion()
   render()
 }
 
@@ -323,6 +364,9 @@ function advanceGenerationStep(): boolean {
   for (const point of discovered) {
     setGenerationDiscoveredMask(point.x, point.y)
   }
+  if (app.generationPreview.committed) {
+    app.mazeEditVersion += 1
+  }
   bumpGenerationCacheVersion()
   return true
 }
@@ -337,15 +381,27 @@ function finishGenerationAnimation(): void {
   app.mazeRuntime = app.generationPreview.runtime
   app.hasCustomStartAndEndPoints = false
   app.hasGeneratedMaze = true
+  app.generationPreview.committed = true
   app.stepState = createStepper(app.maze, app.mazeRuntime)
   app.solveCurrentHeadKey = key(app.stepState.start.x, app.stepState.start.y)
 
-  clearGenerationPreviewState()
   stopGenerationAnimation()
   render()
 }
 
 export function clearGenerationPreviewState(): void {
+  const preview = app.generationPreview
+  if (preview?.committed) {
+    preview.player.finish()
+    app.maze = preview.view
+    app.mazeRuntime = preview.runtime
+    app.hasCustomStartAndEndPoints = false
+    app.hasGeneratedMaze = true
+    app.mazeEditVersion += 1
+    app.stepState = createStepper(app.maze, app.mazeRuntime)
+    app.solveCurrentHeadKey = key(app.stepState.start.x, app.stepState.start.y)
+  }
+
   app.generationPreview = null
   app.generationLastTimestamp = 0
   app.generationElapsed = 0
@@ -371,6 +427,14 @@ function setGenerationDiscoveredMask(x: number, y: number): void {
     return
   }
   app.generationDiscoveredMask[y * app.generationMaskCols + x] = 1
+}
+
+function rebuildGenerationDiscoveredMask(preview: GenerationPreview): void {
+  resetGenerationDiscoveredMask(preview.runtime)
+  for (const pointKey of preview.discoveredKeys) {
+    const point = parsePointKey(pointKey)
+    setGenerationDiscoveredMask(point.x, point.y)
+  }
 }
 
 function toggleSolveRun(): void {
@@ -399,7 +463,7 @@ function toggleSolveRun(): void {
 }
 
 function stepSolveOnce(): void {
-  if (app.generating || app.stepState.status !== 'running') {
+  if (app.generating) {
     return
   }
 
@@ -407,9 +471,35 @@ function stepSolveOnce(): void {
     return
   }
 
+  if (getSolveStepAction(app.stepState.status) === 'restart') {
+    resetSolveState()
+  }
+
   if (!advanceSolveState()) {
     return
   }
+  render()
+}
+
+function stepSolvePreviousOnce(): void {
+  if (app.generating || app.running || !app.solvePlayer || app.solvePlayer.index === 0) {
+    return
+  }
+
+  if (!app.solvePlayer.prev()) {
+    return
+  }
+
+  const rebuilt = rebuildSolveVisualState({
+    algorithm: app.stepState.algorithm,
+    end: app.stepState.end,
+    start: app.stepState.start,
+    steps: app.solvePlayer.steps.slice(0, app.solvePlayer.index),
+  })
+  app.stepState = rebuilt.state
+  app.solveCurrentHeadKey = rebuilt.currentHeadKey
+  app.floodDepthByKey = rebuilt.floodDepthByKey
+  bumpSolveCacheVersion()
   render()
 }
 

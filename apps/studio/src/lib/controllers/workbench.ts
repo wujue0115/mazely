@@ -42,6 +42,10 @@ export function setActiveTab(tab: PanelTab): void {
     stopSolveAnimation()
   }
 
+  if ((tab === 'solve' || tab === 'edit') && app.generationPreview?.committed) {
+    clearGenerationPreviewState()
+  }
+
   if ((tab === 'solve' || tab === 'edit') && !app.hasGeneratedMaze && tab !== 'edit') {
     showToast('Please generate or edit a maze first.')
     return
