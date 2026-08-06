@@ -49,7 +49,7 @@ ES module CDN:
 
 ```html
 <script type="module">
-  import { createMaze } from 'https://esm.sh/mazely@0.2.0'
+  import { createMaze } from 'https://esm.sh/mazely@0.3.0'
 
   const maze = createMaze({ seed: 'browser-example' })
   maze.generate('dfs').finish()

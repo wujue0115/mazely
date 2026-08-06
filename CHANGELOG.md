@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-06
+
 ### Added
 
 - Added a previous-step control to Mazely Studio for rewinding paused Generate
@@ -16,13 +18,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Mazely Studio's forward-step control now restarts a completed Solve animation
-  and advances its first step.
+- Mazely Studio's forward-step control now restarts a completed Generate or
+  Solve animation and advances its first step.
 
 ### Fixed
 
 - Corrected Binary Tree generation step direction, including masked mazes, so
   animation heads move from the north or west neighbor toward the current cell.
+- Refined the image export dialog's spacing and visual hierarchy.
 
 ## [0.2.0] - 2026-08-05
 
@@ -54,6 +57,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with ESM output and TypeScript declarations.
 - Added Mazely Studio and the VitePress documentation site.
 
-[Unreleased]: https://github.com/wujue0115/mazely/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/wujue0115/mazely/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/wujue0115/mazely/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/wujue0115/mazely/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/wujue0115/mazely/releases/tag/v0.1.0
