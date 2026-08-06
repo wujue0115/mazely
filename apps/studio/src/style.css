@@ -1692,21 +1692,14 @@ input[type='checkbox'].switch:checked::before {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 72px;
   padding: var(--ui-pad-lg);
   border-bottom: 1px solid var(--hairline);
   background: var(--surface);
 }
 
 .export-dialog-header h2 {
-  margin: 3px 0 0;
+  margin: 0;
   font: var(--text-headline-md);
-}
-
-.export-dialog-eyebrow {
-  color: var(--primary-fixed-dim);
-  font: var(--text-label-xs);
-  letter-spacing: var(--tracking-label);
 }
 
 .export-dialog-close {
@@ -1728,7 +1721,7 @@ input[type='checkbox'].switch:checked::before {
 .export-dialog-body {
   display: grid;
   gap: var(--ui-gap-lg);
-  padding: var(--ui-pad-lg);
+  padding: var(--ui-pad-lg) var(--ui-pad-lg) 0;
 }
 
 .export-field {
@@ -1759,7 +1752,6 @@ input[type='checkbox'].switch:checked::before {
 
 .export-dialog-footer {
   padding: var(--ui-pad-lg);
-  border-top: 1px solid var(--hairline);
 }
 
 /* ---------- Shape Studio (floating editor window) ---------- */
