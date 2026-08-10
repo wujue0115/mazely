@@ -1,5 +1,5 @@
 import type { Maze, MazeGrid, MazePoint, SquareCell } from 'mazely'
-import type { FloodTheme } from './flood'
+import type { FloodColorSource } from './flood'
 import type { MazeViewState } from './maze-types'
 import type { StyleTheme, StyleVisibility } from './types'
 import { pointToCellId } from 'mazely'
@@ -10,7 +10,7 @@ import { FIXED_CELL_SIZE } from './types'
 interface ExportSvgOptions {
   flood?: {
     depthByKey: Record<string, number>
-    theme: FloodTheme
+    theme: FloodColorSource
   }
   pointMarkers?: {
     end: boolean

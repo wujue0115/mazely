@@ -20,65 +20,74 @@ import {
   styleWallInput,
   visibilityButtonByKey,
 } from '../dom'
-import { DEFAULT_FLOOD_THEME } from '../flood'
+import { DEFAULT_CUSTOM_FLOOD_THEME, DEFAULT_FLOOD_THEME } from '../flood'
 import { render } from '../renderer'
 import { DEFAULT_STYLE_THEME, DEFAULT_STYLE_VISIBILITY } from '../types'
 import { isHexColor } from '../utils'
+import { syncFloodThemeEditor } from './flood-theme-editor'
 
-function getVisibleStyleKeys(): Set<StyleKey> {
-  const visible = new Set<StyleKey>(['grid', 'wall', 'cell', 'unlinkedCell'])
+function getEnabledStyleKeys(): Set<StyleKey> {
+  const enabled = new Set<StyleKey>(['grid', 'wall', 'cell', 'unlinkedCell'])
 
   if (app.activeTab === 'generate') {
-    visible.add('visit')
-    visible.add('path')
+    enabled.add('visit')
+    enabled.add('path')
     const algorithm = getGenerationAlgorithm(generationSelect.value)
-    visible.add('head')
+    enabled.add('head')
     if (isGenerationVisibleMultiHeadMode(algorithm)) {
-      visible.add('frontier')
-      visible.add('subPath')
+      enabled.add('frontier')
+      enabled.add('subPath')
     }
     if (algorithm !== 'kruskal') {
-      visible.add('start')
+      enabled.add('start')
     }
-    return visible
+    return enabled
   }
 
   if (app.activeTab === 'edit') {
-    visible.add('start')
-    visible.add('end')
-    return visible
+    enabled.add('start')
+    enabled.add('end')
+    return enabled
   }
 
   if (app.activeTab === 'solve' && app.stepState.algorithm === 'flood') {
-    visible.add('start')
-    return visible
+    enabled.add('start')
+    return enabled
   }
 
-  visible.add('visit')
-  visible.add('path')
-  visible.add('start')
-  visible.add('end')
-  visible.add('head')
+  enabled.add('visit')
+  enabled.add('path')
+  enabled.add('start')
+  enabled.add('end')
+  enabled.add('head')
   if (isSolveVisibleMultiHeadMode(app.stepState.algorithm)) {
-    visible.add('frontier')
-    visible.add('subPath')
+    enabled.add('frontier')
+    enabled.add('subPath')
   }
-  return visible
+  return enabled
 }
 
 export function syncStyleEditingVisibility(): void {
-  const visible = getVisibleStyleKeys()
+  const enabledKeys = getEnabledStyleKeys()
   for (const keyName of Object.keys(styleChipByKey) as StyleKey[]) {
-    styleChipByKey[keyName].classList.toggle('is-hidden', !visible.has(keyName))
+    const enabled = enabledKeys.has(keyName)
+    styleChipByKey[keyName].classList.remove('is-hidden')
+    styleChipByKey[keyName].classList.toggle('is-disabled', !enabled)
+    styleChipByKey[keyName].setAttribute('aria-disabled', String(!enabled))
+    styleChipByKey[keyName].querySelector<HTMLInputElement>('input[type="color"]')!.disabled = !enabled
+    visibilityButtonByKey[keyName].disabled = !enabled
   }
-  floodThemeField.classList.toggle(
-    'is-hidden',
-    app.activeTab !== 'solve' || app.stepState.algorithm !== 'flood',
-  )
+  const floodThemeEnabled = app.activeTab === 'solve' && app.stepState.algorithm === 'flood'
+  floodThemeField.classList.remove('is-hidden')
+  floodThemeField.classList.toggle('is-disabled', !floodThemeEnabled)
+  floodThemeField.setAttribute('aria-disabled', String(!floodThemeEnabled))
+  floodThemeSelect.disabled = !floodThemeEnabled
+  syncFloodThemeEditor()
 }
 
 export function syncStyleThemeInputs(): void {
   floodThemeSelect.value = app.floodTheme
+  syncFloodThemeEditor()
   styleGridInput.value = app.styleTheme.grid
   styleWallInput.value = app.styleTheme.wall
   styleCellInput.value = app.styleTheme.cell
@@ -140,6 +149,7 @@ function syncPointIndicatorColors(): void {
 
 export function resetStyleTheme(): void {
   app.floodTheme = DEFAULT_FLOOD_THEME
+  app.customFloodTheme = structuredClone(DEFAULT_CUSTOM_FLOOD_THEME)
   app.styleTheme = { ...DEFAULT_STYLE_THEME }
   app.visibleElements = { ...DEFAULT_STYLE_VISIBILITY }
   syncStyleThemeInputs()

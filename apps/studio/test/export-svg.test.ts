@@ -189,4 +189,35 @@ describe('buildMazeSvg', () => {
     expect(svg).toContain('fill="rgb(239,108,112)"')
     expect(svg).not.toContain('<circle')
   })
+
+  it('exports custom flood gradient colors', () => {
+    const runtime = createMaze({ grid: { cols: 2, rows: 1, type: 'square' } })
+    runtime.openAllEdges()
+    const svg = buildMazeSvg({
+      flood: {
+        depthByKey: { '0,0': 0, '1,0': 1 },
+        theme: {
+          curve: { x1: 0, x2: 1, y1: 0, y2: 1 },
+          endColor: '#ffffff',
+          loop: false,
+          startColor: '#000000',
+          totalPoints: 2,
+          type: 'custom',
+        },
+      },
+      maze: {
+        algorithm: 'dfs',
+        cols: 2,
+        end: { x: 1, y: 0 },
+        rows: 1,
+        start: { x: 0, y: 0 },
+      },
+      runtime,
+      theme: DEFAULT_STYLE_THEME,
+      visibleElements: DEFAULT_STYLE_VISIBILITY,
+    })
+
+    expect(svg).toContain('fill="rgb(0,0,0)"')
+    expect(svg).toContain('fill="rgb(255,255,255)"')
+  })
 })

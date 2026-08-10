@@ -7,6 +7,7 @@ import {
   shouldShowFloodVisualization,
 } from './lib/algorithms'
 import { app, initAppState } from './lib/app-state'
+import { initFloodThemeEditor } from './lib/controllers/flood-theme-editor'
 import { initImageExport } from './lib/controllers/image-export'
 import {
   initMazeEditor,
@@ -62,7 +63,6 @@ import {
   canvasWrap,
   controlBar,
   ctx,
-  floodThemeSelect,
   focusViewButton,
   generationSelect,
   lockGridRatioInput,
@@ -114,7 +114,6 @@ import {
 } from './lib/dom'
 import { buildExportFilename, downloadBlob } from './lib/export-image'
 import { buildMazeSvg } from './lib/export-svg'
-import { isFloodTheme } from './lib/flood'
 import { key, parsePointKey } from './lib/point'
 import { ensureThreeView, fitMazeInView, render, resetView } from './lib/renderer'
 import { parseRange, resizeHighResCanvas } from './lib/utils'
@@ -153,13 +152,6 @@ tabEdit.addEventListener('click', () => {
 
 generationSelect.addEventListener('change', invalidateGenerationPreview)
 solvingSelect.addEventListener('change', resetSolveState)
-floodThemeSelect.addEventListener('change', () => {
-  if (!isFloodTheme(floodThemeSelect.value)) {
-    return
-  }
-  app.floodTheme = floodThemeSelect.value
-  render()
-})
 mazeWidthInput.addEventListener('input', () => {
   const changed = applyGridDimensionChange('width')
   if (changed) {
@@ -269,6 +261,7 @@ app.shapeEditor = initShapeEditor({
   onApply: applyShape,
   showToast,
 })
+initFloodThemeEditor()
 initMazeEditor()
 initMazeFileActions()
 initImageExport({ exportSvg, showToast })
@@ -303,7 +296,7 @@ function exportSvg(): void {
     flood: floodActive
       ? {
           depthByKey: app.floodDepthByKey,
-          theme: app.floodTheme,
+          theme: app.floodTheme === 'custom' ? app.customFloodTheme : app.floodTheme,
         }
       : undefined,
     maze,

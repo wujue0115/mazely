@@ -1,7 +1,7 @@
 import type { Maze, MazeSolvingStep, StepPlayer } from 'mazely'
 import type { GenerationPreview } from './controllers/generation'
 import type { AppliedShape, ShapeEditorApi } from './controllers/shape-editor'
-import type { FloodTheme } from './flood'
+import type { CustomFloodTheme, FloodThemeSelection } from './flood'
 import type {
   MazeGenerationAlgorithm,
   MazePoint,
@@ -22,7 +22,7 @@ import {
   wallHeightRange,
   wallRange,
 } from './dom'
-import { DEFAULT_FLOOD_THEME } from './flood'
+import { DEFAULT_CUSTOM_FLOOD_THEME, DEFAULT_FLOOD_THEME } from './flood'
 import { key } from './point'
 import { DEFAULT_STYLE_THEME, DEFAULT_STYLE_VISIBILITY } from './types'
 import { parseGridDimension, parseRange } from './utils'
@@ -49,7 +49,8 @@ export interface AppState {
   solveRuntime: Maze | null
   solvePlayer: StepPlayer<MazeSolvingStep> | null
   floodDepthByKey: Record<string, number>
-  floodTheme: FloodTheme
+  floodTheme: FloodThemeSelection
+  customFloodTheme: CustomFloodTheme
   shape: AppliedShape | null
   shapeEditor: ShapeEditorApi | null
   showShapeColors: boolean
@@ -195,6 +196,7 @@ export function initAppState(options: {
     editTool: 'pan',
     floodDepthByKey: {},
     floodTheme: DEFAULT_FLOOD_THEME,
+    customFloodTheme: structuredClone(DEFAULT_CUSTOM_FLOOD_THEME),
     generating: false,
     generationCacheVersion: 0,
     generationDiscoveredMask: new Uint8Array(0),

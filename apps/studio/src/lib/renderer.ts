@@ -431,6 +431,14 @@ function getWebgl2dCellKey(activeRuntime: Maze, previewing: boolean): string {
     app.stepState.algorithm,
     app.solvePlayer?.index,
     app.floodTheme,
+    app.customFloodTheme.startColor,
+    app.customFloodTheme.endColor,
+    app.customFloodTheme.loop,
+    app.customFloodTheme.totalPoints,
+    app.customFloodTheme.curve.x1,
+    app.customFloodTheme.curve.y1,
+    app.customFloodTheme.curve.x2,
+    app.customFloodTheme.curve.y2,
     app.showShapeColors,
     app.shape ? 'shape' : 'rect',
     app.styleTheme.wall,
@@ -813,7 +821,8 @@ function getCellFill(
     ? app.floodDepthByKey[pointKey]
     : undefined
   if (floodDepth !== undefined) {
-    return getFloodDepthColor(app.floodTheme, floodDepth, runtime.grid.rows, runtime.grid.cols)
+    const source = app.floodTheme === 'custom' ? app.customFloodTheme : app.floodTheme
+    return getFloodDepthColor(source, floodDepth, runtime.grid.rows, runtime.grid.cols)
   }
 
   if (!hasOpenCellEdge(runtime, x, y)) {

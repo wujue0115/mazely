@@ -512,9 +512,9 @@
               >
                 <span class="icon icon-eye" aria-hidden="true"></span>
               </button>
-              <input id="style-path" type="color" value="#8ff5ff" />
+              <input id="style-path" type="color" value="#91f7ff" />
               <label class="swatch-name" for="style-path">Path</label>
-              <code class="swatch-hex" data-style-hex="path">#8ff5ff</code>
+              <code class="swatch-hex" data-style-hex="path">#91f7ff</code>
             </div>
             <div class="swatch-row" data-style-key="subPath">
               <button
@@ -589,9 +589,9 @@
           </div>
         </section>
 
-        <section id="flood-theme-field" class="field-group is-hidden">
+        <section id="flood-theme-field" class="field-group is-disabled" aria-disabled="true">
           <label class="micro-label" for="flood-theme-select">Flood Theme</label>
-          <select id="flood-theme-select">
+          <select id="flood-theme-select" disabled>
             <option value="pccs-pale">PCCS Pale</option>
             <option value="pccs-pale+">PCCS Pale+</option>
             <option value="pccs-light">PCCS Light</option>
@@ -607,7 +607,36 @@
             <option value="pccs-dark">PCCS Dark</option>
             <option value="pccs-dark-grayish">PCCS Dark Grayish</option>
             <option value="gray">Gray</option>
+            <option value="custom">Custom Gradient</option>
           </select>
+          <div id="custom-flood-theme" class="custom-flood-theme is-hidden">
+            <div class="custom-flood-colors">
+              <label class="custom-flood-color" for="custom-flood-start">
+                <span>Start</span>
+                <input id="custom-flood-start" type="color" value="#91f7ff" />
+                <code id="custom-flood-start-hex">#91f7ff</code>
+              </label>
+              <label class="custom-flood-color" for="custom-flood-end">
+                <span>End</span>
+                <input id="custom-flood-end" type="color" value="#264054" />
+                <code id="custom-flood-end-hex">#264054</code>
+              </label>
+            </div>
+            <label class="custom-flood-points" for="custom-flood-points">
+              <span>Total Color Points</span>
+              <input id="custom-flood-points" type="number" min="2" max="10000" step="1" value="20" />
+            </label>
+            <label class="custom-flood-loop" for="custom-flood-loop">
+              <span>Loop gradient</span>
+              <input id="custom-flood-loop" class="switch" type="checkbox" />
+            </label>
+            <div
+              id="custom-flood-preview"
+              class="custom-flood-preview"
+              aria-label="Start to end color gradient preview"
+            ></div>
+            <button id="custom-flood-curve-btn" class="ghost-btn" type="button">Edit Curve</button>
+          </div>
         </section>
 
         <section class="field-group">
@@ -691,6 +720,51 @@
             <span class="icon icon-download" aria-hidden="true"></span>
             Download
           </button>
+        </footer>
+      </section>
+    </div>
+
+    <div
+      id="flood-curve-dialog"
+      class="export-dialog flood-curve-dialog is-hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="flood-curve-dialog-title"
+    >
+      <button
+        id="flood-curve-backdrop"
+        class="export-dialog-backdrop"
+        type="button"
+        aria-label="Cancel curve editing"
+      ></button>
+      <section class="export-dialog-window flood-curve-window">
+        <header class="export-dialog-header">
+          <h2 id="flood-curve-dialog-title">Flood color curve</h2>
+          <button id="flood-curve-close" class="export-dialog-close" type="button" title="Cancel" aria-label="Cancel">
+            ✕
+          </button>
+        </header>
+        <div class="flood-curve-body">
+          <p>Drag both handles. X is depth progress; Y is color progress.</p>
+          <svg
+            id="flood-curve-graph"
+            class="flood-curve-graph"
+            viewBox="0 0 300 300"
+            role="img"
+            aria-label="Editable flood color interpolation curve"
+          >
+            <path class="flood-curve-grid" d="M0 75H300M0 150H300M0 225H300M75 0V300M150 0V300M225 0V300"></path>
+            <path id="flood-curve-control-lines" class="flood-curve-control-lines"></path>
+            <path id="flood-curve-path" class="flood-curve-path"></path>
+            <circle id="flood-curve-handle-1" class="flood-curve-handle" r="10" data-handle="1"></circle>
+            <circle id="flood-curve-handle-2" class="flood-curve-handle" r="10" data-handle="2"></circle>
+          </svg>
+          <output id="flood-curve-readout" class="flood-curve-readout"></output>
+        </div>
+        <footer class="flood-curve-footer">
+          <button id="flood-curve-reset" class="ghost-btn" type="button">Linear</button>
+          <button id="flood-curve-cancel" class="ghost-btn" type="button">Cancel</button>
+          <button id="flood-curve-apply" class="cta-btn" type="button">Apply</button>
         </footer>
       </section>
     </div>

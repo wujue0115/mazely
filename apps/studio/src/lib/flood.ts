@@ -1,5 +1,21 @@
 type Rgb = readonly [number, number, number]
 
+export interface FloodCurve {
+  x1: number
+  y1: number
+  x2: number
+  y2: number
+}
+
+export interface CustomFloodTheme {
+  curve: FloodCurve
+  endColor: string
+  loop: boolean
+  startColor: string
+  totalPoints: number
+  type: 'custom'
+}
+
 const FLOOD_PALETTES = {
   'pccs-pale': [[231, 213, 212], [233, 213, 207], [246, 227, 206], [239, 230, 198], [230, 233, 198], [196, 224, 203], [191, 224, 217], [198, 221, 226], [194, 204, 213], [201, 202, 213], [208, 200, 209], [228, 213, 217]],
   'pccs-pale+': [[232, 194, 191], [235, 194, 181], [244, 212, 176], [242, 230, 184], [216, 221, 173], [174, 212, 185], [166, 212, 204], [173, 209, 218], [175, 192, 209], [187, 189, 208], [200, 185, 201], [222, 196, 202]],
@@ -19,14 +35,47 @@ const FLOOD_PALETTES = {
 } as const satisfies Record<string, readonly Rgb[]>
 
 export type FloodTheme = keyof typeof FLOOD_PALETTES
+export type FloodThemeSelection = FloodTheme | 'custom'
+export type FloodColorSource = FloodTheme | CustomFloodTheme
 
 export const DEFAULT_FLOOD_THEME: FloodTheme = 'pccs-bright'
+export const MIN_CUSTOM_FLOOD_POINTS = 2
+export const MAX_CUSTOM_FLOOD_POINTS = 10_000
+export const LINEAR_FLOOD_CURVE: FloodCurve = { x1: 0, x2: 1, y1: 0, y2: 1 }
+export const DEFAULT_CUSTOM_FLOOD_THEME: CustomFloodTheme = {
+  curve: { ...LINEAR_FLOOD_CURVE },
+  endColor: '#264054',
+  loop: false,
+  startColor: '#91f7ff',
+  totalPoints: 20,
+  type: 'custom',
+}
 
 export function isFloodTheme(value: string): value is FloodTheme {
   return Object.hasOwn(FLOOD_PALETTES, value)
 }
 
-export function getFloodDepthColor(theme: FloodTheme, depth: number, rows: number, cols: number): string {
+export function isCustomFloodTheme(value: unknown): value is CustomFloodTheme {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+  const theme = value as Partial<CustomFloodTheme>
+  return theme.type === 'custom'
+    && isHexColor(theme.startColor)
+    && isHexColor(theme.endColor)
+    && typeof theme.loop === 'boolean'
+    && Number.isInteger(theme.totalPoints)
+    && theme.totalPoints! >= MIN_CUSTOM_FLOOD_POINTS
+    && theme.totalPoints! <= MAX_CUSTOM_FLOOD_POINTS
+    && isFloodCurve(theme.curve)
+}
+
+export function getFloodDepthColor(source: FloodColorSource, depth: number, rows: number, cols: number): string {
+  if (typeof source !== 'string') {
+    return getCustomFloodDepthColor(source, depth)
+  }
+
+  const theme = source
   const palette = FLOOD_PALETTES[theme]
   const cycleLength = Math.max(palette.length, rows + cols - 5)
   const position = (Math.max(0, depth) * palette.length) / cycleLength
@@ -37,4 +86,92 @@ export function getFloodDepthColor(theme: FloodTheme, depth: number, rows: numbe
   const to = palette[nextIndex]
   const channel = (offset: number): number => Math.floor(from[offset] + (to[offset] - from[offset]) * ratio)
   return `rgb(${channel(0)},${channel(1)},${channel(2)})`
+}
+
+export function generateCustomFloodColors(theme: CustomFloodTheme): string[] {
+  return Array.from({ length: theme.totalPoints }, (_, index) =>
+    getCustomFloodDepthColor(theme, index))
+}
+
+/** One-way preview samples. Loop playback must never add A back at the end. */
+export function generateCustomFloodPreviewColors(theme: CustomFloodTheme, maxSamples = 128): string[] {
+  const totalPoints = Math.min(theme.totalPoints, Math.max(MIN_CUSTOM_FLOOD_POINTS, maxSamples))
+  const previewTheme: CustomFloodTheme = { ...theme, loop: false, totalPoints }
+  const colors = generateCustomFloodColors(previewTheme)
+  colors[0] = theme.startColor.toLowerCase()
+  colors[colors.length - 1] = theme.endColor.toLowerCase()
+  return colors
+}
+
+export function evaluateFloodCurve(curve: FloodCurve, progress: number): number {
+  const targetX = clamp(progress, 0, 1)
+  if (targetX === 0 || targetX === 1) {
+    return targetX
+  }
+  let lower = 0
+  let upper = 1
+  let parameter = targetX
+
+  // Invert the Bezier x component so the draggable curve behaves like a
+  // conventional easing graph: x is depth progress and y is color progress.
+  for (let iteration = 0; iteration < 24; iteration += 1) {
+    parameter = (lower + upper) / 2
+    const x = cubicBezier(parameter, curve.x1, curve.x2)
+    if (x < targetX) {
+      lower = parameter
+    }
+    else {
+      upper = parameter
+    }
+  }
+
+  return clamp(cubicBezier(parameter, curve.y1, curve.y2), 0, 1)
+}
+
+function getCustomFloodDepthColor(theme: CustomFloodTheme, depth: number): string {
+  const normalizedDepth = Math.max(0, Math.floor(depth))
+  const span = theme.totalPoints - 1
+  const cycleLength = span * 2
+  const cyclePosition = normalizedDepth % cycleLength
+  const pointIndex = theme.loop
+    ? (cyclePosition <= span ? cyclePosition : cycleLength - cyclePosition)
+    : Math.min(normalizedDepth, span)
+  const progress = pointIndex / (theme.totalPoints - 1)
+  const ratio = evaluateFloodCurve(theme.curve, progress)
+  const from = hexToRgb(theme.startColor)
+  const to = hexToRgb(theme.endColor)
+  const channel = (offset: number): number => Math.floor(from[offset] + (to[offset] - from[offset]) * ratio)
+  return `rgb(${channel(0)},${channel(1)},${channel(2)})`
+}
+
+function cubicBezier(parameter: number, firstControl: number, secondControl: number): number {
+  const inverse = 1 - parameter
+  return 3 * inverse * inverse * parameter * firstControl
+    + 3 * inverse * parameter * parameter * secondControl
+    + parameter * parameter * parameter
+}
+
+function isFloodCurve(value: unknown): value is FloodCurve {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+  const curve = value as Partial<FloodCurve>
+  return [curve.x1, curve.y1, curve.x2, curve.y2].every(coordinate =>
+    typeof coordinate === 'number' && Number.isFinite(coordinate) && coordinate >= 0 && coordinate <= 1)
+}
+
+function isHexColor(value: unknown): value is string {
+  return typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value)
+}
+
+function hexToRgb(value: string): Rgb {
+  return [
+    Number.parseInt(value.slice(1, 3), 16),
+    Number.parseInt(value.slice(3, 5), 16),
+    Number.parseInt(value.slice(5, 7), 16),
+  ]
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value))
 }
