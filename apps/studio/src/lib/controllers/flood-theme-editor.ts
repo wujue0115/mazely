@@ -42,8 +42,7 @@ export function initFloodThemeEditor(): void {
   floodThemeSelect.addEventListener('change', onThemeChange)
   customFloodStartInput.addEventListener('input', () => updateColor('startColor', customFloodStartInput.value))
   customFloodEndInput.addEventListener('input', () => updateColor('endColor', customFloodEndInput.value))
-  customFloodPointsInput.addEventListener('input', updatePointCount)
-  customFloodPointsInput.addEventListener('change', normalizePointCountInput)
+  customFloodPointsInput.addEventListener('change', commitPointCount)
   customFloodLoopInput.addEventListener('change', updateLoop)
   customFloodCurveButton.addEventListener('click', openCurveDialog)
   floodCurveBackdrop.addEventListener('click', cancelCurveEditing)
@@ -99,18 +98,17 @@ function updateColor(key: 'startColor' | 'endColor', value: string): void {
   render()
 }
 
-function updatePointCount(): void {
-  if (customFloodPointsInput.value.trim() === '') {
-    return
-  }
-  const value = Number.parseInt(customFloodPointsInput.value, 10)
-  if (!Number.isFinite(value)) {
+function commitPointCount(): void {
+  const parsed = Number(customFloodPointsInput.value)
+  if (!Number.isFinite(parsed)) {
+    normalizePointCountInput()
     return
   }
   app.customFloodTheme = {
     ...app.customFloodTheme,
-    totalPoints: clamp(value, MIN_CUSTOM_FLOOD_POINTS, MAX_CUSTOM_FLOOD_POINTS),
+    totalPoints: clamp(Math.trunc(parsed), MIN_CUSTOM_FLOOD_POINTS, MAX_CUSTOM_FLOOD_POINTS),
   }
+  normalizePointCountInput()
   updateGradientPreview()
   render()
 }
