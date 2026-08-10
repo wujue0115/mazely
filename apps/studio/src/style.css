@@ -1300,6 +1300,75 @@ input[type='checkbox'].switch:checked::before {
   gap: var(--ui-gap-xs);
 }
 
+.custom-flood-theme {
+  display: grid;
+  gap: var(--ui-gap-sm);
+  margin-top: var(--ui-gap-sm);
+  padding: var(--ui-pad-md);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  background: var(--fill-faint);
+}
+
+.custom-flood-theme.is-hidden {
+  display: none;
+}
+
+.custom-flood-colors {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--ui-gap-sm);
+}
+
+.custom-flood-color,
+.custom-flood-points {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: var(--ui-gap-xs);
+  font: var(--text-code-sm);
+  color: var(--on-surface-variant);
+}
+
+.custom-flood-loop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ui-gap-sm);
+  color: var(--on-surface-variant);
+  font: var(--text-code-sm);
+  cursor: pointer;
+}
+
+.custom-flood-color input[type='color'] {
+  width: 32px;
+  height: 28px;
+  padding: 2px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius-xs);
+  background: transparent;
+  cursor: pointer;
+}
+
+.custom-flood-color code {
+  grid-column: 1 / -1;
+  color: var(--on-surface);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.custom-flood-points input {
+  width: 92px;
+}
+
+.custom-flood-preview {
+  height: 28px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius-xs);
+  background-color: var(--surface-container-highest);
+  background-repeat: no-repeat;
+}
+
 .field-head {
   display: flex;
   align-items: center;
@@ -1568,6 +1637,22 @@ input[type='checkbox'].switch:checked::before {
   background: var(--fill-faint);
 }
 
+.swatch-row.is-disabled,
+#flood-theme-field.is-disabled {
+  opacity: 0.35;
+}
+
+.swatch-row[aria-disabled='true'],
+.swatch-row[aria-disabled='true'] *,
+#flood-theme-field[aria-disabled='true'],
+#flood-theme-field[aria-disabled='true'] * {
+  cursor: default !important;
+}
+
+.swatch-row.is-disabled:hover {
+  background: transparent;
+}
+
 .visibility-btn {
   width: 24px;
   height: 24px;
@@ -1588,6 +1673,15 @@ input[type='checkbox'].switch:checked::before {
 .visibility-btn:hover {
   background: var(--fill-hover);
   color: var(--on-surface);
+}
+
+.visibility-btn:disabled:hover {
+  background: var(--fill-faint);
+  color: var(--primary-fixed-dim);
+}
+
+.visibility-btn:disabled:not(.is-visible):hover {
+  color: var(--outline);
 }
 
 .visibility-btn .icon {
@@ -1752,6 +1846,79 @@ input[type='checkbox'].switch:checked::before {
 
 .export-dialog-footer {
   padding: var(--ui-pad-lg);
+}
+
+.flood-curve-window {
+  width: min(520px, calc(100vw - 32px));
+}
+
+.flood-curve-body {
+  display: grid;
+  justify-items: center;
+  gap: var(--ui-gap-md);
+  padding: var(--ui-pad-lg);
+}
+
+.flood-curve-body p {
+  width: 100%;
+  margin: 0;
+  color: var(--on-surface-variant);
+  font: var(--text-code-sm);
+}
+
+.flood-curve-graph {
+  width: min(360px, 100%);
+  aspect-ratio: 1;
+  overflow: visible;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  touch-action: none;
+}
+
+.flood-curve-grid {
+  fill: none;
+  stroke: var(--hairline);
+  stroke-width: 1;
+}
+
+.flood-curve-control-lines {
+  fill: none;
+  stroke: var(--outline);
+  stroke-width: 1;
+  stroke-dasharray: 5 5;
+}
+
+.flood-curve-path {
+  fill: none;
+  stroke: var(--primary-fixed-dim);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+
+.flood-curve-handle {
+  fill: var(--primary-container);
+  stroke: var(--on-primary-container);
+  stroke-width: 1.5;
+  cursor: grab;
+}
+
+.flood-curve-handle:active {
+  cursor: grabbing;
+}
+
+.flood-curve-readout {
+  width: 100%;
+  color: var(--primary-fixed-dim);
+  font: var(--text-code-sm);
+  text-align: center;
+}
+
+.flood-curve-footer {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--ui-gap-sm);
+  padding: 0 var(--ui-pad-lg) var(--ui-pad-lg);
 }
 
 /* ---------- Shape Studio (floating editor window) ---------- */
@@ -2471,6 +2638,10 @@ input[type='checkbox'].switch:checked::before {
   input[type='range']::-moz-range-thumb {
     width: 18px;
     height: 18px;
+  }
+
+  .flood-curve-handle {
+    r: 9px;
   }
 
   *::-webkit-scrollbar {

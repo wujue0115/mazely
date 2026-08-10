@@ -12,6 +12,7 @@ import {
   wallHeightRange,
   wallRange,
 } from '../dom'
+import { DEFAULT_CUSTOM_FLOOD_THEME } from '../flood'
 import {
   decodeMazeFile,
   encodeMazeFile,
@@ -76,6 +77,7 @@ async function saveMazeFile(): Promise<void> {
     saveMazeButton.disabled = true
     const bytes = await encodeMazeFile({
       appearance: {
+        customFloodTheme: app.customFloodTheme,
         floorTheme: app.floodTheme,
         showShapeColors: app.showShapeColors,
         styleTheme: app.styleTheme,
@@ -180,6 +182,9 @@ async function loadMazeFile(file: File): Promise<void> {
       app.styleTheme = { ...loaded.appearance.styleTheme }
       app.visibleElements = { ...loaded.appearance.visibleElements }
       app.floodTheme = loaded.appearance.floorTheme
+      app.customFloodTheme = loaded.appearance.customFloodTheme
+        ? structuredClone(loaded.appearance.customFloodTheme)
+        : structuredClone(DEFAULT_CUSTOM_FLOOD_THEME)
       app.wallThickness = loaded.appearance.wallThickness
       app.wallHeightPx = loaded.appearance.wallHeightPx
       app.showShapeColors = loaded.appearance.showShapeColors

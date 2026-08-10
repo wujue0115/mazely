@@ -173,6 +173,46 @@ describe('.maze v1 codec', () => {
     })
   })
 
+  it('round-trips a custom flood gradient', async () => {
+    const runtime = createMaze({ grid: { cols: 1, rows: 1, type: 'square' } })
+    const customFloodTheme = {
+      curve: { x1: 0.2, x2: 0.8, y1: 0.1, y2: 0.9 },
+      endColor: '#abcdef',
+      loop: true,
+      startColor: '#123456',
+      totalPoints: 37,
+      type: 'custom',
+    } as const
+    const encoded = await encodeMazeFile({
+      appearance: {
+        ...appearance,
+        customFloodTheme,
+        floorTheme: 'custom',
+      },
+      hasCustomStartAndEndPoints: false,
+      maze: {
+        algorithm: 'dfs',
+        cols: 1,
+        end: { x: 0, y: 0 },
+        rows: 1,
+        start: { x: 0, y: 0 },
+      },
+      runtime,
+      shape: null,
+      solve: {
+        algorithm: 'flood',
+        head: null,
+        path: [],
+        status: 'running',
+        visited: {},
+      },
+    })
+
+    const loaded = await decodeMazeFile(encoded)
+    expect(loaded.appearance?.floorTheme).toBe('custom')
+    expect(loaded.appearance?.customFloodTheme).toEqual(customFloodTheme)
+  })
+
   it('maps legacy road appearance fields to cell and sub path fields', async () => {
     const runtime = createMaze({ grid: { cols: 2, rows: 1, type: 'square' } })
     const { floorTheme: _floorTheme, ...legacyAppearance } = appearance

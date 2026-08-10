@@ -40,7 +40,7 @@ export const DEFAULT_STYLE_THEME: StyleTheme = {
   grid: '#b8c2c7',
   end: '#ffa1d4',
   head: '#00deec',
-  path: '#8ff5ff',
+  path: '#91f7ff',
   start: '#5df0c0',
   subPath: '#181818',
   unlinkedCell: '#767575',

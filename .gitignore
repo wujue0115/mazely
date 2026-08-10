@@ -10,4 +10,7 @@ docs/.vitepress/dist
 .eslintcache
 *.tsbuildinfo
 
+**/.vitepress/cache/
+**/.vitepress/dist/
+
 .DS_Store

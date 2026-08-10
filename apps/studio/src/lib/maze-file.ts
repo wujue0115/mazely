@@ -1,6 +1,6 @@
 import type { Maze, SquareCell } from 'mazely'
 import type { AppliedShape } from './controllers/shape-editor'
-import type { FloodTheme } from './flood'
+import type { CustomFloodTheme, FloodThemeSelection } from './flood'
 import type {
   MazeGenerationAlgorithm,
   MazePoint,
@@ -14,7 +14,12 @@ import {
   isMazeGenerationAlgorithm,
   MAZE_SOLVING_ALGORITHMS,
 } from 'mazely'
-import { DEFAULT_FLOOD_THEME, isFloodTheme } from './flood'
+import {
+  DEFAULT_CUSTOM_FLOOD_THEME,
+  DEFAULT_FLOOD_THEME,
+  isCustomFloodTheme,
+  isFloodTheme,
+} from './flood'
 import { key, parsePointKey } from './point'
 import { DEFAULT_STYLE_THEME, DEFAULT_STYLE_VISIBILITY } from './types'
 
@@ -37,7 +42,8 @@ const CHUNK_CELL_COLORS = 6
 export type MazeFileSolveStatus = 'generated' | 'solved' | 'unsolved'
 
 export interface MazeFileAppearance {
-  floorTheme: FloodTheme
+  customFloodTheme?: CustomFloodTheme
+  floorTheme: FloodThemeSelection
   showShapeColors: boolean
   styleTheme: StyleTheme
   visibleElements: StyleVisibility
@@ -640,9 +646,13 @@ function decodeMeta(bytes: Uint8Array): MazeFileMeta {
 
 function decodeAppearance(bytes: Uint8Array): MazeFileAppearance {
   const value = decodeJson(bytes) as Partial<MazeFileAppearance>
+  const customFloodTheme = value.customFloodTheme
+    ? { ...value.customFloodTheme, loop: value.customFloodTheme.loop ?? false }
+    : structuredClone(DEFAULT_CUSTOM_FLOOD_THEME)
   if (!isStyleTheme(value.styleTheme)
     || !isStyleVisibility(value.visibleElements)
-    || (value.floorTheme !== undefined && !isFloodTheme(value.floorTheme))
+    || (value.floorTheme !== undefined && value.floorTheme !== 'custom' && !isFloodTheme(value.floorTheme))
+    || !isCustomFloodTheme(customFloodTheme)
     || typeof value.showShapeColors !== 'boolean'
     || !isNumberInRange(value.wallHeightPx, 0, 60)
     || !isNumberInRange(value.wallThickness, 1, 8)) {
@@ -650,6 +660,7 @@ function decodeAppearance(bytes: Uint8Array): MazeFileAppearance {
   }
   return {
     ...value,
+    customFloodTheme,
     floorTheme: value.floorTheme ?? DEFAULT_FLOOD_THEME,
     styleTheme: normalizeStyleTheme(value.styleTheme),
     visibleElements: normalizeStyleVisibility(value.visibleElements),
