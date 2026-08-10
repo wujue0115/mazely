@@ -1885,21 +1885,21 @@ input[type='checkbox'].switch:checked::before {
 .flood-curve-control-lines {
   fill: none;
   stroke: var(--outline);
-  stroke-width: 1.5;
+  stroke-width: 1;
   stroke-dasharray: 5 5;
 }
 
 .flood-curve-path {
   fill: none;
   stroke: var(--primary-fixed-dim);
-  stroke-width: 4;
+  stroke-width: 2.5;
   stroke-linecap: round;
 }
 
 .flood-curve-handle {
   fill: var(--primary-container);
   stroke: var(--on-primary-container);
-  stroke-width: 2;
+  stroke-width: 1.5;
   cursor: grab;
 }
 
@@ -2638,6 +2638,10 @@ input[type='checkbox'].switch:checked::before {
   input[type='range']::-moz-range-thumb {
     width: 18px;
     height: 18px;
+  }
+
+  .flood-curve-handle {
+    r: 9px;
   }
 
   *::-webkit-scrollbar {
