@@ -10,7 +10,7 @@ import type {
 } from './maze-types'
 import type { SolveState } from './solver-state'
 import type { ThreeMazeView } from './three-view'
-import type { MazeEditTarget, MazeEditTool, PanelTab, StyleTheme, StyleVisibility } from './types'
+import type { MazeEditTarget, MazeEditTool, PanelTab, PointPicker, PointSelectionMode, StyleTheme, StyleVisibility } from './types'
 import type { Webgl2dMazeView } from './webgl-2d-view'
 import { createMaze } from 'mazely'
 import { getGenerationAlgorithm, getSolvingAlgorithm } from './algorithms'
@@ -58,7 +58,12 @@ export interface AppState {
   maze: MazeViewState
   stepState: SolveState
   hasGeneratedMaze: boolean
-  hasCustomStartAndEndPoints: boolean
+  generatePointMode: PointSelectionMode
+  generateManualStart: MazePoint
+  solvePointMode: PointSelectionMode
+  solveManualStart: MazePoint
+  solveManualEnd: MazePoint
+  pointPicker: PointPicker | null
   mazeEditVersion: number
   editTool: MazeEditTool
   editingMaze: boolean
@@ -206,7 +211,8 @@ export function initAppState(options: {
     generationMaskCols: 0,
     generationMaskRows: 0,
     generationPreview: null,
-    hasCustomStartAndEndPoints: false,
+    generateManualStart: { ...initialMazeState.maze.start },
+    generatePointMode: 'auto',
     hasGeneratedMaze: false,
     hasValidGridDimensions: true,
     lastPointerX: 0,
@@ -224,6 +230,7 @@ export function initAppState(options: {
     pointKeyBuffer: [],
     pointKeyCols: 0,
     pointKeyRows: 0,
+    pointPicker: null,
     running: false,
     shape: null,
     shapeEditor: null,
@@ -235,6 +242,9 @@ export function initAppState(options: {
     solveElapsed: 0,
     solveLastTimestamp: 0,
     solvePlayer: null,
+    solveManualEnd: { ...initialMazeState.maze.end },
+    solveManualStart: { ...initialMazeState.maze.start },
+    solvePointMode: 'auto',
     solveRuntime: null,
     stepBatchSize: 1,
     stepDelay: 20,

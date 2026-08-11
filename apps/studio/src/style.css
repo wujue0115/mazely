@@ -1527,6 +1527,76 @@ input[type='checkbox'].switch:checked::before {
   color: var(--on-surface);
 }
 
+.point-mode-switch {
+  padding: var(--ui-pad-sm) 0;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.point-selection-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--ui-gap-sm);
+}
+
+.point-tool-grid {
+  display: grid;
+  width: 100%;
+}
+
+.point-tool-grid.is-single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.point-tool-grid.is-pair {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.point-tool-grid.is-start-only {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.point-tool-grid .maze-point-dot {
+  width: 11px;
+  height: 11px;
+}
+
+.point-tool-grid.is-single .tool-tab-indicator {
+  width: calc(100% - (var(--ui-pad-xs) * 2));
+}
+
+.point-tool-grid.is-pair .tool-tab-indicator {
+  width: calc((100% - (var(--ui-pad-xs) * 2) - var(--ui-gap-xs)) / 2);
+}
+
+.point-tool-grid.is-start-only .tool-tab-indicator {
+  width: calc(100% - (var(--ui-pad-xs) * 2));
+}
+
+.point-tool-grid .tool-tab-indicator {
+  opacity: 0;
+}
+
+.point-tool-grid .tool-tab-btn.is-active ~ .tool-tab-indicator {
+  opacity: 1;
+}
+
+#solve-end-btn.is-active ~ .tool-tab-indicator {
+  transform: translateX(calc(100% + var(--ui-gap-xs)));
+}
+
+.point-selection-readout {
+  color: var(--on-surface);
+  font-size: 11px;
+}
+
+.field-note {
+  margin: 0;
+  color: var(--on-surface-variant);
+  font: var(--text-label-xs);
+  opacity: 0.65;
+}
+
 .shape-group {
   padding-top: var(--ui-pad-md);
   border-top: 1px solid var(--hairline);

@@ -87,6 +87,7 @@ export function getPointMarkerVisibility(options: {
   floodActive: boolean
   floodStarted: boolean
   generationAlgorithm: MazeGenerationAlgorithm
+  generationManualStart?: boolean
   lowDetail?: boolean
   previewingGeneration: boolean
   showingSolveResult: boolean
@@ -104,6 +105,7 @@ export function getPointMarkerVisibility(options: {
       options.activeTab === 'solve'
       || options.activeTab === 'edit'
       || options.showingSolveResult
+      || (options.activeTab === 'generate' && options.generationManualStart === true)
       || shouldShowGenerationStartMarker(
         options.previewingGeneration,
         options.generationAlgorithm,

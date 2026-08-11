@@ -85,7 +85,13 @@ async function saveMazeFile(): Promise<void> {
         wallHeightPx: app.wallHeightPx,
         wallThickness: app.wallThickness,
       },
-      hasCustomStartAndEndPoints: app.hasCustomStartAndEndPoints,
+      pointPreferences: {
+        generateManualStart: app.generateManualStart,
+        generateMode: app.generatePointMode,
+        solveManualEnd: app.solveManualEnd,
+        solveManualStart: app.solveManualStart,
+        solveMode: app.solvePointMode,
+      },
       maze: app.maze,
       runtime: app.mazeRuntime!,
       shape: app.shape,
@@ -136,8 +142,11 @@ async function loadMazeFile(file: File): Promise<void> {
     app.shape = loaded.shape
     app.shapeEditor?.forgetSource()
     app.hasGeneratedMaze = true
-    // A file's start and end points are authoritative and must survive future tab switches.
-    app.hasCustomStartAndEndPoints = true
+    app.generatePointMode = loaded.pointPreferences.generateMode
+    app.generateManualStart = { ...loaded.pointPreferences.generateManualStart }
+    app.solvePointMode = loaded.pointPreferences.solveMode
+    app.solveManualStart = { ...loaded.pointPreferences.solveManualStart }
+    app.solveManualEnd = { ...loaded.pointPreferences.solveManualEnd }
     app.mazeEditVersion += 1
     app.solveRuntime = loaded.runtime
     app.solvePlayer = null
@@ -198,7 +207,7 @@ async function loadMazeFile(file: File): Promise<void> {
     bumpSolveCacheVersion()
     syncGridDimensionInputs()
     syncShapePanel()
-    setActiveTab(loaded.solve.status === 'generated' ? 'generate' : 'solve')
+    setActiveTab(loaded.solve.status === 'generated' ? 'generate' : 'solve', { preservePoints: true })
     fitMazeInView(app.maze)
     syncUi()
     render()

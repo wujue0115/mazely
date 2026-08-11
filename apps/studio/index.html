@@ -264,10 +264,24 @@
             </div>
           </section>
 
-          <div class="info-card">
-            <span class="icon icon-info" aria-hidden="true"></span>
-            <span>Automatic start point selection</span>
-          </div>
+          <section class="field-group">
+            <span class="micro-label">Start Point</span>
+            <label class="custom-flood-loop point-mode-switch" for="generate-points-auto">
+              <span>Automatic selection</span>
+              <input id="generate-points-auto" class="switch" type="checkbox" checked />
+            </label>
+            <div id="generate-manual-points" class="point-selection-block is-hidden">
+              <div class="tab-nav animated-tool-nav point-tool-grid is-single" role="group" aria-label="Generation start point">
+                <button id="generate-start-btn" class="tab-btn tool-tab-btn" type="button" aria-pressed="false">
+                  <span class="maze-point-dot maze-point-dot-start" aria-hidden="true"></span>
+                  Start
+                </button>
+                <span class="tool-tab-indicator" aria-hidden="true"></span>
+              </div>
+              <code id="generate-start-readout" class="readout point-selection-readout">0, 0</code>
+            </div>
+            <p id="generate-start-note" class="field-note">A start is selected when generation begins.</p>
+          </section>
 
           <section class="field-group shape-group" aria-label="Image shape">
             <span class="micro-label">Image Shape</span>
@@ -304,6 +318,10 @@
 
           <section class="field-group">
             <span id="solve-points-label" class="micro-label">Start / End Points</span>
+            <label class="custom-flood-loop point-mode-switch" for="solve-points-auto">
+              <span>Automatic selection</span>
+              <input id="solve-points-auto" class="switch" type="checkbox" checked />
+            </label>
             <div class="info-card info-card-block">
               <div id="solve-points-info" class="info-card-row">
                 <span class="icon icon-info" aria-hidden="true"></span>
@@ -324,6 +342,17 @@
                     <code id="solve-end-readout" class="readout">0, 0</code>
                   </div>
                 </div>
+              </div>
+              <div id="solve-manual-actions" class="tab-nav animated-tool-nav point-tool-grid is-pair is-hidden" role="group" aria-label="Solve start and end points">
+                <button id="solve-start-btn" class="tab-btn tool-tab-btn" type="button" aria-pressed="false">
+                  <span class="maze-point-dot maze-point-dot-start" aria-hidden="true"></span>
+                  Start
+                </button>
+                <button id="solve-end-btn" class="tab-btn tool-tab-btn" type="button" aria-pressed="false">
+                  <span class="maze-point-dot maze-point-dot-end" aria-hidden="true"></span>
+                  End
+                </button>
+                <span class="tool-tab-indicator" aria-hidden="true"></span>
               </div>
             </div>
           </section>

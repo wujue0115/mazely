@@ -59,7 +59,7 @@ export function syncUi(): void {
   solveEndReadout.textContent = `${app.maze.end.x}, ${app.maze.end.y}`
   solveEndPoint.classList.toggle('is-hidden', floodAlgorithm)
   solvePointsGrid.classList.toggle('is-start-only', floodAlgorithm)
-  solvePointsInfo.classList.toggle('is-hidden', floodAlgorithm)
+  solvePointsInfo.classList.toggle('is-hidden', floodAlgorithm || app.solvePointMode === 'manual')
   solvePointsLabel.textContent = floodAlgorithm ? 'Start Point' : 'Start / End Points'
   editStartReadout.textContent = `${app.maze.start.x}, ${app.maze.start.y}`
   editEndReadout.textContent = `${app.maze.end.x}, ${app.maze.end.y}`

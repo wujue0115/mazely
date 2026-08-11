@@ -128,14 +128,17 @@ export function resetSolveState(): void {
 function createCurrentMaze(): GenerationPreview {
   syncGridDimensionInputs()
   const generationAlgorithm = getGenerationAlgorithm(generationSelect.value)
-  const randomStart = shouldUseRandomGenerationStart(generationAlgorithm)
+  const randomStart = app.generatePointMode === 'auto' && shouldUseRandomGenerationStart(generationAlgorithm)
     ? getRandomGenerationStart()
     : undefined
 
   const runtime = createMaze({
     grid: { cols: app.mazeWidth, mask: app.shape?.cellMask, rows: app.mazeHeight, type: 'square' },
   })
-  const start = randomStart ?? app.shape?.start ?? { x: 0, y: 0 }
+  const start = randomStart
+    ?? (app.generatePointMode === 'manual' ? app.generateManualStart : undefined)
+    ?? app.shape?.start
+    ?? { x: 0, y: 0 }
   const end = app.shape?.end ?? { x: app.mazeWidth - 1, y: app.mazeHeight - 1 }
   const player = runtime.generate(generationAlgorithm, { start })
 
@@ -162,6 +165,11 @@ export function onRunAction(): void {
     return
   }
 
+  if (!hasValidSolvePoints()) {
+    showToast('Start and end points must be different.')
+    return
+  }
+
   toggleSolveRun()
 }
 
@@ -170,8 +178,18 @@ export function onStepAction(): void {
     stepGenerateOnce()
     return
   }
+  if (!hasValidSolvePoints()) {
+    showToast('Start and end points must be different.')
+    return
+  }
 
   stepSolveOnce()
+}
+
+function hasValidSolvePoints(): boolean {
+  return app.stepState.algorithm === 'flood'
+    || app.maze.start.x !== app.maze.end.x
+    || app.maze.start.y !== app.maze.end.y
 }
 
 export function onPreviousStepAction(): void {
@@ -379,7 +397,6 @@ function finishGenerationAnimation(): void {
   app.generationPreview.player.finish()
   app.maze = app.generationPreview.view
   app.mazeRuntime = app.generationPreview.runtime
-  app.hasCustomStartAndEndPoints = false
   app.hasGeneratedMaze = true
   app.generationPreview.committed = true
   app.stepState = createStepper(app.maze, app.mazeRuntime)
@@ -395,7 +412,6 @@ export function clearGenerationPreviewState(): void {
     preview.player.finish()
     app.maze = preview.view
     app.mazeRuntime = preview.runtime
-    app.hasCustomStartAndEndPoints = false
     app.hasGeneratedMaze = true
     app.mazeEditVersion += 1
     app.stepState = createStepper(app.maze, app.mazeRuntime)

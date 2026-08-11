@@ -1,6 +1,11 @@
 export type Direction = 'north' | 'east' | 'south' | 'west'
 export type PanelTab = 'generate' | 'solve' | 'edit'
 export type MazeEditTool = 'edge' | 'start' | 'end' | 'pan'
+export type PointSelectionMode = 'auto' | 'manual'
+export interface PointPicker {
+  owner: 'generate' | 'solve'
+  target: 'start' | 'end'
+}
 export type MazeEditTarget
   = | {
     type: 'cell'

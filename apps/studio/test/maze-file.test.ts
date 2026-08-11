@@ -18,6 +18,14 @@ const appearance = {
   wallThickness: 2,
 }
 
+const pointPreferences = {
+  generateManualStart: { x: 0, y: 0 },
+  generateMode: 'auto',
+  solveManualEnd: { x: 0, y: 0 },
+  solveManualStart: { x: 0, y: 0 },
+  solveMode: 'auto',
+} as const
+
 describe('.maze v1 codec', () => {
   it('round-trips a generated square maze with bit-packed links', async () => {
     const runtime = createMaze({ grid: { cols: 3, rows: 2, type: 'square' } })
@@ -26,7 +34,11 @@ describe('.maze v1 codec', () => {
 
     const encoded = await encodeMazeFile({
       appearance,
-      hasCustomStartAndEndPoints: false,
+      pointPreferences: {
+        ...pointPreferences,
+        generateMode: 'manual',
+        solveManualEnd: { x: 2, y: 1 },
+      },
       maze: {
         algorithm: 'dfs',
         cols: 3,
@@ -56,6 +68,10 @@ describe('.maze v1 codec', () => {
       start: { x: 0, y: 0 },
     })
     expect(loaded.solve.status).toBe('generated')
+    expect(loaded.pointPreferences).toMatchObject({
+      generateMode: 'manual',
+      solveMode: 'auto',
+    })
     expect(openedEdgeIds(loaded.runtime)).toEqual(openedEdgeIds(runtime))
   })
 
@@ -80,7 +96,12 @@ describe('.maze v1 codec', () => {
         ...appearance,
         wallThickness: 3.5,
       },
-      hasCustomStartAndEndPoints: true,
+      pointPreferences: {
+        ...pointPreferences,
+        generateMode: 'manual',
+        solveManualEnd: { x: 2, y: 1 },
+        solveMode: 'manual',
+      },
       maze: {
         algorithm: 'prim',
         cols: 3,
@@ -116,6 +137,13 @@ describe('.maze v1 codec', () => {
       path,
       status: 'solved',
     })
+    expect(loaded.pointPreferences).toEqual({
+      generateManualStart: { x: 0, y: 0 },
+      generateMode: 'manual',
+      solveManualEnd: { x: 2, y: 1 },
+      solveManualStart: { x: 0, y: 0 },
+      solveMode: 'manual',
+    })
     expect(loaded.solve.visited).toEqual({
       '0,0': true,
       '1,0': true,
@@ -144,7 +172,7 @@ describe('.maze v1 codec', () => {
 
     const encoded = await encodeMazeFile({
       appearance,
-      hasCustomStartAndEndPoints: false,
+      pointPreferences: { ...pointPreferences, solveManualEnd: { x: 1, y: 1 } },
       maze: {
         algorithm: 'dfs',
         cols: 2,
@@ -189,7 +217,7 @@ describe('.maze v1 codec', () => {
         customFloodTheme,
         floorTheme: 'custom',
       },
-      hasCustomStartAndEndPoints: false,
+      pointPreferences,
       maze: {
         algorithm: 'dfs',
         cols: 1,
@@ -239,7 +267,7 @@ describe('.maze v1 codec', () => {
         styleTheme: legacyTheme,
         visibleElements: legacyVisibility,
       } as unknown as typeof appearance,
-      hasCustomStartAndEndPoints: false,
+      pointPreferences,
       maze: {
         algorithm: 'dfs',
         cols: 2,
@@ -277,7 +305,7 @@ describe('.maze v1 codec', () => {
 
     await expect(encodeMazeFile({
       appearance,
-      hasCustomStartAndEndPoints: false,
+      pointPreferences,
       maze: {
         algorithm: 'dfs',
         cols: 2,
@@ -301,7 +329,7 @@ describe('.maze v1 codec', () => {
     const runtime = createMaze({ grid: { cols: 1, rows: 1, type: 'square' } })
     const encoded = await encodeMazeFile({
       appearance,
-      hasCustomStartAndEndPoints: false,
+      pointPreferences,
       maze: {
         algorithm: 'dfs',
         cols: 1,

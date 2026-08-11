@@ -376,6 +376,7 @@ function renderWebgl2dView(
     floodActive,
     floodStarted,
     generationAlgorithm: getGenerationAlgorithm(generationSelect.value),
+    generationManualStart: app.generatePointMode === 'manual',
     lowDetail,
     previewingGeneration: previewing,
     showingSolveResult,
@@ -471,6 +472,7 @@ function getWebgl2dOverlayKey(activeRuntime: Maze, previewing: boolean): string 
     app.visibleElements.end,
     app.visibleElements.subPath,
     app.editTool,
+    app.pointPicker ? `${app.pointPicker.owner}:${app.pointPicker.target}` : '',
     getEditHoverTargetKey(),
     app.wallThickness,
     app.styleTheme.path,
@@ -488,7 +490,7 @@ function pushEditPreviewOverlays(out: {
   dots: Webgl2dOverlayDot[]
   rings: Webgl2dOverlayRing[]
 }, wallThickness: number): void {
-  if (app.activeTab !== 'edit' || !app.editHoverTarget) {
+  if ((!app.pointPicker && app.activeTab !== 'edit') || !app.editHoverTarget) {
     return
   }
 
@@ -517,6 +519,12 @@ function pushEditPreviewOverlays(out: {
 }
 
 function getPointPreviewColor(): string {
+  if (app.pointPicker?.target === 'start') {
+    return app.styleTheme.start
+  }
+  if (app.pointPicker?.target === 'end') {
+    return app.styleTheme.end
+  }
   if (app.editTool === 'start') {
     return app.styleTheme.start
   }
@@ -784,6 +792,7 @@ function renderThreeView(
     floodActive,
     floodStarted,
     generationAlgorithm: getGenerationAlgorithm(generationSelect.value),
+    generationManualStart: app.generatePointMode === 'manual',
     previewingGeneration: previewing,
     showingSolveResult,
     visibleEnd: app.visibleElements.end,
