@@ -38,7 +38,7 @@ function getActiveMazeSpan(): number {
 }
 
 export function onPointerDown(event: PointerEvent): void {
-  if ((app.activeTab === 'edit' && app.editTool !== 'pan') || app.view3d || event.button !== 0) {
+  if (app.pointPicker || (app.activeTab === 'edit' && app.editTool !== 'pan') || app.view3d || event.button !== 0) {
     return
   }
 

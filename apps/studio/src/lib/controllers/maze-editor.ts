@@ -1,5 +1,6 @@
 import type { MazeEditTarget, MazeEditTool } from '../types'
 import { pointToCellId } from 'mazely'
+import { getGenerationAlgorithm, getSolvingAlgorithm, shouldUseRandomGenerationStart } from '../algorithms'
 import { app } from '../app-state'
 import { bumpSolveCacheVersion } from '../derived'
 import {
@@ -13,6 +14,17 @@ import {
   editToolEndButton,
   editToolPanButton,
   editToolStartButton,
+  generateManualPoints,
+  generatePointsAutoInput,
+  generateStartButton,
+  generateStartNote,
+  generateStartReadout,
+  generationSelect,
+  solveEndButton,
+  solveManualActions,
+  solvePointsAutoInput,
+  solveStartButton,
+  solvingSelect,
 } from '../dom'
 import { key } from '../point'
 import { render } from '../renderer'
@@ -65,14 +77,78 @@ export function syncMazeEditorUi(): void {
 
   editStartReadout.textContent = `${app.maze.start.x}, ${app.maze.start.y}`
   editEndReadout.textContent = `${app.maze.end.x}, ${app.maze.end.y}`
+  syncPointSelectionUi()
+}
+
+export function syncPointSelectionUi(): void {
+  const generationUsesStart = shouldUseRandomGenerationStart(getGenerationAlgorithm(generationSelect.value))
+  const flood = getSolvingAlgorithm(solvingSelect.value) === 'flood'
+  generatePointsAutoInput.checked = app.generatePointMode === 'auto'
+  solvePointsAutoInput.checked = app.solvePointMode === 'auto'
+  generateManualPoints.classList.toggle('is-hidden', app.generatePointMode === 'auto' || !generationUsesStart)
+  solveManualActions.classList.toggle('is-hidden', app.solvePointMode === 'auto')
+  solveManualActions.classList.toggle('is-start-only', flood)
+  solveEndButton.classList.toggle('is-hidden', flood)
+  generateStartNote.textContent = generationUsesStart
+    ? (app.generatePointMode === 'auto'
+        ? 'Automatic random start selection'
+        : 'Select the cell where generation begins.')
+    : 'This algorithm does not use a start point.'
+  const generationStart = app.generatePointMode === 'auto'
+    ? app.maze.start
+    : app.generateManualStart
+  generateStartReadout.textContent = `${generationStart.x}, ${generationStart.y}`
+  generateStartButton.classList.toggle('is-active', app.pointPicker?.owner === 'generate')
+  solveStartButton.classList.toggle('is-active', app.pointPicker?.owner === 'solve' && app.pointPicker.target === 'start')
+  solveEndButton.classList.toggle('is-active', app.pointPicker?.owner === 'solve' && app.pointPicker.target === 'end')
+  generateStartButton.setAttribute('aria-pressed', String(app.pointPicker?.owner === 'generate'))
+  solveStartButton.setAttribute('aria-pressed', String(app.pointPicker?.owner === 'solve' && app.pointPicker.target === 'start'))
+  solveEndButton.setAttribute('aria-pressed', String(app.pointPicker?.owner === 'solve' && app.pointPicker.target === 'end'))
+}
+
+export function beginPointSelection(owner: 'generate' | 'solve', target: 'start' | 'end'): void {
+  if ((owner === 'generate' && app.generatePointMode !== 'manual')
+    || (owner === 'solve' && app.solvePointMode !== 'manual')) {
+    return
+  }
+  if (app.view3d) {
+    showToast('Switch to 2D view to select maze points.')
+    return
+  }
+  if (owner === 'generate') {
+    stopGenerationAnimation()
+    clearGenerationPreviewState()
+  }
+  else {
+    stopSolveAnimation()
+  }
+  app.pointPicker = app.pointPicker?.owner === owner && app.pointPicker.target === target
+    ? null
+    : { owner, target }
+  setHoverTarget(null)
+  syncPointSelectionUi()
+  render()
+}
+
+export function cancelPointSelection(): void {
+  if (!app.pointPicker) {
+    return
+  }
+  app.pointPicker = null
+  setHoverTarget(null)
+  syncPointSelectionUi()
 }
 
 export function onMazeEditPointerDown(event: PointerEvent): void {
-  if (app.activeTab !== 'edit' || app.view3d || app.editTool === 'pan' || event.button !== 0) {
+  const pickingPoint = app.pointPicker?.owner === app.activeTab
+  if ((!pickingPoint && (app.activeTab !== 'edit' || app.editTool === 'pan')) || app.view3d || event.button !== 0) {
     return
   }
 
   event.preventDefault()
+  if (pickingPoint) {
+    event.stopImmediatePropagation()
+  }
   app.editingMaze = true
   app.editPointerId = event.pointerId
   app.editLastTargetKey = null
@@ -82,7 +158,8 @@ export function onMazeEditPointerDown(event: PointerEvent): void {
 }
 
 export function onMazeEditPointerMove(event: PointerEvent): void {
-  if (app.activeTab !== 'edit' || app.view3d || app.editTool === 'pan') {
+  const pickingPoint = app.pointPicker?.owner === app.activeTab
+  if ((!pickingPoint && (app.activeTab !== 'edit' || app.editTool === 'pan')) || app.view3d) {
     setHoverTarget(null)
     return
   }
@@ -131,6 +208,13 @@ function applyPointerEdit(event: PointerEvent): void {
   app.editLastTargetKey = targetKey
 
   const tool = app.editTool
+  if (app.pointPicker) {
+    if (target.type !== 'cell') {
+      return
+    }
+    applyPickedPoint({ x: target.x, y: target.y })
+    return
+  }
   if (tool === 'start' || tool === 'end') {
     if (target.type !== 'cell') {
       return
@@ -210,11 +294,61 @@ function setStartOrEndPoint(tool: 'start' | 'end', point: { x: number, y: number
     return
   }
 
+  const other = tool === 'start' ? app.maze.end : app.maze.start
+  if (getSolvingAlgorithm(solvingSelect.value) !== 'flood'
+    && point.x === other.x
+    && point.y === other.y) {
+    showToast('Start and end points must be different.')
+    return
+  }
+
   app.maze = {
     ...app.maze,
     [tool]: point,
   }
-  app.hasCustomStartAndEndPoints = true
+  if (tool === 'start') {
+    app.generateManualStart = { ...point }
+    app.solveManualStart = { ...point }
+  }
+  else {
+    app.solveManualEnd = { ...point }
+  }
+}
+
+function applyPickedPoint(point: { x: number, y: number }): void {
+  const picker = app.pointPicker
+  if (!picker || !app.mazeRuntime?.grid.getCell(pointToCellId(point))) {
+    return
+  }
+  if (picker.owner === 'solve') {
+    const other = picker.target === 'start' ? app.solveManualEnd : app.solveManualStart
+    if (point.x === other.x && point.y === other.y && getSolvingAlgorithm(solvingSelect.value) !== 'flood') {
+      showToast('Start and end points must be different.')
+      return
+    }
+  }
+
+  stopGenerationAnimation()
+  stopSolveAnimation()
+  if (picker.owner === 'generate') {
+    clearGenerationPreviewState()
+    app.generateManualStart = { ...point }
+    app.maze = { ...app.maze, start: { ...point } }
+  }
+  else if (picker.target === 'start') {
+    app.solveManualStart = { ...point }
+    app.maze = { ...app.maze, start: { ...point } }
+  }
+  else {
+    app.solveManualEnd = { ...point }
+    app.maze = { ...app.maze, end: { ...point } }
+  }
+  app.pointPicker = null
+  app.stepState = createStepper(app.maze, app.mazeRuntime)
+  app.solveCurrentHeadKey = key(app.stepState.start.x, app.stepState.start.y)
+  bumpSolveCacheVersion()
+  syncMazeEditorUi()
+  render()
 }
 
 function getEditTarget(event: PointerEvent): MazeEditTarget | null {
@@ -229,7 +363,7 @@ function getEditTarget(event: PointerEvent): MazeEditTarget | null {
     return null
   }
 
-  if (app.editTool === 'start' || app.editTool === 'end') {
+  if (app.pointPicker || app.editTool === 'start' || app.editTool === 'end') {
     return { type: 'cell', x: cellX, y: cellY }
   }
 

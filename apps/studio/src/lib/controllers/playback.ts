@@ -1,12 +1,11 @@
 import type { Maze } from 'mazely'
-import type { MazePoint, MazeViewState } from '../maze-types'
+import type { MazeViewState } from '../maze-types'
 import type { SolveState } from '../solver-state'
 import type { GenerationPreview } from './generation'
 import { createMaze } from 'mazely'
 import {
   getGenerationAlgorithm,
   getSolvingAlgorithm,
-  shouldUseRandomGenerationStart,
 } from '../algorithms'
 import {
   app,
@@ -17,9 +16,8 @@ import { bumpGenerationCacheVersion, bumpSolveCacheVersion } from '../derived'
 import { generationSelect, solvingSelect, speedRange } from '../dom'
 import { key, parsePointKey } from '../point'
 import { render } from '../renderer'
-import { getRandomMaskPoint } from '../shape-mask'
 import { applySolveStepToState, rebuildSolveVisualState } from '../solver-state'
-import { getRandomMazePoint, parseRange } from '../utils'
+import { parseRange } from '../utils'
 import {
   advanceGenerationPreview,
   createGenerationPreview,
@@ -128,14 +126,13 @@ export function resetSolveState(): void {
 function createCurrentMaze(): GenerationPreview {
   syncGridDimensionInputs()
   const generationAlgorithm = getGenerationAlgorithm(generationSelect.value)
-  const randomStart = shouldUseRandomGenerationStart(generationAlgorithm)
-    ? getRandomGenerationStart()
-    : undefined
 
   const runtime = createMaze({
     grid: { cols: app.mazeWidth, mask: app.shape?.cellMask, rows: app.mazeHeight, type: 'square' },
   })
-  const start = randomStart ?? app.shape?.start ?? { x: 0, y: 0 }
+  const start = app.generatePointMode === 'manual'
+    ? app.generateManualStart
+    : app.maze.start
   const end = app.shape?.end ?? { x: app.mazeWidth - 1, y: app.mazeHeight - 1 }
   const player = runtime.generate(generationAlgorithm, { start })
 
@@ -147,18 +144,16 @@ function createCurrentMaze(): GenerationPreview {
   })
 }
 
-function getRandomGenerationStart(): MazePoint {
-  if (app.shape) {
-    return getRandomMaskPoint(app.shape.cellMask) ?? app.shape.start
-  }
-  return getRandomMazePoint(app.mazeWidth, app.mazeHeight)
-}
-
 export function onRunAction(): void {
   syncLoopSpeed()
 
   if (app.activeTab === 'generate') {
     toggleGenerateRun()
+    return
+  }
+
+  if (!hasValidSolvePoints()) {
+    showToast('Start and end points must be different.')
     return
   }
 
@@ -170,8 +165,18 @@ export function onStepAction(): void {
     stepGenerateOnce()
     return
   }
+  if (!hasValidSolvePoints()) {
+    showToast('Start and end points must be different.')
+    return
+  }
 
   stepSolveOnce()
+}
+
+function hasValidSolvePoints(): boolean {
+  return app.stepState.algorithm === 'flood'
+    || app.maze.start.x !== app.maze.end.x
+    || app.maze.start.y !== app.maze.end.y
 }
 
 export function onPreviousStepAction(): void {
@@ -379,7 +384,6 @@ function finishGenerationAnimation(): void {
   app.generationPreview.player.finish()
   app.maze = app.generationPreview.view
   app.mazeRuntime = app.generationPreview.runtime
-  app.hasCustomStartAndEndPoints = false
   app.hasGeneratedMaze = true
   app.generationPreview.committed = true
   app.stepState = createStepper(app.maze, app.mazeRuntime)
@@ -395,7 +399,6 @@ export function clearGenerationPreviewState(): void {
     preview.player.finish()
     app.maze = preview.view
     app.mazeRuntime = preview.runtime
-    app.hasCustomStartAndEndPoints = false
     app.hasGeneratedMaze = true
     app.mazeEditVersion += 1
     app.stepState = createStepper(app.maze, app.mazeRuntime)

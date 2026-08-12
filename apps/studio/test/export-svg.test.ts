@@ -5,9 +5,17 @@ import { buildMazeSvg } from '../src/lib/export-svg'
 import { DEFAULT_STYLE_THEME, DEFAULT_STYLE_VISIBILITY } from '../src/lib/types'
 
 describe('buildMazeSvg', () => {
-  it('keeps a completed flood visible on Generate until generation starts', () => {
+  it('hides a completed flood outside the Solve panel', () => {
     expect(shouldShowFloodVisualization({
       activeTab: 'generate',
+      previewingGeneration: false,
+      solvingAlgorithm: 'flood',
+      solveStarted: false,
+      solveStatus: 'solved',
+    })).toBe(false)
+
+    expect(shouldShowFloodVisualization({
+      activeTab: 'solve',
       previewingGeneration: false,
       solvingAlgorithm: 'flood',
       solveStarted: false,
@@ -23,13 +31,13 @@ describe('buildMazeSvg', () => {
     })).toBe(false)
   })
 
-  it('keeps running solve visuals on Generate until generation starts', () => {
+  it('hides running solve visuals outside the Solve panel', () => {
     expect(shouldShowSolveProgress({
       activeTab: 'generate',
       previewingGeneration: false,
       solveStarted: true,
       solveStatus: 'running',
-    })).toBe(true)
+    })).toBe(false)
 
     expect(shouldShowSolveProgress({
       activeTab: 'generate',
@@ -42,6 +50,13 @@ describe('buildMazeSvg', () => {
       activeTab: 'generate',
       previewingGeneration: false,
       solvingAlgorithm: 'flood',
+      solveStarted: true,
+      solveStatus: 'running',
+    })).toBe(false)
+
+    expect(shouldShowSolveProgress({
+      activeTab: 'solve',
+      previewingGeneration: false,
       solveStarted: true,
       solveStatus: 'running',
     })).toBe(true)

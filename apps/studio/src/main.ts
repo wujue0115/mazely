@@ -10,6 +10,7 @@ import { app, initAppState } from './lib/app-state'
 import { initFloodThemeEditor } from './lib/controllers/flood-theme-editor'
 import { initImageExport } from './lib/controllers/image-export'
 import {
+  beginPointSelection,
   initMazeEditor,
   onMazeEditPointerDown,
   onMazeEditPointerMove,
@@ -25,7 +26,6 @@ import {
   onResetAction,
   onRunAction,
   onStepAction,
-  resetSolveState,
   syncLoopSpeed,
 } from './lib/controllers/playback'
 import { initShapeEditor } from './lib/controllers/shape-editor'
@@ -49,6 +49,8 @@ import {
   clearShape,
   invalidateGenerationPreview,
   setActiveTab,
+  setGeneratePointMode,
+  setSolvePointMode,
   syncGridDimensionInputs,
   syncShapePanel,
 } from './lib/controllers/workbench'
@@ -64,6 +66,8 @@ import {
   controlBar,
   ctx,
   focusViewButton,
+  generatePointsAutoInput,
+  generateStartButton,
   generationSelect,
   lockGridRatioInput,
   mazeHeightInput,
@@ -82,6 +86,9 @@ import {
   shapeEditButton,
   shapeFileInput,
   shapeUploadButton,
+  solveEndButton,
+  solvePointsAutoInput,
+  solveStartButton,
   solvingSelect,
   speedRange,
   stepButton,
@@ -151,7 +158,12 @@ tabEdit.addEventListener('click', () => {
 })
 
 generationSelect.addEventListener('change', invalidateGenerationPreview)
-solvingSelect.addEventListener('change', resetSolveState)
+solvingSelect.addEventListener('change', () => setSolvePointMode(solvePointsAutoInput.checked))
+generatePointsAutoInput.addEventListener('change', () => setGeneratePointMode(generatePointsAutoInput.checked))
+solvePointsAutoInput.addEventListener('change', () => setSolvePointMode(solvePointsAutoInput.checked))
+generateStartButton.addEventListener('click', () => beginPointSelection('generate', 'start'))
+solveStartButton.addEventListener('click', () => beginPointSelection('solve', 'start'))
+solveEndButton.addEventListener('click', () => beginPointSelection('solve', 'end'))
 mazeWidthInput.addEventListener('input', () => {
   const changed = applyGridDimensionChange('width')
   if (changed) {
@@ -286,8 +298,11 @@ function exportSvg(): void {
     floodActive,
     floodStarted: floodActive && (app.running || app.stepState.visitedCount > 0),
     generationAlgorithm: getGenerationAlgorithm(generationSelect.value),
+    generationManualStart: app.generatePointMode === 'manual',
     previewingGeneration: activePreview !== null,
-    showingSolveResult: activePreview === null && app.stepState.status !== 'running',
+    showingSolveResult: app.activeTab === 'solve'
+      && activePreview === null
+      && app.stepState.status !== 'running',
     visibleEnd: app.visibleElements.end,
     visibleStart: app.visibleElements.start,
   })

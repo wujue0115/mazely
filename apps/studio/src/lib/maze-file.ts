@@ -8,7 +8,7 @@ import type {
   MazeViewState,
 } from './maze-types'
 import type { SolveState } from './solver-state'
-import type { StyleTheme, StyleVisibility } from './types'
+import type { PointSelectionMode, StyleTheme, StyleVisibility } from './types'
 import {
   createMaze,
   isMazeGenerationAlgorithm,
@@ -41,6 +41,14 @@ const CHUNK_CELL_COLORS = 6
 
 export type MazeFileSolveStatus = 'generated' | 'solved' | 'unsolved'
 
+export interface MazeFilePointPreferences {
+  generateMode: PointSelectionMode
+  generateManualStart: MazePoint
+  solveMode: PointSelectionMode
+  solveManualEnd: MazePoint
+  solveManualStart: MazePoint
+}
+
 export interface MazeFileAppearance {
   customFloodTheme?: CustomFloodTheme
   floorTheme: FloodThemeSelection
@@ -53,7 +61,7 @@ export interface MazeFileAppearance {
 
 export interface MazeFileSaveOptions {
   appearance: MazeFileAppearance
-  hasCustomStartAndEndPoints: boolean
+  pointPreferences: MazeFilePointPreferences
   maze: MazeViewState
   runtime: Maze
   shape: AppliedShape | null
@@ -68,7 +76,7 @@ export interface MazeFileSaveOptions {
 
 export interface LoadedMazeFile {
   appearance: MazeFileAppearance | null
-  hasCustomStartAndEndPoints: boolean
+  pointPreferences: MazeFilePointPreferences
   maze: MazeViewState
   runtime: Maze
   shape: AppliedShape | null
@@ -83,7 +91,8 @@ export interface LoadedMazeFile {
 
 interface MazeFileMeta {
   generationAlgorithm: MazeGenerationAlgorithm
-  hasCustomStartAndEndPoints: boolean
+  hasCustomStartAndEndPoints?: boolean
+  pointPreferences?: MazeFilePointPreferences
 }
 
 interface DecodedTopology {
@@ -111,7 +120,9 @@ export async function encodeMazeFile(options: MazeFileSaveOptions): Promise<Uint
   const chunks = [
     encodeChunk(CHUNK_META, encodeJson({
       generationAlgorithm: options.maze.algorithm,
-      hasCustomStartAndEndPoints: options.hasCustomStartAndEndPoints,
+      hasCustomStartAndEndPoints: options.pointPreferences.generateMode === 'manual'
+        || options.pointPreferences.solveMode === 'manual',
+      pointPreferences: options.pointPreferences,
     } satisfies MazeFileMeta)),
     encodeChunk(CHUNK_TOPOLOGY, topology),
     encodeChunk(CHUNK_LINKS, links),
@@ -178,6 +189,8 @@ export async function decodeMazeFile(file: ArrayBuffer | Uint8Array): Promise<Lo
   const links = requireChunk(chunks, CHUNK_LINKS)
   const runtime = createRuntime(topology, links)
   const state = decodeState(requireChunk(chunks, CHUNK_STATE), topology, runtime)
+  const pointPreferences = resolvePointPreferences(meta, state)
+  assertPointPreferences(runtime, pointPreferences)
   const appearanceChunk = chunks.get(CHUNK_STYLE)
   const appearance = appearanceChunk ? decodeAppearance(appearanceChunk) : null
   const colorsChunk = chunks.get(CHUNK_CELL_COLORS)
@@ -195,7 +208,7 @@ export async function decodeMazeFile(file: ArrayBuffer | Uint8Array): Promise<Lo
 
   return {
     appearance,
-    hasCustomStartAndEndPoints: meta.hasCustomStartAndEndPoints,
+    pointPreferences,
     maze: {
       algorithm: meta.generationAlgorithm,
       cols: topology.cols,
@@ -637,11 +650,57 @@ function encodeJson(value: unknown): Uint8Array {
 
 function decodeMeta(bytes: Uint8Array): MazeFileMeta {
   const value = decodeJson(bytes) as Partial<MazeFileMeta>
+  const validPointPreferences = isPointPreferences(value.pointPreferences)
   if (!isMazeGenerationAlgorithm(value.generationAlgorithm)
-    || typeof value.hasCustomStartAndEndPoints !== 'boolean') {
+    || (value.pointPreferences !== undefined && !validPointPreferences)
+    || (typeof value.hasCustomStartAndEndPoints !== 'boolean' && !validPointPreferences)) {
     throw new MazeFileError('The META chunk is invalid.')
   }
   return value as MazeFileMeta
+}
+
+function resolvePointPreferences(meta: MazeFileMeta, state: DecodedState): MazeFilePointPreferences {
+  if (meta.pointPreferences) {
+    return structuredClone(meta.pointPreferences)
+  }
+  const mode: PointSelectionMode = meta.hasCustomStartAndEndPoints ? 'manual' : 'auto'
+  return {
+    generateManualStart: { ...state.start },
+    generateMode: mode,
+    solveManualEnd: { ...state.end },
+    solveManualStart: { ...state.start },
+    solveMode: mode,
+  }
+}
+
+function isPointPreferences(value: unknown): value is MazeFilePointPreferences {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+  const record = value as Partial<MazeFilePointPreferences>
+  return isPointSelectionMode(record.generateMode)
+    && isPointSelectionMode(record.solveMode)
+    && isMazePoint(record.generateManualStart)
+    && isMazePoint(record.solveManualStart)
+    && isMazePoint(record.solveManualEnd)
+}
+
+function isPointSelectionMode(value: unknown): value is PointSelectionMode {
+  return value === 'auto' || value === 'manual'
+}
+
+function isMazePoint(value: unknown): value is MazePoint {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+  const point = value as Partial<MazePoint>
+  return Number.isInteger(point.x) && Number.isInteger(point.y)
+}
+
+function assertPointPreferences(runtime: Maze, preferences: MazeFilePointPreferences): void {
+  assertActiveCell(runtime, preferences.generateManualStart, 'generation manual start')
+  assertActiveCell(runtime, preferences.solveManualStart, 'solve manual start')
+  assertActiveCell(runtime, preferences.solveManualEnd, 'solve manual end')
 }
 
 function decodeAppearance(bytes: Uint8Array): MazeFileAppearance {
@@ -768,6 +827,7 @@ function assertSaveOptions(options: MazeFileSaveOptions): void {
   }
   assertActiveCell(options.runtime, options.maze.start, 'start')
   assertActiveCell(options.runtime, options.maze.end, 'end')
+  assertPointPreferences(options.runtime, options.pointPreferences)
   for (const pointKey of Object.keys(options.solve.visited)) {
     assertActiveCell(options.runtime, parsePointKey(pointKey), 'visited')
   }

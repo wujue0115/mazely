@@ -553,7 +553,7 @@ body {
     calc((var(--dock-collapsed-toggle-gap) * 2) - var(--dock-bar-padding))
   );
   --dock-collapsed-width: calc(
-    (var(--ui-control-height-md) * 4) + var(--dock-toggle-size) + (var(--ui-gap-xs) * 5) + (var(--ui-pad-xs) * 4) +
+    (var(--ui-control-height-md) * 5) + var(--dock-toggle-size) + (var(--ui-gap-xs) * 5) + (var(--ui-pad-xs) * 4) +
       (var(--dock-collapsed-toggle-gap) * 2)
   );
   --dock-expanded-width: min(820px, calc(100vw - 48px));
@@ -1525,6 +1525,85 @@ input[type='checkbox'].switch:checked::before {
 .maze-point-text .readout {
   font-size: 11px;
   color: var(--on-surface);
+}
+
+.point-mode-switch {
+  justify-content: flex-start;
+  gap: var(--ui-gap-md);
+  padding: var(--ui-pad-sm) 0;
+}
+
+.point-mode-switch input[type='checkbox'].switch {
+  width: 34px;
+  height: 20px;
+  flex: 0 0 auto;
+}
+
+.point-mode-switch input[type='checkbox'].switch::before {
+  width: 14px;
+  height: 14px;
+}
+
+.point-mode-switch input[type='checkbox'].switch:checked::before {
+  transform: translateX(14px);
+}
+
+.point-selection-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--ui-gap-sm);
+}
+
+.point-selection-block + .info-card,
+.point-tool-grid + .info-card {
+  margin-top: var(--ui-pad-sm);
+}
+
+.point-tool-grid {
+  display: grid;
+  width: 100%;
+}
+
+.point-tool-grid.is-single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.point-tool-grid.is-pair {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.point-tool-grid.is-start-only {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.point-tool-grid .maze-point-dot {
+  width: 11px;
+  height: 11px;
+}
+
+.point-tool-grid.is-single .tool-tab-indicator {
+  width: calc(100% - (var(--ui-pad-xs) * 2));
+}
+
+.point-tool-grid.is-pair .tool-tab-indicator {
+  width: calc((100% - (var(--ui-pad-xs) * 2) - var(--ui-gap-xs)) / 2);
+}
+
+.point-tool-grid.is-start-only .tool-tab-indicator {
+  width: calc(100% - (var(--ui-pad-xs) * 2));
+}
+
+.point-tool-grid .tool-tab-indicator {
+  opacity: 0;
+}
+
+.point-tool-grid .tool-tab-btn.is-active ~ .tool-tab-indicator {
+  opacity: 1;
+}
+
+#solve-end-btn.is-active ~ .tool-tab-indicator {
+  transform: translateX(calc(100% + var(--ui-gap-xs)));
 }
 
 .shape-group {
@@ -2569,7 +2648,7 @@ input[type='checkbox'].switch:checked::before {
 
   .control-bar {
     --mobile-dock-collapsed-width: calc(
-      (var(--ui-control-height-md) * 4) + var(--dock-toggle-size) + (var(--ui-gap-sm) * 2) + (var(--ui-gap-xs) * 3) +
+      (var(--ui-control-height-md) * 5) + var(--dock-toggle-size) + (var(--ui-gap-sm) * 2) + (var(--ui-gap-xs) * 3) +
         (var(--ui-pad-xs) * 4)
     );
 

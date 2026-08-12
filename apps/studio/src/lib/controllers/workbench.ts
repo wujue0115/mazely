@@ -1,6 +1,7 @@
 import type { PanelTab } from '../types'
 import type { AppliedShape } from './shape-editor'
-import { getGenerationAlgorithm } from '../algorithms'
+import { pointToCellId } from 'mazely'
+import { getGenerationAlgorithm, shouldUseRandomGenerationStart } from '../algorithms'
 import { app, createSolidMazeState } from '../app-state'
 import {
   canvasWrap,
@@ -25,7 +26,9 @@ import {
 } from '../dom'
 import { key } from '../point'
 import { fitMazeInView, render } from '../renderer'
-import { clamp, GRID_DIMENSION_MAX, parseGridDimensionOptional } from '../utils'
+import { getRandomMaskPoint } from '../shape-mask'
+import { clamp, getRandomMazePoint, GRID_DIMENSION_MAX, parseGridDimensionOptional } from '../utils'
+import { cancelPointSelection, syncPointSelectionUi } from './maze-editor'
 import {
   clearGenerationPreviewState,
   createStepper,
@@ -37,7 +40,8 @@ import {
 import { showToast, syncUi } from './status'
 import { syncStyleEditingVisibility } from './theme-panel'
 
-export function setActiveTab(tab: PanelTab): void {
+export function setActiveTab(tab: PanelTab, options: { preservePoints?: boolean } = {}): void {
+  cancelPointSelection()
   if (app.running && tab === 'edit') {
     stopSolveAnimation()
   }
@@ -65,8 +69,11 @@ export function setActiveTab(tab: PanelTab): void {
   }
 
   if (tab === 'solve') {
-    if (!app.hasCustomStartAndEndPoints) {
+    if (!options.preservePoints && app.solvePointMode === 'auto') {
       applyDefaultSolvePoints()
+    }
+    else if (!options.preservePoints) {
+      applyManualSolvePoints()
     }
     if (shouldResetSolveStateForCurrentMaze()) {
       resetSolveState()
@@ -75,18 +82,76 @@ export function setActiveTab(tab: PanelTab): void {
       syncUi()
       render()
     }
+    syncPointSelectionUi()
     return
   }
 
   if (tab === 'edit') {
     prepareClosedMazeForEdit()
+    syncPointSelectionUi()
     syncUi()
     render()
     return
   }
 
+  if (!options.preservePoints) {
+    applyGenerationPointPreference()
+  }
+  syncPointSelectionUi()
+
   syncUi()
   render()
+}
+
+export function setGeneratePointMode(auto: boolean): void {
+  cancelPointSelection()
+  app.generatePointMode = auto ? 'auto' : 'manual'
+  stopGenerationAnimation()
+  clearGenerationPreviewState()
+  applyGenerationPointPreference()
+  if (app.mazeRuntime) {
+    app.stepState = createStepper(app.maze, app.mazeRuntime)
+  }
+  syncPointSelectionUi()
+  syncUi()
+  render()
+}
+
+export function setSolvePointMode(auto: boolean): void {
+  cancelPointSelection()
+  app.solvePointMode = auto ? 'auto' : 'manual'
+  if (auto) {
+    applyDefaultSolvePoints()
+  }
+  else {
+    applyManualSolvePoints()
+  }
+  resetSolveState()
+  syncPointSelectionUi()
+}
+
+function applyGenerationPointPreference(): void {
+  if (!app.mazeRuntime || app.generationPreview) {
+    return
+  }
+  let start = app.generateManualStart
+  if (app.generatePointMode === 'auto') {
+    const algorithm = getGenerationAlgorithm(generationSelect.value)
+    start = shouldUseRandomGenerationStart(algorithm)
+      ? getAutomaticGenerationStart()
+      : (app.shape?.start ?? { x: 0, y: 0 })
+  }
+  if (!app.mazeRuntime.grid.getCell(pointToCellId(start))) {
+    start = app.shape?.start ?? { x: 0, y: 0 }
+  }
+  app.maze = { ...app.maze, start: { ...start } }
+}
+
+function getAutomaticGenerationStart() {
+  if (app.shape) {
+    return getRandomMaskPoint(app.shape.cellMask) ?? app.shape.start
+  }
+  return getRandomMazePoint(app.mazeWidth, app.mazeHeight)
 }
 
 function prepareClosedMazeForEdit(): void {
@@ -118,13 +183,30 @@ function applyDefaultSolvePoints(): void {
   }
 }
 
+function applyManualSolvePoints(): void {
+  if (!app.mazeRuntime) {
+    return
+  }
+  const start = app.mazeRuntime.grid.getCell(pointToCellId(app.solveManualStart))
+    ? app.solveManualStart
+    : (app.shape?.start ?? { x: 0, y: 0 })
+  const end = app.mazeRuntime.grid.getCell(pointToCellId(app.solveManualEnd))
+    ? app.solveManualEnd
+    : (app.shape?.end ?? { x: app.maze.cols - 1, y: app.maze.rows - 1 })
+  app.solveManualStart = { ...start }
+  app.solveManualEnd = { ...end }
+  app.maze = { ...app.maze, end: { ...end }, start: { ...start } }
+}
+
 export function invalidateGenerationPreview(): void {
   if (app.generating) {
     return
   }
 
   clearGenerationPreviewState()
+  applyGenerationPointPreference()
   syncGridDimensionInputs()
+  syncPointSelectionUi()
   syncStyleEditingVisibility()
   render()
 }
@@ -165,7 +247,7 @@ function rebuildMazeForShapeChange(): void {
   )
   app.maze = solidMazeState.maze
   app.mazeRuntime = solidMazeState.runtime
-  app.hasCustomStartAndEndPoints = false
+  resetManualPointDrafts()
   app.hasGeneratedMaze = false
   app.stepState = createStepper(app.maze, app.mazeRuntime)
   app.solveCurrentHeadKey = key(app.stepState.start.x, app.stepState.start.y)
@@ -174,8 +256,11 @@ function rebuildMazeForShapeChange(): void {
     switchTabsWithoutSideEffects('generate')
   }
 
+  applyGenerationPointPreference()
+
   syncGridDimensionInputs()
   syncShapePanel()
+  syncPointSelectionUi()
   syncStyleEditingVisibility()
   fitMazeInView(app.maze)
   render()
@@ -299,7 +384,7 @@ export function applyGridDimensionChange(changedBy: 'width' | 'height' | 'none' 
   )
   app.maze = solidMazeState.maze
   app.mazeRuntime = solidMazeState.runtime
-  app.hasCustomStartAndEndPoints = false
+  resetManualPointDrafts()
   app.hasGeneratedMaze = false
   app.stepState = createStepper(app.maze, app.mazeRuntime)
   app.solveCurrentHeadKey = key(app.stepState.start.x, app.stepState.start.y)
@@ -308,7 +393,16 @@ export function applyGridDimensionChange(changedBy: 'width' | 'height' | 'none' 
     switchTabsWithoutSideEffects('generate')
   }
 
+  applyGenerationPointPreference()
+  syncPointSelectionUi()
+
   return true
+}
+
+function resetManualPointDrafts(): void {
+  app.generateManualStart = { ...app.maze.start }
+  app.solveManualStart = { ...app.maze.start }
+  app.solveManualEnd = { ...app.maze.end }
 }
 
 function switchTabsWithoutSideEffects(tab: PanelTab): void {

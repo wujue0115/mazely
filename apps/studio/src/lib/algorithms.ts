@@ -48,9 +48,6 @@ export function shouldShowFloodVisualization(options: {
   }
 
   return options.activeTab === 'solve'
-    || (options.activeTab === 'generate' && (
-      options.solveStatus !== 'running' || options.solveStarted
-    ))
 }
 
 export function shouldShowSolveProgress(options: {
@@ -64,7 +61,6 @@ export function shouldShowSolveProgress(options: {
   }
 
   return options.activeTab === 'solve'
-    || (options.activeTab === 'generate' && options.solveStarted)
 }
 
 export function shouldShowGenerationStartMarker(
@@ -87,6 +83,7 @@ export function getPointMarkerVisibility(options: {
   floodActive: boolean
   floodStarted: boolean
   generationAlgorithm: MazeGenerationAlgorithm
+  generationManualStart?: boolean
   lowDetail?: boolean
   previewingGeneration: boolean
   showingSolveResult: boolean
@@ -104,6 +101,7 @@ export function getPointMarkerVisibility(options: {
       options.activeTab === 'solve'
       || options.activeTab === 'edit'
       || options.showingSolveResult
+      || (options.activeTab === 'generate' && options.generationManualStart === true)
       || shouldShowGenerationStartMarker(
         options.previewingGeneration,
         options.generationAlgorithm,
