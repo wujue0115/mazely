@@ -256,8 +256,11 @@ function rebuildMazeForShapeChange(): void {
     switchTabsWithoutSideEffects('generate')
   }
 
+  applyGenerationPointPreference()
+
   syncGridDimensionInputs()
   syncShapePanel()
+  syncPointSelectionUi()
   syncStyleEditingVisibility()
   fitMazeInView(app.maze)
   render()
@@ -389,6 +392,9 @@ export function applyGridDimensionChange(changedBy: 'width' | 'height' | 'none' 
   if (app.activeTab === 'solve' || app.activeTab === 'edit') {
     switchTabsWithoutSideEffects('generate')
   }
+
+  applyGenerationPointPreference()
+  syncPointSelectionUi()
 
   return true
 }

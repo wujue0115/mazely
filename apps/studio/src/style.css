@@ -1528,8 +1528,24 @@ input[type='checkbox'].switch:checked::before {
 }
 
 .point-mode-switch {
+  justify-content: flex-start;
+  gap: var(--ui-gap-md);
   padding: var(--ui-pad-sm) 0;
-  border-bottom: 1px solid var(--hairline);
+}
+
+.point-mode-switch input[type='checkbox'].switch {
+  width: 34px;
+  height: 20px;
+  flex: 0 0 auto;
+}
+
+.point-mode-switch input[type='checkbox'].switch::before {
+  width: 14px;
+  height: 14px;
+}
+
+.point-mode-switch input[type='checkbox'].switch:checked::before {
+  transform: translateX(14px);
 }
 
 .point-selection-block {
@@ -1537,6 +1553,11 @@ input[type='checkbox'].switch:checked::before {
   flex-direction: column;
   align-items: center;
   gap: var(--ui-gap-sm);
+}
+
+.point-selection-block + .info-card,
+.point-tool-grid + .info-card {
+  margin-top: var(--ui-pad-sm);
 }
 
 .point-tool-grid {
@@ -1583,18 +1604,6 @@ input[type='checkbox'].switch:checked::before {
 
 #solve-end-btn.is-active ~ .tool-tab-indicator {
   transform: translateX(calc(100% + var(--ui-gap-xs)));
-}
-
-.point-selection-readout {
-  color: var(--on-surface);
-  font-size: 11px;
-}
-
-.field-note {
-  margin: 0;
-  color: var(--on-surface-variant);
-  font: var(--text-label-xs);
-  opacity: 0.65;
 }
 
 .shape-group {

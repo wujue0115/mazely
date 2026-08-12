@@ -91,10 +91,13 @@ export function syncPointSelectionUi(): void {
   solveEndButton.classList.toggle('is-hidden', flood)
   generateStartNote.textContent = generationUsesStart
     ? (app.generatePointMode === 'auto'
-        ? 'A start is selected when generation begins.'
+        ? 'Automatic random start selection'
         : 'Select the cell where generation begins.')
     : 'This algorithm does not use a start point.'
-  generateStartReadout.textContent = `${app.generateManualStart.x}, ${app.generateManualStart.y}`
+  const generationStart = app.generatePointMode === 'auto'
+    ? app.maze.start
+    : app.generateManualStart
+  generateStartReadout.textContent = `${generationStart.x}, ${generationStart.y}`
   generateStartButton.classList.toggle('is-active', app.pointPicker?.owner === 'generate')
   solveStartButton.classList.toggle('is-active', app.pointPicker?.owner === 'solve' && app.pointPicker.target === 'start')
   solveEndButton.classList.toggle('is-active', app.pointPicker?.owner === 'solve' && app.pointPicker.target === 'end')
