@@ -553,7 +553,7 @@ body {
     calc((var(--dock-collapsed-toggle-gap) * 2) - var(--dock-bar-padding))
   );
   --dock-collapsed-width: calc(
-    (var(--ui-control-height-md) * 4) + var(--dock-toggle-size) + (var(--ui-gap-xs) * 5) + (var(--ui-pad-xs) * 4) +
+    (var(--ui-control-height-md) * 5) + var(--dock-toggle-size) + (var(--ui-gap-xs) * 5) + (var(--ui-pad-xs) * 4) +
       (var(--dock-collapsed-toggle-gap) * 2)
   );
   --dock-expanded-width: min(820px, calc(100vw - 48px));
@@ -2648,7 +2648,7 @@ input[type='checkbox'].switch:checked::before {
 
   .control-bar {
     --mobile-dock-collapsed-width: calc(
-      (var(--ui-control-height-md) * 4) + var(--dock-toggle-size) + (var(--ui-gap-sm) * 2) + (var(--ui-gap-xs) * 3) +
+      (var(--ui-control-height-md) * 5) + var(--dock-toggle-size) + (var(--ui-gap-sm) * 2) + (var(--ui-gap-xs) * 3) +
         (var(--ui-pad-xs) * 4)
     );
 
