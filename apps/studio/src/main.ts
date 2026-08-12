@@ -300,7 +300,9 @@ function exportSvg(): void {
     generationAlgorithm: getGenerationAlgorithm(generationSelect.value),
     generationManualStart: app.generatePointMode === 'manual',
     previewingGeneration: activePreview !== null,
-    showingSolveResult: activePreview === null && app.stepState.status !== 'running',
+    showingSolveResult: app.activeTab === 'solve'
+      && activePreview === null
+      && app.stepState.status !== 'running',
     visibleEnd: app.visibleElements.end,
     visibleStart: app.visibleElements.start,
   })

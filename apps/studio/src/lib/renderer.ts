@@ -51,7 +51,9 @@ function isOpenFieldGenerationPreview(preview: GenerationPreview | null): boolea
 }
 
 function shouldShowSolveResult(previewingGeneration: boolean): boolean {
-  return !previewingGeneration && app.stepState.status !== 'running'
+  return app.activeTab === 'solve'
+    && !previewingGeneration
+    && app.stepState.status !== 'running'
 }
 
 export function resetView(): void {
@@ -318,7 +320,7 @@ function renderWebgl2dView(
     }
   }
 
-  if (!previewing && !floodActive) {
+  if (app.activeTab === 'solve' && !previewing && !floodActive) {
     if (app.visibleElements.path) {
       pushPolyline(app.stepState.path, app.styleTheme.path, THREE_PATH_WIDTH)
     }
@@ -739,7 +741,7 @@ function renderThreeView(
     }
   }
 
-  if (!previewing && !floodActive) {
+  if (app.activeTab === 'solve' && !previewing && !floodActive) {
     if (app.visibleElements.path) {
       pushPolyline(app.stepState.path, app.styleTheme.path, THREE_PATH_WIDTH)
     }
@@ -852,6 +854,12 @@ function getCellFill(
   // cell by cell through the visited set below.
   if (app.activeTab === 'generate' && imageColor && !shouldShowSolveResult(false)) {
     return app.visibleElements.visit ? imageColor : HIDDEN_CELL_COLOR
+  }
+
+  if (app.activeTab !== 'solve') {
+    return app.visibleElements.cell
+      ? (imageColor ?? app.styleTheme.cell)
+      : HIDDEN_CELL_COLOR
   }
 
   const solveStartKey = key(app.maze.start.x, app.maze.start.y)

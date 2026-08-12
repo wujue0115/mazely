@@ -48,9 +48,6 @@ export function shouldShowFloodVisualization(options: {
   }
 
   return options.activeTab === 'solve'
-    || (options.activeTab === 'generate' && (
-      options.solveStatus !== 'running' || options.solveStarted
-    ))
 }
 
 export function shouldShowSolveProgress(options: {
@@ -64,7 +61,6 @@ export function shouldShowSolveProgress(options: {
   }
 
   return options.activeTab === 'solve'
-    || (options.activeTab === 'generate' && options.solveStarted)
 }
 
 export function shouldShowGenerationStartMarker(
