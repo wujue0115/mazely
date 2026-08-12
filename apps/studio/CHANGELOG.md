@@ -4,6 +4,29 @@ All notable changes to the continuously deployed Mazely Studio app are
 documented in this file. Studio versions advance independently from the
 published `mazely` and `@mazely/core` packages.
 
+## [0.6.0] - 2026-08-13
+
+### Added
+
+- Added independent automatic and manual point selection to the Generate and
+  Solve panels, including direct 2D canvas selection for generation starts and
+  solve start/end points.
+- Added point-selection preference persistence to `.maze` files with backward
+  compatibility for files saved by earlier Studio versions.
+
+### Changed
+
+- Editing a start point now updates the saved Generate and Solve manual starts,
+  while editing an end point updates the saved Solve manual end without
+  changing either panel's automatic/manual mode.
+- Solve paths, visits, heads, frontiers, and flood colors are now shown only in
+  the Solve panel.
+
+### Fixed
+
+- Prevented point-to-point solvers from using the same start and end cell.
+- Kept the playback dock's expand button visible when the dock is collapsed.
+
 ## [0.5.0] - 2026-08-11
 
 ### Added
