@@ -1482,6 +1482,11 @@ input[type='checkbox'].switch:checked::before {
   border-top: 1px solid var(--hairline);
 }
 
+.info-card-row.is-hidden + .maze-points-grid {
+  padding-top: 0;
+  border-top: 0;
+}
+
 .maze-points-grid.is-start-only {
   grid-template-columns: minmax(0, 1fr);
   padding-top: 0;
