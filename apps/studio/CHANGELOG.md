@@ -4,6 +4,13 @@ All notable changes to the continuously deployed Mazely Studio app are
 documented in this file. Studio versions advance independently from the
 published `mazely` and `@mazely/core` packages.
 
+## [0.6.1] - 2026-08-15
+
+### Fixed
+
+- Removed the extra top border and spacing above the Solve point readouts when
+  the manual Start and End controls are shown.
+
 ## [0.6.0] - 2026-08-13
 
 ### Added
