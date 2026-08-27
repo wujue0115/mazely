@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createMaze, DEFAULT_MAZE_SIZE, MAZELY_DEFAULTS, serializeGrid } from '../src'
+import { createMaze, DEFAULT_MAZE_SIZE, GridCell, MAZELY_DEFAULTS, serializeGrid, SquareCell, TriangleCell } from '../src'
 
 describe('mazely facade', () => {
   it('creates a maze with friendly defaults', () => {
@@ -29,5 +29,25 @@ describe('mazely facade', () => {
 
     const serialized = serializeGrid(maze.grid)
     expect(serialized.openedEdgeIds.length).toBe(15)
+  })
+
+  it('creates triangle mazes through the public factory', () => {
+    const maze = createMaze({
+      grid: { layout: 'triangle', size: 6, type: 'triangle' },
+      seed: 'facade-triangle',
+    })
+
+    maze.generate('prim').finish()
+    maze.solve('a-star', {
+      end: { x: 10, y: 5 },
+      start: { x: 0, y: 0 },
+    }).finish()
+
+    expect(maze.grid.type).toBe('triangle')
+    expect(maze.grid.cells[0]).toBeInstanceOf(GridCell)
+    expect(maze.grid.cells[0]).toBeInstanceOf(TriangleCell)
+    expect(maze.grid.cells[0]).not.toBeInstanceOf(SquareCell)
+    expect(maze.getSolveResult()?.solved).toBe(true)
+    expect(serializeGrid(maze.grid).triangleLayout).toBe('triangle')
   })
 })

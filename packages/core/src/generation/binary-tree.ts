@@ -1,11 +1,11 @@
-import type { MazeAlgorithm, MazeContext, MazeGenerationStep, SquareCell } from '../types'
+import type { GridCell, MazeAlgorithm, MazeContext, MazeGenerationStep } from '../types'
 import { edgeBetween } from './grid-helpers'
 import { buildCarveStep } from './shared'
 
-class BinaryTreeSquareAlgorithm implements MazeAlgorithm<SquareCell, MazeGenerationStep> {
+class BinaryTreeSquareAlgorithm implements MazeAlgorithm<GridCell, MazeGenerationStep> {
   name = 'binary-tree';
 
-  * generate(context: MazeContext<SquareCell>): IterableIterator<MazeGenerationStep> {
+  * generate(context: MazeContext<GridCell>): IterableIterator<MazeGenerationStep> {
     const cells = [...context.grid.cells].sort((a, b) => a.row - b.row || a.col - b.col)
 
     for (const cell of cells) {
@@ -24,6 +24,6 @@ class BinaryTreeSquareAlgorithm implements MazeAlgorithm<SquareCell, MazeGenerat
   }
 }
 
-export function createBinaryTreeAlgorithm(): MazeAlgorithm<SquareCell, MazeGenerationStep> {
+export function createBinaryTreeAlgorithm(): MazeAlgorithm<GridCell, MazeGenerationStep> {
   return new BinaryTreeSquareAlgorithm()
 }

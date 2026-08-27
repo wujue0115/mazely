@@ -1,15 +1,15 @@
-import type { MazeAlgorithm, MazeContext, MazeGenerationStep, SquareCell } from '../types'
+import type { GridCell, MazeAlgorithm, MazeContext, MazeGenerationStep } from '../types'
 import { buildPositionMap, cellAt, edgeBetween } from './grid-helpers'
 import { buildCarveStep } from './shared'
 
-class SidewinderSquareAlgorithm implements MazeAlgorithm<SquareCell, MazeGenerationStep> {
+class SidewinderSquareAlgorithm implements MazeAlgorithm<GridCell, MazeGenerationStep> {
   name = 'sidewinder';
 
-  * generate(context: MazeContext<SquareCell>): IterableIterator<MazeGenerationStep> {
+  * generate(context: MazeContext<GridCell>): IterableIterator<MazeGenerationStep> {
     const byPosition = buildPositionMap(context.grid.cells)
 
     for (let row = 0; row < context.grid.rows; row += 1) {
-      let run: SquareCell[] = []
+      let run: GridCell[] = []
       for (let col = 0; col < context.grid.cols; col += 1) {
         const cell = cellAt(byPosition, row, col)
         if (!cell) {
@@ -46,6 +46,6 @@ class SidewinderSquareAlgorithm implements MazeAlgorithm<SquareCell, MazeGenerat
   }
 }
 
-export function createSidewinderAlgorithm(): MazeAlgorithm<SquareCell, MazeGenerationStep> {
+export function createSidewinderAlgorithm(): MazeAlgorithm<GridCell, MazeGenerationStep> {
   return new SidewinderSquareAlgorithm()
 }

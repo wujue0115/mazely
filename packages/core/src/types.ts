@@ -3,6 +3,7 @@ import type { MazeGenerationAlgorithm, MazeSolvingAlgorithm } from './algorithms
 export type { MazeGenerationAlgorithm, MazeSolvingAlgorithm } from './algorithms'
 
 export type CellId = string
+export type MazeGridType = 'square' | 'triangle'
 
 export interface MazePoint {
   x: number
@@ -85,7 +86,8 @@ export class MazeEdge {
   }
 }
 
-export class SquareCell extends MazeCell {
+/** Built-in maze cell with logical row/column coordinates and directional edges. */
+export class GridCell extends MazeCell {
   readonly row: number
   readonly col: number
 
@@ -113,7 +115,36 @@ export class SquareCell extends MazeCell {
   }
 }
 
+/** A cell in a square tiling. */
+export class SquareCell extends GridCell {}
+
+export type TriangleOrientation = 'up' | 'down'
+export type TriangleGridLayout = 'triangle' | 'rectangle'
+
+/**
+ * A cell in an alternating triangular tiling. Triangle cells retain the
+ * directional edge shape of GridCell: left/right are the slanted sides, while
+ * exactly one of top/bottom is the horizontal base selected by `orientation`.
+ */
+export class TriangleCell extends GridCell {
+  readonly orientation: TriangleOrientation
+  readonly offsetX: number
+
+  constructor(options: {
+    id: CellId
+    row: number
+    col: number
+    orientation: TriangleOrientation
+    offsetX: number
+  }) {
+    super(options)
+    this.orientation = options.orientation
+    this.offsetX = options.offsetX
+  }
+}
+
 export interface MazeGrid<Cell extends MazeCell = MazeCell> {
+  readonly type: MazeGridType
   readonly rows: number
   readonly cols: number
   readonly cells: Cell[]
@@ -217,7 +248,7 @@ export interface SolveMazeResult {
 
 export type MazelyPhase = 'idle' | 'generate' | 'solve'
 
-export interface MazelyGridOptions {
+export interface MazelySquareGridOptions {
   type: 'square'
   rows: number
   cols: number
@@ -228,6 +259,25 @@ export interface MazelyGridOptions {
    */
   mask?: readonly (readonly boolean[])[]
 }
+
+export type MazelyTriangleGridOptions
+  = | {
+    type: 'triangle'
+    layout: 'triangle'
+    /** Number of smallest triangles along each side of the outer triangle. */
+    size: number
+    /** Cell inclusion mask indexed as `mask[row][col]`. */
+    mask?: readonly (readonly boolean[])[]
+  }
+  | {
+    type: 'triangle'
+    layout: 'rectangle'
+    rows: number
+    cols: number
+    mask?: readonly (readonly boolean[])[]
+  }
+
+export type MazelyGridOptions = MazelySquareGridOptions | MazelyTriangleGridOptions
 
 export interface CreateMazeOptions {
   seed?: string | number

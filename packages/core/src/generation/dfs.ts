@@ -1,19 +1,19 @@
-import type { CellId, MazeAlgorithm, MazeContext, MazeEdge, MazeGenerationStep, MazePoint, SquareCell } from '../types'
+import type { CellId, GridCell, MazeAlgorithm, MazeContext, MazeEdge, MazeGenerationStep, MazePoint } from '../types'
 import { resolveStartCell } from './shared'
 
-class DfsSquareAlgorithm implements MazeAlgorithm<SquareCell, MazeGenerationStep> {
+class DfsAlgorithm implements MazeAlgorithm<GridCell, MazeGenerationStep> {
   name = 'dfs'
 
   constructor(private readonly start?: MazePoint) {}
 
-  * generate(context: MazeContext<SquareCell>): IterableIterator<MazeGenerationStep> {
+  * generate(context: MazeContext<GridCell>): IterableIterator<MazeGenerationStep> {
     const first = resolveStartCell(context, this.start)
     if (!first) {
       return
     }
 
     const visited = new Set<CellId>([first.id])
-    const stack: SquareCell[] = [first]
+    const stack: GridCell[] = [first]
 
     yield {
       type: 'visit',
@@ -23,9 +23,9 @@ class DfsSquareAlgorithm implements MazeAlgorithm<SquareCell, MazeGenerationStep
 
     while (stack.length > 0) {
       const current = stack[stack.length - 1]
-      const candidates: Array<{ edge: MazeEdge, neighbor: SquareCell }> = []
+      const candidates: Array<{ edge: MazeEdge, neighbor: GridCell }> = []
       for (const edge of context.grid.getEdges(current)) {
-        const neighbor = edge.getOther(current) as SquareCell | null
+        const neighbor = edge.getOther(current) as GridCell | null
         if (neighbor && !visited.has(neighbor.id)) {
           candidates.push({ edge, neighbor })
         }
@@ -53,6 +53,6 @@ class DfsSquareAlgorithm implements MazeAlgorithm<SquareCell, MazeGenerationStep
   }
 }
 
-export function createDfsAlgorithm(start?: MazePoint): MazeAlgorithm<SquareCell, MazeGenerationStep> {
-  return new DfsSquareAlgorithm(start)
+export function createDfsAlgorithm(start?: MazePoint): MazeAlgorithm<GridCell, MazeGenerationStep> {
+  return new DfsAlgorithm(start)
 }

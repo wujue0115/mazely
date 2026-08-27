@@ -1,5 +1,6 @@
 import type {
   CreateMazeOptions,
+  GridCell,
   MazeAlgorithm,
   MazeContext,
   MazeEdge,
@@ -19,8 +20,8 @@ import type {
   MazeSolvingStep,
   MazeStep,
   SolveMazeResult,
-  SquareCell,
 } from '../types'
+import { MAZE_GENERATION_CAPABILITIES } from '../algorithms'
 import { StepPlayer } from '../engine'
 import {
   assertGridConnected,
@@ -38,7 +39,7 @@ import {
   createWilsonAlgorithm,
   withSpanningTreeGuarantee,
 } from '../generation'
-import { createSquareGrid } from '../grid'
+import { createSquareGrid, createTriangleGrid } from '../grid'
 import {
   createSolveAStarAlgorithm,
   createSolveBestFirstAlgorithm,
@@ -51,7 +52,7 @@ import { pointToCellId } from '../types'
 import { createRandom } from '../utils'
 
 export class Mazely {
-  readonly grid: MazeGrid<SquareCell>
+  readonly grid: MazeGrid<GridCell>
 
   private readonly seed?: string | number
   private phase: MazelyPhase = 'idle'
@@ -70,17 +71,24 @@ export class Mazely {
 
   constructor(options: CreateMazeOptions) {
     const { grid: gridOptions } = options
-    if (gridOptions.type !== 'square') {
-      throw new Error(`Unsupported grid type: ${gridOptions.type}`)
-    }
     this.seed = options.seed
-    this.grid = createSquareGrid(gridOptions.rows, gridOptions.cols, gridOptions.mask)
+    this.grid = gridOptions.type === 'triangle'
+      ? gridOptions.layout === 'triangle'
+        ? createTriangleGrid(gridOptions.size, gridOptions.mask)
+        : createTriangleGrid(gridOptions.rows, gridOptions.cols, gridOptions.mask)
+      : createSquareGrid(gridOptions.rows, gridOptions.cols, gridOptions.mask)
   }
 
   generate(
     algorithm: MazeGenerationAlgorithm,
     options?: MazelyGenerateOptions,
   ): StepPlayer<MazeGenerationStep> {
+    const capabilities = MAZE_GENERATION_CAPABILITIES[algorithm]
+    if (!(capabilities.supportedGridTypes as readonly string[]).includes(this.grid.type)) {
+      throw new TypeError(
+        `Generation algorithm "${algorithm}" does not support ${this.grid.type} grids.`,
+      )
+    }
     if (options?.start) {
       this.assertPointInGrid(options.start, 'start')
     }
@@ -236,10 +244,10 @@ export class Mazely {
   }
 
   private createPlayer<Step extends MazeStep>(
-    algorithm: MazeAlgorithm<SquareCell, Step>,
+    algorithm: MazeAlgorithm<GridCell, Step>,
   ): StepPlayer<Step> {
     const random = createRandom(this.seed)
-    const context: MazeContext<SquareCell> = { grid: this.grid, random }
+    const context: MazeContext<GridCell> = { grid: this.grid, random }
     return new StepPlayer({
       grid: this.grid,
       steps: algorithm.generate(context),
@@ -266,7 +274,7 @@ export class Mazely {
       changes.set(edge, opened)
     }
     const stageCell = (point: MazePoint, opened: boolean): void => {
-      const cell = this.getSquareCell(point, 'cell')
+      const cell = this.getCell(point, 'cell')
       for (const edge of cell.getEdges()) {
         stageEdge(edge, opened)
       }
@@ -350,15 +358,8 @@ export class Mazely {
   }
 
   private getEdgeBetween(from: MazePoint, to: MazePoint): MazeEdge {
-    const distance = Math.abs(from.x - to.x) + Math.abs(from.y - to.y)
-    if (distance !== 1) {
-      throw new RangeError(
-        `Cells (${from.x}, ${from.y}) and (${to.x}, ${to.y}) are not adjacent.`,
-      )
-    }
-
-    const fromCell = this.getSquareCell(from, 'from')
-    const toCell = this.getSquareCell(to, 'to')
+    const fromCell = this.getCell(from, 'from')
+    const toCell = this.getCell(to, 'to')
     const edge = fromCell.getEdges().find(edge => edge.getOther(fromCell)?.id === toCell.id)
     if (!edge) {
       throw new RangeError(
@@ -368,7 +369,7 @@ export class Mazely {
     return edge
   }
 
-  private getSquareCell(point: MazePoint, label: string): SquareCell {
+  private getCell(point: MazePoint, label: string): GridCell {
     const cell = this.grid.getCell(pointToCellId(point))
     if (!cell) {
       throw new RangeError(

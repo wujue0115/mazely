@@ -1,13 +1,13 @@
-import type { CellId, MazeAlgorithm, MazeContext, MazeGenerationStep, MazePoint, SquareCell } from '../types'
+import type { CellId, GridCell, MazeAlgorithm, MazeContext, MazeGenerationStep, MazePoint } from '../types'
 import { edgeBetween, unvisitedNeighbors } from './grid-helpers'
 import { buildCarveStep, resolveStartCell } from './shared'
 
-class HuntAndKillSquareAlgorithm implements MazeAlgorithm<SquareCell, MazeGenerationStep> {
+class HuntAndKillAlgorithm implements MazeAlgorithm<GridCell, MazeGenerationStep> {
   name = 'hunt-and-kill'
 
   constructor(private readonly start?: MazePoint) {}
 
-  * generate(context: MazeContext<SquareCell>): IterableIterator<MazeGenerationStep> {
+  * generate(context: MazeContext<GridCell>): IterableIterator<MazeGenerationStep> {
     let current = resolveStartCell(context, this.start)
     if (!current) {
       return
@@ -29,7 +29,7 @@ class HuntAndKillSquareAlgorithm implements MazeAlgorithm<SquareCell, MazeGenera
         continue
       }
 
-      let hunted: SquareCell | undefined
+      let hunted: GridCell | undefined
       for (let row = 0; row < context.grid.rows; row += 1) {
         yield {
           patches: [],
@@ -63,6 +63,6 @@ class HuntAndKillSquareAlgorithm implements MazeAlgorithm<SquareCell, MazeGenera
   }
 }
 
-export function createHuntAndKillAlgorithm(start?: MazePoint): MazeAlgorithm<SquareCell, MazeGenerationStep> {
-  return new HuntAndKillSquareAlgorithm(start)
+export function createHuntAndKillAlgorithm(start?: MazePoint): MazeAlgorithm<GridCell, MazeGenerationStep> {
+  return new HuntAndKillAlgorithm(start)
 }

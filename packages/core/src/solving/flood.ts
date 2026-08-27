@@ -1,26 +1,26 @@
 import type {
   CellId,
+  GridCell,
   MazeAlgorithm,
   MazeContext,
   MazePoint,
   MazeSolvingStep,
-  SquareCell,
 } from '../types'
 import { pointToCellId } from '../types'
 import { getOpenNeighbors } from './shared'
 
 interface FloodQueueEntry {
-  cell: SquareCell
+  cell: GridCell
   depth: number
   parentId: CellId | null
 }
 
-class SolveFloodAlgorithm implements MazeAlgorithm<SquareCell, MazeSolvingStep> {
+class SolveFloodAlgorithm implements MazeAlgorithm<GridCell, MazeSolvingStep> {
   name = 'solve-flood'
 
   constructor(private readonly start: MazePoint) {}
 
-  * generate(context: MazeContext<SquareCell>): IterableIterator<MazeSolvingStep> {
+  * generate(context: MazeContext<GridCell>): IterableIterator<MazeSolvingStep> {
     const startCell = context.grid.getCell(pointToCellId(this.start))
     if (!startCell) {
       return
@@ -79,6 +79,6 @@ class SolveFloodAlgorithm implements MazeAlgorithm<SquareCell, MazeSolvingStep> 
 
 export function createSolveFloodAlgorithm(
   start: MazePoint,
-): MazeAlgorithm<SquareCell, MazeSolvingStep> {
+): MazeAlgorithm<GridCell, MazeSolvingStep> {
   return new SolveFloodAlgorithm(start)
 }

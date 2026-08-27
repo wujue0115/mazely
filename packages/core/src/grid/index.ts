@@ -1,4 +1,6 @@
 export type { SerializedMaze } from './serialize'
 export { applySerializedGrid, serializeGrid } from './serialize'
-export type { SquareGridMask } from './square-grid'
+export type { SquareGrid, SquareGridMask } from './square-grid'
 export { createSquareGrid } from './square-grid'
+export type { TriangleGrid, TriangleGridMask } from './triangle-grid'
+export { createTriangleGrid } from './triangle-grid'

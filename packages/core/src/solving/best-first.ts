@@ -1,24 +1,23 @@
-import type { MazeAlgorithm, MazeContext, MazePoint, MazeSolvingStep, SquareCell } from '../types'
+import type { GridCell, MazeAlgorithm, MazeContext, MazePoint, MazeSolvingStep } from '../types'
 import { PriorityQueue } from '../utils'
-import { buildProcessStep, buildVisitStartStep, getOpenNeighbors, getSolveStartAndEndCells } from './shared'
+import { buildProcessStep, buildVisitStartStep, estimateCellDistance, getOpenNeighbors, getSolveStartAndEndCells } from './shared'
 
 interface FrontierNode {
-  cell: SquareCell
+  cell: GridCell
   score: number
 }
 
-class SolveBestFirstAlgorithm implements MazeAlgorithm<SquareCell, MazeSolvingStep> {
+class SolveBestFirstAlgorithm implements MazeAlgorithm<GridCell, MazeSolvingStep> {
   name = 'solve-best-first'
 
   constructor(private readonly start: MazePoint, private readonly end: MazePoint) {}
 
-  * generate(context: MazeContext<SquareCell>): IterableIterator<MazeSolvingStep> {
+  * generate(context: MazeContext<GridCell>): IterableIterator<MazeSolvingStep> {
     const { startCell, endCell } = getSolveStartAndEndCells(context, this.start, this.end)
     if (!startCell || !endCell)
       return
 
-    const heuristic = (cell: SquareCell) =>
-      Math.abs(cell.col - endCell.col) + Math.abs(cell.row - endCell.row)
+    const heuristic = (cell: GridCell) => estimateCellDistance(cell, endCell)
 
     const visited = new Set<string>([startCell.id])
     const frontier = new PriorityQueue<FrontierNode>((a, b) => a.score < b.score)
@@ -32,7 +31,7 @@ class SolveBestFirstAlgorithm implements MazeAlgorithm<SquareCell, MazeSolvingSt
         break
       }
 
-      const added: SquareCell[] = []
+      const added: GridCell[] = []
       for (const next of getOpenNeighbors(context, current)) {
         if (visited.has(next.id))
           continue
@@ -48,6 +47,6 @@ class SolveBestFirstAlgorithm implements MazeAlgorithm<SquareCell, MazeSolvingSt
 export function createSolveBestFirstAlgorithm(
   start: MazePoint,
   end: MazePoint,
-): MazeAlgorithm<SquareCell, MazeSolvingStep> {
+): MazeAlgorithm<GridCell, MazeSolvingStep> {
   return new SolveBestFirstAlgorithm(start, end)
 }

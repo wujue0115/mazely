@@ -1,18 +1,18 @@
-import type { MazeAlgorithm, MazeContext, MazePoint, MazeSolvingStep, SquareCell } from '../types'
+import type { GridCell, MazeAlgorithm, MazeContext, MazePoint, MazeSolvingStep } from '../types'
 import { buildExpandStep, buildVisitStartStep, getOpenNeighbors, getSolveStartAndEndCells } from './shared'
 
-class SolveDfsAlgorithm implements MazeAlgorithm<SquareCell, MazeSolvingStep> {
+class SolveDfsAlgorithm implements MazeAlgorithm<GridCell, MazeSolvingStep> {
   name = 'solve-dfs'
 
   constructor(private readonly start: MazePoint, private readonly end: MazePoint) {}
 
-  * generate(context: MazeContext<SquareCell>): IterableIterator<MazeSolvingStep> {
+  * generate(context: MazeContext<GridCell>): IterableIterator<MazeSolvingStep> {
     const { startCell, endCell } = getSolveStartAndEndCells(context, this.start, this.end)
     if (!startCell || !endCell)
       return
 
     const visited = new Set<string>([startCell.id])
-    const stack: SquareCell[] = [startCell]
+    const stack: GridCell[] = [startCell]
     yield buildVisitStartStep(startCell)
 
     while (stack.length > 0) {
@@ -36,6 +36,6 @@ class SolveDfsAlgorithm implements MazeAlgorithm<SquareCell, MazeSolvingStep> {
 export function createSolveDfsAlgorithm(
   start: MazePoint,
   end: MazePoint,
-): MazeAlgorithm<SquareCell, MazeSolvingStep> {
+): MazeAlgorithm<GridCell, MazeSolvingStep> {
   return new SolveDfsAlgorithm(start, end)
 }

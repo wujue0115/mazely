@@ -1,9 +1,9 @@
-import type { CellId, MazeContext, MazePatch, MazePoint, MazeSolvingStep, SquareCell } from '../types'
+import type { CellId, GridCell, MazeContext, MazePatch, MazePoint, MazeSolvingStep } from '../types'
 import { getLinkedNeighbors } from '../graph'
-import { pointToCellId } from '../types'
+import { pointToCellId, TriangleCell } from '../types'
 
 export function getSolveStartAndEndCells(
-  context: MazeContext<SquareCell>,
+  context: MazeContext<GridCell>,
   start: MazePoint,
   end: MazePoint,
 ) {
@@ -12,7 +12,7 @@ export function getSolveStartAndEndCells(
   return { endCell, startCell }
 }
 
-export function buildVisitStartStep(startCell: SquareCell): MazeSolvingStep {
+export function buildVisitStartStep(startCell: GridCell): MazeSolvingStep {
   return {
     type: 'solve.visit',
     patches: [
@@ -29,13 +29,13 @@ interface ExpandStepOptions {
 }
 
 interface ProcessAddition {
-  cell: SquareCell
+  cell: GridCell
   options?: ExpandStepOptions
 }
 
 /** Selects a frontier cell and applies all discoveries made while expanding it. */
 export function buildProcessStep(
-  current: SquareCell,
+  current: GridCell,
   additions: ProcessAddition[],
 ): MazeSolvingStep {
   return {
@@ -50,8 +50,8 @@ export function buildProcessStep(
 }
 
 export function buildExpandStep(
-  current: SquareCell,
-  next: SquareCell,
+  current: GridCell,
+  next: GridCell,
   options: ExpandStepOptions = {},
 ): MazeSolvingStep {
   return {
@@ -62,8 +62,8 @@ export function buildExpandStep(
 }
 
 function buildExpandPatches(
-  current: SquareCell,
-  next: SquareCell,
+  current: GridCell,
+  next: GridCell,
   options: ExpandStepOptions = {},
 ): MazePatch[] {
   return [
@@ -73,6 +73,25 @@ function buildExpandPatches(
   ]
 }
 
-export function getOpenNeighbors(context: MazeContext<SquareCell>, current: SquareCell): SquareCell[] {
+export function getOpenNeighbors(context: MazeContext<GridCell>, current: GridCell): GridCell[] {
   return getLinkedNeighbors(context.grid, current)
+}
+
+export function estimateCellDistance(cell: GridCell, end: GridCell): number {
+  if (cell instanceof TriangleCell && end instanceof TriangleCell) {
+    const triangleHeight = Math.sqrt(3) / 2
+    const center = triangleCenter(cell, triangleHeight)
+    const endCenter = triangleCenter(end, triangleHeight)
+    // Neighboring triangle centroids are 1/sqrt(3) world units apart.
+    return Math.hypot(center.x - endCenter.x, center.y - endCenter.y) * Math.sqrt(3)
+  }
+  return Math.abs(cell.col - end.col) + Math.abs(cell.row - end.row)
+}
+
+function triangleCenter(cell: TriangleCell, height: number): { x: number, y: number } {
+  return {
+    x: cell.offsetX + cell.col / 2 + 0.5,
+    y: cell.row * height
+      + (cell.orientation === 'up' ? height * 2 / 3 : height / 3),
+  }
 }

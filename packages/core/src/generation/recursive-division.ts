@@ -1,4 +1,4 @@
-import type { MazeAlgorithm, MazeContext, MazeEdge, MazeGenerationStep, SquareCell } from '../types'
+import type { GridCell, MazeAlgorithm, MazeContext, MazeEdge, MazeGenerationStep } from '../types'
 import { buildPositionMap, cellAt, edgeBetween } from './grid-helpers'
 
 interface Region {
@@ -10,8 +10,8 @@ interface Region {
 
 interface WallEdge {
   edge: MazeEdge
-  from: SquareCell
-  to: SquareCell
+  from: GridCell
+  to: GridCell
 }
 
 function buildSetEdgesStep(edges: WallEdge[], opened: boolean): MazeGenerationStep {
@@ -22,10 +22,10 @@ function buildSetEdgesStep(edges: WallEdge[], opened: boolean): MazeGenerationSt
   }
 }
 
-class RecursiveDivisionSquareAlgorithm implements MazeAlgorithm<SquareCell, MazeGenerationStep> {
+class RecursiveDivisionSquareAlgorithm implements MazeAlgorithm<GridCell, MazeGenerationStep> {
   name = 'recursive-division';
 
-  * generate(context: MazeContext<SquareCell>): IterableIterator<MazeGenerationStep> {
+  * generate(context: MazeContext<GridCell>): IterableIterator<MazeGenerationStep> {
     const byPosition = buildPositionMap(context.grid.cells)
     const regions: Region[] = [{
       bottom: context.grid.rows - 1,
@@ -93,6 +93,6 @@ class RecursiveDivisionSquareAlgorithm implements MazeAlgorithm<SquareCell, Maze
   }
 }
 
-export function createRecursiveDivisionAlgorithm(): MazeAlgorithm<SquareCell, MazeGenerationStep> {
+export function createRecursiveDivisionAlgorithm(): MazeAlgorithm<GridCell, MazeGenerationStep> {
   return new RecursiveDivisionSquareAlgorithm()
 }

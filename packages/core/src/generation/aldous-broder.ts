@@ -1,10 +1,10 @@
-import type { CellId, MazeAlgorithm, MazeContext, MazeGenerationStep, SquareCell } from '../types'
+import type { CellId, GridCell, MazeAlgorithm, MazeContext, MazeGenerationStep } from '../types'
 import { buildCarveStep } from './shared'
 
-class AldousBroderSquareAlgorithm implements MazeAlgorithm<SquareCell, MazeGenerationStep> {
+class AldousBroderAlgorithm implements MazeAlgorithm<GridCell, MazeGenerationStep> {
   name = 'aldous-broder';
 
-  * generate(context: MazeContext<SquareCell>): IterableIterator<MazeGenerationStep> {
+  * generate(context: MazeContext<GridCell>): IterableIterator<MazeGenerationStep> {
     if (context.grid.cells.length === 0) {
       return
     }
@@ -25,7 +25,7 @@ class AldousBroderSquareAlgorithm implements MazeAlgorithm<SquareCell, MazeGener
       }
 
       const edge = context.random.pick(edges)
-      const next = edge.getOther(current) as SquareCell | null
+      const next = edge.getOther(current) as GridCell | null
       if (!next) {
         continue
       }
@@ -46,6 +46,6 @@ class AldousBroderSquareAlgorithm implements MazeAlgorithm<SquareCell, MazeGener
   }
 }
 
-export function createAldousBroderAlgorithm(): MazeAlgorithm<SquareCell, MazeGenerationStep> {
-  return new AldousBroderSquareAlgorithm()
+export function createAldousBroderAlgorithm(): MazeAlgorithm<GridCell, MazeGenerationStep> {
+  return new AldousBroderAlgorithm()
 }

@@ -1,18 +1,18 @@
-import type { MazeAlgorithm, MazeContext, MazePoint, MazeSolvingStep, SquareCell } from '../types'
+import type { GridCell, MazeAlgorithm, MazeContext, MazePoint, MazeSolvingStep } from '../types'
 import { buildProcessStep, buildVisitStartStep, getOpenNeighbors, getSolveStartAndEndCells } from './shared'
 
-class SolveBfsAlgorithm implements MazeAlgorithm<SquareCell, MazeSolvingStep> {
+class SolveBfsAlgorithm implements MazeAlgorithm<GridCell, MazeSolvingStep> {
   name = 'solve-bfs'
 
   constructor(private readonly start: MazePoint, private readonly end: MazePoint) {}
 
-  * generate(context: MazeContext<SquareCell>): IterableIterator<MazeSolvingStep> {
+  * generate(context: MazeContext<GridCell>): IterableIterator<MazeSolvingStep> {
     const { startCell, endCell } = getSolveStartAndEndCells(context, this.start, this.end)
     if (!startCell || !endCell)
       return
 
     const visited = new Set<string>([startCell.id])
-    const queue: SquareCell[] = [startCell]
+    const queue: GridCell[] = [startCell]
     let head = 0
     yield buildVisitStartStep(startCell)
 
@@ -24,7 +24,7 @@ class SolveBfsAlgorithm implements MazeAlgorithm<SquareCell, MazeSolvingStep> {
         break
       }
 
-      const added: SquareCell[] = []
+      const added: GridCell[] = []
       for (const next of getOpenNeighbors(context, current)) {
         if (visited.has(next.id))
           continue
@@ -40,6 +40,6 @@ class SolveBfsAlgorithm implements MazeAlgorithm<SquareCell, MazeSolvingStep> {
 export function createSolveBfsAlgorithm(
   start: MazePoint,
   end: MazePoint,
-): MazeAlgorithm<SquareCell, MazeSolvingStep> {
+): MazeAlgorithm<GridCell, MazeSolvingStep> {
   return new SolveBfsAlgorithm(start, end)
 }

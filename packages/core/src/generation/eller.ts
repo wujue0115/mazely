@@ -1,17 +1,17 @@
-import type { MazeAlgorithm, MazeContext, MazeGenerationStep, SquareCell } from '../types'
+import type { GridCell, MazeAlgorithm, MazeContext, MazeGenerationStep } from '../types'
 import { buildPositionMap, cellAt, edgeBetween } from './grid-helpers'
 import { buildCarveStep } from './shared'
 
-class EllerSquareAlgorithm implements MazeAlgorithm<SquareCell, MazeGenerationStep> {
+class EllerSquareAlgorithm implements MazeAlgorithm<GridCell, MazeGenerationStep> {
   name = 'eller';
 
-  * generate(context: MazeContext<SquareCell>): IterableIterator<MazeGenerationStep> {
+  * generate(context: MazeContext<GridCell>): IterableIterator<MazeGenerationStep> {
     const byPosition = buildPositionMap(context.grid.cells)
     let nextSet = 1
     let incomingSets = new Map<string, number>()
 
     for (let row = 0; row < context.grid.rows; row += 1) {
-      const rowCells: SquareCell[] = []
+      const rowCells: GridCell[] = []
       const sets = new Map<string, number>()
       for (let col = 0; col < context.grid.cols; col += 1) {
         const cell = cellAt(byPosition, row, col)
@@ -57,7 +57,7 @@ class EllerSquareAlgorithm implements MazeAlgorithm<SquareCell, MazeGenerationSt
         continue
       }
 
-      const cellsBySet = new Map<number, SquareCell[]>()
+      const cellsBySet = new Map<number, GridCell[]>()
       for (const cell of rowCells) {
         const south = cellAt(byPosition, cell.row + 1, cell.col)
         if (!south) {
@@ -85,6 +85,6 @@ class EllerSquareAlgorithm implements MazeAlgorithm<SquareCell, MazeGenerationSt
   }
 }
 
-export function createEllerAlgorithm(): MazeAlgorithm<SquareCell, MazeGenerationStep> {
+export function createEllerAlgorithm(): MazeAlgorithm<GridCell, MazeGenerationStep> {
   return new EllerSquareAlgorithm()
 }

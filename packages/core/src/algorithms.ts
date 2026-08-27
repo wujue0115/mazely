@@ -26,6 +26,7 @@ export type MazeSolvingAlgorithm = typeof MAZE_SOLVING_ALGORITHMS[number]
 
 export interface MazeGenerationAlgorithmCapabilities {
   supportsMasks: true
+  supportedGridTypes: readonly ('square' | 'triangle')[]
   usesStart: boolean
 }
 
@@ -34,18 +35,18 @@ export interface MazeSolvingAlgorithmCapabilities {
 }
 
 export const MAZE_GENERATION_CAPABILITIES = Object.freeze({
-  'aldous-broder': { supportsMasks: true, usesStart: false },
-  'binary-tree': { supportsMasks: true, usesStart: false },
-  'dfs': { supportsMasks: true, usesStart: true },
-  'eller': { supportsMasks: true, usesStart: false },
-  'growing-tree': { supportsMasks: true, usesStart: true },
-  'hunt-and-kill': { supportsMasks: true, usesStart: true },
-  'kruskal': { supportsMasks: true, usesStart: false },
-  'prim': { supportsMasks: true, usesStart: true },
-  'recursive-division': { supportsMasks: true, usesStart: false },
-  'sidewinder': { supportsMasks: true, usesStart: false },
-  'traversal': { supportsMasks: true, usesStart: true },
-  'wilson': { supportsMasks: true, usesStart: false },
+  'aldous-broder': { supportedGridTypes: ['square', 'triangle'], supportsMasks: true, usesStart: false },
+  'binary-tree': { supportedGridTypes: ['square'], supportsMasks: true, usesStart: false },
+  'dfs': { supportedGridTypes: ['square', 'triangle'], supportsMasks: true, usesStart: true },
+  'eller': { supportedGridTypes: ['square'], supportsMasks: true, usesStart: false },
+  'growing-tree': { supportedGridTypes: ['square', 'triangle'], supportsMasks: true, usesStart: true },
+  'hunt-and-kill': { supportedGridTypes: ['square', 'triangle'], supportsMasks: true, usesStart: true },
+  'kruskal': { supportedGridTypes: ['square', 'triangle'], supportsMasks: true, usesStart: false },
+  'prim': { supportedGridTypes: ['square', 'triangle'], supportsMasks: true, usesStart: true },
+  'recursive-division': { supportedGridTypes: ['square'], supportsMasks: true, usesStart: false },
+  'sidewinder': { supportedGridTypes: ['square'], supportsMasks: true, usesStart: false },
+  'traversal': { supportedGridTypes: ['square', 'triangle'], supportsMasks: true, usesStart: true },
+  'wilson': { supportedGridTypes: ['square', 'triangle'], supportsMasks: true, usesStart: false },
 } satisfies Record<MazeGenerationAlgorithm, MazeGenerationAlgorithmCapabilities>)
 
 export const MAZE_SOLVING_CAPABILITIES = Object.freeze({
