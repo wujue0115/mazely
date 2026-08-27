@@ -284,6 +284,9 @@ styleResetButton.addEventListener('click', resetStyleTheme)
 
 app.shapeEditor = initShapeEditor({
   getDefaultCols: () => 60,
+  getGridTopology: () => app.gridType === 'triangle'
+    ? { layout: app.triangleLayout, type: 'triangle' }
+    : { type: 'square' },
   onApply: applyShape,
   showToast,
 })

@@ -84,8 +84,8 @@ export function syncUi(): void {
     || partialSolve
   gridTypeSelect.disabled = app.generating || app.running
   triangleLayoutSelect.disabled = app.generating || app.running || app.gridType !== 'triangle'
-  shapeUploadButton.disabled = app.gridType === 'triangle'
-  shapeEditButton.disabled = app.gridType === 'triangle'
+  shapeUploadButton.disabled = app.generating || app.running
+  shapeEditButton.disabled = app.generating || app.running
   view3dButton.disabled = app.gridType === 'triangle'
 
   syncUiState({

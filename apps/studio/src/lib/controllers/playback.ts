@@ -130,8 +130,8 @@ function createCurrentMaze(): GenerationPreview {
   const runtime = createMaze({
     grid: app.gridType === 'triangle'
       ? app.triangleLayout === 'triangle'
-        ? { layout: 'triangle', size: app.mazeWidth, type: 'triangle' }
-        : { cols: app.mazeWidth, layout: 'rectangle', rows: app.mazeHeight, type: 'triangle' }
+        ? { layout: 'triangle', mask: app.shape?.cellMask, size: app.mazeWidth, type: 'triangle' }
+        : { cols: app.mazeWidth, layout: 'rectangle', mask: app.shape?.cellMask, rows: app.mazeHeight, type: 'triangle' }
       : { cols: app.mazeWidth, mask: app.shape?.cellMask, rows: app.mazeHeight, type: 'square' },
   })
   const start = app.generatePointMode === 'manual'

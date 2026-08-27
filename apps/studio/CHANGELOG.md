@@ -12,6 +12,8 @@ published `mazely` and `@mazely/core` packages.
   rectangular outer layouts in the WebGL 2D view and SVG export.
 - Added topology-aware algorithm availability so square-only generators are
   disabled when a triangular grid is selected.
+- Added image-shaped triangle mazes with polygon-based image sampling, cell
+  colors, editing tools, and triangle-aware connectivity checks.
 
 ### Fixed
 
@@ -22,8 +24,8 @@ published `mazely` and `@mazely/core` packages.
 
 ### Known limitations
 
-- Triangular grids do not yet support the 3D view, image-shaped masks, or
-  saving to Studio `.maze` files.
+- Triangular grids do not yet support the 3D view or saving to Studio `.maze`
+  files.
 
 ## [0.6.1] - 2026-08-15
 

@@ -159,8 +159,8 @@ export function createSolidMazeState(
   const runtime = createMaze({
     grid: gridType === 'triangle'
       ? triangleLayout === 'triangle'
-        ? { layout: 'triangle', size: width, type: 'triangle' }
-        : { cols: width, layout: 'rectangle', rows: height, type: 'triangle' }
+        ? { layout: 'triangle', mask: shape?.cellMask ?? undefined, size: width, type: 'triangle' }
+        : { cols: width, layout: 'rectangle', mask: shape?.cellMask ?? undefined, rows: height, type: 'triangle' }
       : { cols: width, mask: shape?.cellMask ?? undefined, rows: height, type: 'square' },
   })
   const start = shape?.start ?? { x: 0, y: 0 }

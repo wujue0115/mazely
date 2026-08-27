@@ -1,14 +1,18 @@
 import type { MazePoint } from '../maze-types'
-import type { CellColors, CellMask, PixelMask } from '../shape-mask'
+import type { CellColors, CellMask, PixelMask, ShapeGridTopology } from '../shape-mask'
 import {
   buildAutoPixelMask,
   buildCellColors,
   buildCellMask,
   findFarthestMaskCells,
   findMaskRegions,
+  findShapeCellAtPixel,
+  getShapeCellPolygon,
+  getShapeGridDimensions,
   keepLargestMaskRegion,
   prunePixelMaskToCells,
   removeSimilarCells,
+  setShapeCellPixels,
 } from '../shape-mask'
 import {
   clamp,
@@ -25,6 +29,8 @@ export interface AppliedShape {
   cellColors: CellColors
   cols: number
   rows: number
+  /** Side size when using a triangular outer layout. */
+  size?: number
   start: MazePoint
   end: MazePoint
 }
@@ -32,6 +38,7 @@ export interface AppliedShape {
 export interface ShapeEditorOptions {
   onApply: (shape: AppliedShape) => void
   getDefaultCols: () => number
+  getGridTopology: () => ShapeGridTopology
   showToast: (message: string) => void
 }
 
@@ -84,6 +91,7 @@ export function initShapeEditor(options: ShapeEditorOptions): ShapeEditorApi {
   const undoButton = query<HTMLButtonElement>('#shape-undo-btn')
   const redoButton = query<HTMLButtonElement>('#shape-redo-btn')
   const colsInput = query<HTMLInputElement>('#shape-cols-input')
+  const sizeLabel = query<HTMLElement>('#shape-size-label')
   const gridLabel = query<HTMLElement>('#shape-grid-label')
   const statCells = query<HTMLElement>('#shape-stat-cells')
   const statRegions = query<HTMLElement>('#shape-stat-regions')
@@ -106,8 +114,10 @@ export function initShapeEditor(options: ShapeEditorOptions): ShapeEditorApi {
   let tool: ShapeTool = 'keep'
   let brushCells = Number(brushRange.value)
   let wandTolerance = Number(wandRange.value)
+  let size = 60
   let cols = 60
   let rows = 60
+  let topology: ShapeGridTopology = { type: 'square' }
   let painting = false
   let paintPointerId: number | null = null
   let lastPaintX = 0
@@ -262,11 +272,11 @@ export function initShapeEditor(options: ShapeEditorOptions): ShapeEditorApi {
   colsInput.addEventListener('change', () => {
     const parsed = Number.parseInt(colsInput.value, 10)
     if (!Number.isFinite(parsed)) {
-      colsInput.value = String(cols)
+      colsInput.value = String(size)
       return
     }
-    cols = clamp(parsed, 4, GRID_DIMENSION_MAX)
-    colsInput.value = String(cols)
+    size = clamp(parsed, 4, GRID_DIMENSION_MAX)
+    colsInput.value = String(size)
     refreshDerivedState()
     queueRender()
   })
@@ -276,8 +286,8 @@ export function initShapeEditor(options: ShapeEditorOptions): ShapeEditorApi {
       return
     }
     pushHistory()
-    const pruned = keepLargestMaskRegion(cellMask)
-    prunePixelMaskToCells(pixelMask, pruned)
+    const pruned = keepLargestMaskRegion(cellMask, topology)
+    prunePixelMaskToCells(pixelMask, pruned, topology)
     onMaskEdited()
   })
 
@@ -285,16 +295,17 @@ export function initShapeEditor(options: ShapeEditorOptions): ShapeEditorApi {
     if (regionCount !== 1 || cellCount < MIN_SHAPE_CELLS || !sourceImageData || !pixelMask) {
       return
     }
-    const startAndEndPoints = findFarthestMaskCells(cellMask)
+    const startAndEndPoints = findFarthestMaskCells(cellMask, topology)
     if (!startAndEndPoints) {
       return
     }
     options.onApply({
-      cellColors: buildCellColors(sourceImageData, pixelMask, cellMask, cols, rows),
+      cellColors: buildCellColors(sourceImageData, pixelMask, cellMask, cols, rows, topology),
       cellMask: cellMask.map(line => [...line]),
       cols,
       end: startAndEndPoints.end,
       rows,
+      ...(topology.type === 'triangle' && topology.layout === 'triangle' ? { size: rows } : {}),
       start: startAndEndPoints.start,
     })
     close()
@@ -470,8 +481,8 @@ export function initShapeEditor(options: ShapeEditorOptions): ShapeEditorApi {
     sourceCanvas = working
     sourceImageData = workingCtx.getImageData(0, 0, width, height)
     sourceHasAlpha = hasAlphaPixels(sourceImageData)
-    cols = clamp(options.getDefaultCols(), 4, GRID_DIMENSION_MAX)
-    colsInput.value = String(cols)
+    size = clamp(options.getDefaultCols(), 4, GRID_DIMENSION_MAX)
+    colsInput.value = String(size)
 
     clearHistory()
     rerunAutoMask()
@@ -496,9 +507,12 @@ export function initShapeEditor(options: ShapeEditorOptions): ShapeEditorApi {
     if (!pixelMask) {
       return
     }
-    rows = clamp(Math.max(1, Math.round((cols * pixelMask.height) / pixelMask.width)), 1, GRID_DIMENSION_MAX)
-    cellMask = buildCellMask(pixelMask, cols, rows)
-    const regions = findMaskRegions(cellMask)
+    topology = options.getGridTopology()
+    const dimensions = getShapeGridDimensions(pixelMask.width, pixelMask.height, size, topology)
+    cols = dimensions.cols
+    rows = clamp(dimensions.rows, 1, GRID_DIMENSION_MAX)
+    cellMask = buildCellMask(pixelMask, cols, rows, topology)
+    const regions = findMaskRegions(cellMask, topology)
     regionCount = regions.count
     cellCount = regions.cellCount
     overlayDirty = true
@@ -508,7 +522,11 @@ export function initShapeEditor(options: ShapeEditorOptions): ShapeEditorApi {
   function syncFooter(): void {
     statCells.textContent = String(cellCount)
     statRegions.textContent = String(regionCount)
-    gridLabel.textContent = `${cols} × ${rows} cells`
+    const triangleOuter = topology.type === 'triangle' && topology.layout === 'triangle'
+    sizeLabel.textContent = triangleOuter ? 'SIDE SIZE' : 'WIDTH (CELLS)'
+    gridLabel.textContent = triangleOuter
+      ? `Triangle size ${rows} · ${cellCount} kept cells`
+      : `${cols} × ${rows} cells`
     meta.textContent = sourceName
       ? `${sourceName} · ${pixelMask?.width ?? 0}×${pixelMask?.height ?? 0}px`
       : ''
@@ -553,13 +571,20 @@ export function initShapeEditor(options: ShapeEditorOptions): ShapeEditorApi {
     if (!sourceImageData || !pixelMask) {
       return
     }
-    const col = clamp(Math.floor((bitmapX / pixelMask.width) * cols), 0, cols - 1)
-    const row = clamp(Math.floor((bitmapY / pixelMask.height) * rows), 0, rows - 1)
-    if (!cellMask[row]?.[col]) {
+    const cell = findShapeCellAtPixel(pixelMask, bitmapX, bitmapY, cols, rows, topology)
+    if (!cell || !cellMask[cell.y]?.[cell.x]) {
       return
     }
     pushHistory()
-    removeSimilarCells(sourceImageData, pixelMask, cellMask, col, row, wandTolerance)
+    removeSimilarCells(
+      sourceImageData,
+      pixelMask,
+      cellMask,
+      cell.x,
+      cell.y,
+      wandTolerance,
+      topology,
+    )
     onMaskEdited()
   }
 
@@ -693,31 +718,29 @@ export function initShapeEditor(options: ShapeEditorOptions): ShapeEditorApi {
     queueRender()
   }
 
-  interface CellBlock {
-    startCol: number
-    startRow: number
-    endCol: number
-    endRow: number
-  }
-
-  /** The brushCells×brushCells block of maze cells under a bitmap point. */
-  function getBrushCellBlock(bitmapX: number, bitmapY: number): CellBlock | null {
+  /** The brushCells×brushCells collection of valid maze cells under a bitmap point. */
+  function getBrushCells(bitmapX: number, bitmapY: number): MazePoint[] {
     const mask = pixelMask
     if (!mask) {
-      return null
+      return []
     }
     const blockCells = tool === 'wand' ? 1 : brushCells
-    const col = clamp(Math.floor((bitmapX / mask.width) * cols), 0, cols - 1)
-    const row = clamp(Math.floor((bitmapY / mask.height) * rows), 0, rows - 1)
-    const halfBefore = Math.floor((blockCells - 1) / 2)
-    const startCol = clamp(col - halfBefore, 0, Math.max(0, cols - blockCells))
-    const startRow = clamp(row - halfBefore, 0, Math.max(0, rows - blockCells))
-    return {
-      endCol: Math.min(cols - 1, startCol + blockCells - 1),
-      endRow: Math.min(rows - 1, startRow + blockCells - 1),
-      startCol,
-      startRow,
+    const target = findShapeCellAtPixel(mask, bitmapX, bitmapY, cols, rows, topology)
+    if (!target) {
+      return []
     }
+    const halfBefore = Math.floor((blockCells - 1) / 2)
+    const startCol = clamp(target.x - halfBefore, 0, Math.max(0, cols - blockCells))
+    const startRow = clamp(target.y - halfBefore, 0, Math.max(0, rows - blockCells))
+    const cells: MazePoint[] = []
+    for (let row = startRow; row <= Math.min(rows - 1, startRow + blockCells - 1); row += 1) {
+      for (let col = startCol; col <= Math.min(cols - 1, startCol + blockCells - 1); col += 1) {
+        if (getShapeCellPolygon(mask, col, row, cols, rows, topology)) {
+          cells.push({ x: col, y: row })
+        }
+      }
+    }
+    return cells
   }
 
   /**
@@ -726,19 +749,11 @@ export function initShapeEditor(options: ShapeEditorOptions): ShapeEditorApi {
    */
   function paintCellBlock(bitmapX: number, bitmapY: number, value: 0 | 1): void {
     const mask = pixelMask
-    const block = getBrushCellBlock(bitmapX, bitmapY)
-    if (!mask || !block) {
+    if (!mask) {
       return
     }
-    const startX = Math.floor((block.startCol * mask.width) / cols)
-    const endX = Math.max(startX + 1, Math.floor(((block.endCol + 1) * mask.width) / cols))
-    const startY = Math.floor((block.startRow * mask.height) / rows)
-    const endY = Math.max(startY + 1, Math.floor(((block.endRow + 1) * mask.height) / rows))
-
-    for (let y = startY; y < endY; y += 1) {
-      for (let x = startX; x < endX; x += 1) {
-        mask.data[y * mask.width + x] = value
-      }
+    for (const cell of getBrushCells(bitmapX, bitmapY)) {
+      setShapeCellPixels(mask, cell.x, cell.y, cols, rows, topology, value)
     }
   }
 
@@ -861,45 +876,53 @@ export function initShapeEditor(options: ShapeEditorOptions): ShapeEditorApi {
     if (cellMask.length === 0 || !pixelMask) {
       return
     }
-    const cellWidth = pixelMask.width / cols
-    const cellHeight = pixelMask.height / rows
-    const inset = 0.5 / viewScale
 
     ctx.fillStyle = 'rgba(143, 245, 255, 0.12)'
     ctx.strokeStyle = 'rgba(143, 245, 255, 0.35)'
     ctx.lineWidth = 1 / viewScale
     for (let row = 0; row < rows; row += 1) {
-      for (let col = 0; col < cols; col += 1) {
+      for (let col = 0; col < cellMask[row].length; col += 1) {
         if (!cellMask[row][col]) {
           continue
         }
-        const x = col * cellWidth
-        const y = row * cellHeight
-        ctx.fillRect(x, y, cellWidth, cellHeight)
-        ctx.strokeRect(x + inset, y + inset, cellWidth - inset * 2, cellHeight - inset * 2)
+        const polygon = getShapeCellPolygon(pixelMask, col, row, cols, rows, topology)
+        if (polygon) {
+          drawPolygon(polygon, true)
+        }
       }
     }
   }
 
-  /** Square cursor snapped to the cell block the active tool targets. */
+  /** Cursor snapped to the actual polygons targeted by the active tool. */
   function drawBrushCursor(): void {
     if (tool === 'view' || cursorX < 0 || !pixelMask) {
       return
     }
-    const block = getBrushCellBlock(cursorX, cursorY)
-    if (!block) {
-      return
-    }
-    const cellWidth = pixelMask.width / cols
-    const cellHeight = pixelMask.height / rows
     ctx.strokeStyle = tool === 'keep' ? 'rgba(143, 245, 255, 0.9)' : 'rgba(215, 51, 87, 0.9)'
     ctx.lineWidth = 1.5 / viewScale
-    ctx.strokeRect(
-      block.startCol * cellWidth,
-      block.startRow * cellHeight,
-      (block.endCol - block.startCol + 1) * cellWidth,
-      (block.endRow - block.startRow + 1) * cellHeight,
-    )
+    for (const cell of getBrushCells(cursorX, cursorY)) {
+      const polygon = getShapeCellPolygon(pixelMask, cell.x, cell.y, cols, rows, topology)
+      if (polygon) {
+        drawPolygon(polygon, false)
+      }
+    }
+  }
+
+  function drawPolygon(polygon: Array<{ x: number, y: number }>, fill: boolean): void {
+    const first = polygon[0]
+    if (!first) {
+      return
+    }
+    ctx.beginPath()
+    ctx.moveTo(first.x, first.y)
+    for (let index = 1; index < polygon.length; index += 1) {
+      ctx.lineTo(polygon[index].x, polygon[index].y)
+    }
+    ctx.closePath()
+    if (fill) {
+      ctx.fill()
+    }
+    ctx.stroke()
   }
 
   return {
@@ -919,6 +942,7 @@ export function initShapeEditor(options: ShapeEditorOptions): ShapeEditorApi {
       if (!sourceCanvas) {
         return false
       }
+      refreshDerivedState()
       open()
       return true
     },

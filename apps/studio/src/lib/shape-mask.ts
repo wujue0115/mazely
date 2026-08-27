@@ -1,3 +1,4 @@
+import type { TriangleGridLayout } from 'mazely'
 import type { MazePoint } from './maze-types'
 
 /**
@@ -12,6 +13,23 @@ export interface PixelMask {
 
 /** Cell mask indexed as `mask[row][col]`; `true` keeps the cell. */
 export type CellMask = boolean[][]
+
+export type ShapeGridTopology
+  = | { type: 'square' }
+    | { layout: TriangleGridLayout, type: 'triangle' }
+
+export interface ShapeGridDimensions {
+  cols: number
+  rows: number
+}
+
+interface PixelPoint {
+  x: number
+  y: number
+}
+
+const SQUARE_TOPOLOGY: ShapeGridTopology = { type: 'square' }
+const TRIANGLE_HEIGHT = Math.sqrt(3) / 2
 
 const ALPHA_OPAQUE_THRESHOLD = 128
 
@@ -115,29 +133,128 @@ function colorDistanceSquared(data: Uint8ClampedArray, pixelA: number, pixelB: n
   return dr * dr + dg * dg + db * db
 }
 
+/** Resolves grid dimensions from an image and the editor's primary size. */
+export function getShapeGridDimensions(
+  imageWidth: number,
+  imageHeight: number,
+  size: number,
+  topology: ShapeGridTopology = SQUARE_TOPOLOGY,
+): ShapeGridDimensions {
+  if (topology.type === 'triangle' && topology.layout === 'triangle') {
+    return { cols: size * 2 - 1, rows: size }
+  }
+  if (topology.type === 'triangle') {
+    const worldWidth = (size + 1) / 2
+    const rows = Math.max(1, Math.round((worldWidth * imageHeight) / (imageWidth * TRIANGLE_HEIGHT)))
+    return { cols: size, rows }
+  }
+  return {
+    cols: size,
+    rows: Math.max(1, Math.round((size * imageHeight) / imageWidth)),
+  }
+}
+
+/** Pixel-space polygon occupied by one cell. */
+export function getShapeCellPolygon(
+  pixelMask: Pick<PixelMask, 'height' | 'width'>,
+  col: number,
+  row: number,
+  cols: number,
+  rows: number,
+  topology: ShapeGridTopology = SQUARE_TOPOLOGY,
+): PixelPoint[] | null {
+  if (!isShapeCellCoordinate(col, row, cols, rows, topology)) {
+    return null
+  }
+  if (topology.type === 'square') {
+    const left = (col * pixelMask.width) / cols
+    const right = ((col + 1) * pixelMask.width) / cols
+    const top = (row * pixelMask.height) / rows
+    const bottom = ((row + 1) * pixelMask.height) / rows
+    return [
+      { x: left, y: top },
+      { x: right, y: top },
+      { x: right, y: bottom },
+      { x: left, y: bottom },
+    ]
+  }
+
+  const worldWidth = (cols + 1) / 2
+  const worldHeight = rows * TRIANGLE_HEIGHT
+  const offsetX = topology.layout === 'triangle' ? (rows - row - 1) / 2 : 0
+  const left = offsetX + col / 2
+  const top = row * TRIANGLE_HEIGHT
+  const orientationUp = (topology.layout === 'triangle' ? col : row + col) % 2 === 0
+  const worldPolygon = orientationUp
+    ? [
+        { x: left + 0.5, y: top },
+        { x: left + 1, y: top + TRIANGLE_HEIGHT },
+        { x: left, y: top + TRIANGLE_HEIGHT },
+      ]
+    : [
+        { x: left, y: top },
+        { x: left + 1, y: top },
+        { x: left + 0.5, y: top + TRIANGLE_HEIGHT },
+      ]
+  return worldPolygon.map(point => ({
+    x: (point.x / worldWidth) * pixelMask.width,
+    y: (point.y / worldHeight) * pixelMask.height,
+  }))
+}
+
+/** Returns the cell containing a bitmap point, respecting triangle edges. */
+export function findShapeCellAtPixel(
+  pixelMask: Pick<PixelMask, 'height' | 'width'>,
+  bitmapX: number,
+  bitmapY: number,
+  cols: number,
+  rows: number,
+  topology: ShapeGridTopology = SQUARE_TOPOLOGY,
+): MazePoint | null {
+  if (topology.type === 'square') {
+    const col = Math.floor((bitmapX / pixelMask.width) * cols)
+    const row = Math.floor((bitmapY / pixelMask.height) * rows)
+    return isShapeCellCoordinate(col, row, cols, rows, topology) ? { x: col, y: row } : null
+  }
+
+  const approximateRow = Math.floor((bitmapY / pixelMask.height) * rows)
+  const worldWidth = (cols + 1) / 2
+  const worldX = (bitmapX / pixelMask.width) * worldWidth
+  for (let row = approximateRow - 1; row <= approximateRow + 1; row += 1) {
+    const offsetX = topology.layout === 'triangle' ? (rows - row - 1) / 2 : 0
+    const approximateCol = Math.floor((worldX - offsetX) * 2)
+    for (let col = approximateCol - 2; col <= approximateCol + 2; col += 1) {
+      const polygon = getShapeCellPolygon(pixelMask, col, row, cols, rows, topology)
+      if (polygon && isPointInPolygon(bitmapX, bitmapY, polygon)) {
+        return { x: col, y: row }
+      }
+    }
+  }
+  return null
+}
+
 /**
- * Downsamples the pixel keep mask into a `rows x cols` cell mask. A cell is
- * kept when at least half of the pixels it covers are kept.
+ * Downsamples the pixel keep mask into a cell mask. Triangle cells sample
+ * only pixels whose centers lie inside their polygon.
  */
-export function buildCellMask(pixelMask: PixelMask, cols: number, rows: number): CellMask {
-  const { data, height, width } = pixelMask
+export function buildCellMask(
+  pixelMask: PixelMask,
+  cols: number,
+  rows: number,
+  topology: ShapeGridTopology = SQUARE_TOPOLOGY,
+): CellMask {
   const mask: CellMask = []
 
   for (let row = 0; row < rows; row += 1) {
-    const startY = Math.floor((row * height) / rows)
-    const endY = Math.max(startY + 1, Math.floor(((row + 1) * height) / rows))
     const line: boolean[] = []
-    for (let col = 0; col < cols; col += 1) {
-      const startX = Math.floor((col * width) / cols)
-      const endX = Math.max(startX + 1, Math.floor(((col + 1) * width) / cols))
-
+    const rowCols = getShapeRowCellCount(row, cols, topology)
+    for (let col = 0; col < rowCols; col += 1) {
       let kept = 0
-      for (let y = startY; y < endY; y += 1) {
-        for (let x = startX; x < endX; x += 1) {
-          kept += data[y * width + x]
-        }
-      }
-      const total = (endY - startY) * (endX - startX)
+      let total = 0
+      visitShapeCellPixels(pixelMask, col, row, cols, rows, topology, (pixel) => {
+        kept += pixelMask.data[pixel]
+        total += 1
+      })
       line.push(kept * 2 >= total)
     }
     mask.push(line)
@@ -147,7 +264,7 @@ export function buildCellMask(pixelMask: PixelMask, cols: number, rows: number):
 }
 
 export interface MaskRegions {
-  /** Number of 4-connected regions of kept cells. */
+  /** Number of topology-connected regions of kept cells. */
   count: number
   /** Cells in the largest region. */
   largestSize: number
@@ -157,10 +274,13 @@ export interface MaskRegions {
   labels: Int32Array
 }
 
-/** Labels 4-connected regions of kept cells. */
-export function findMaskRegions(mask: CellMask): MaskRegions {
+/** Labels regions using the selected grid's real cell adjacency. */
+export function findMaskRegions(
+  mask: CellMask,
+  topology: ShapeGridTopology = SQUARE_TOPOLOGY,
+): MaskRegions {
   const rows = mask.length
-  const cols = mask[0]?.length ?? 0
+  const cols = getMaskCols(mask)
   const labels = new Int32Array(rows * cols)
   const sizes: number[] = []
   let cellCount = 0
@@ -189,8 +309,9 @@ export function findMaskRegions(mask: CellMask): MaskRegions {
         size += 1
         const x = current % cols
         const y = (current - x) / cols
-        for (const [nx, ny] of [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]] as const) {
-          if (nx < 0 || nx >= cols || ny < 0 || ny >= rows || !mask[ny][nx]) {
+        for (const neighborPoint of getShapeCellNeighbors(x, y, cols, rows, topology)) {
+          const { x: nx, y: ny } = neighborPoint
+          if (!mask[ny]?.[nx]) {
             continue
           }
           const neighbor = ny * cols + nx
@@ -213,13 +334,16 @@ export function findMaskRegions(mask: CellMask): MaskRegions {
 }
 
 /**
- * Returns a copy of the mask keeping only its largest 4-connected region
+ * Returns a copy of the mask keeping only its largest topology-connected region
  * (ties broken by first region found in scan order).
  */
-export function keepLargestMaskRegion(mask: CellMask): CellMask {
+export function keepLargestMaskRegion(
+  mask: CellMask,
+  topology: ShapeGridTopology = SQUARE_TOPOLOGY,
+): CellMask {
   const rows = mask.length
-  const cols = mask[0]?.length ?? 0
-  const regions = findMaskRegions(mask)
+  const cols = getMaskCols(mask)
+  const regions = findMaskRegions(mask, topology)
   if (regions.count <= 1) {
     return mask.map(line => [...line])
   }
@@ -242,7 +366,7 @@ export function keepLargestMaskRegion(mask: CellMask): CellMask {
   const result: CellMask = []
   for (let row = 0; row < rows; row += 1) {
     const line: boolean[] = []
-    for (let col = 0; col < cols; col += 1) {
+    for (let col = 0; col < mask[row].length; col += 1) {
       line.push(regions.labels[row * cols + col] === largestLabel)
     }
     result.push(line)
@@ -254,17 +378,18 @@ export function keepLargestMaskRegion(mask: CellMask): CellMask {
  * Clears kept pixels that fall inside removed cells, so the pixel mask stays
  * consistent with a pruned cell mask.
  */
-export function prunePixelMaskToCells(pixelMask: PixelMask, cellMask: CellMask): void {
-  const { data, height, width } = pixelMask
+export function prunePixelMaskToCells(
+  pixelMask: PixelMask,
+  cellMask: CellMask,
+  topology: ShapeGridTopology = SQUARE_TOPOLOGY,
+): void {
   const rows = cellMask.length
-  const cols = cellMask[0]?.length ?? 0
+  const cols = getMaskCols(cellMask)
 
-  for (let y = 0; y < height; y += 1) {
-    const row = Math.min(rows - 1, Math.floor((y * rows) / height))
-    for (let x = 0; x < width; x += 1) {
-      const col = Math.min(cols - 1, Math.floor((x * cols) / width))
+  for (let row = 0; row < rows; row += 1) {
+    for (let col = 0; col < cellMask[row].length; col += 1) {
       if (!cellMask[row][col]) {
-        data[y * width + x] = 0
+        setShapeCellPixels(pixelMask, col, row, cols, rows, topology, 0)
       }
     }
   }
@@ -275,14 +400,17 @@ export function prunePixelMaskToCells(pixelMask: PixelMask, cellMask: CellMask):
  * BFS sweep (approximate graph diameter). Assumes a single region; with
  * multiple regions it stays within the region of the first kept cell.
  */
-export function findFarthestMaskCells(mask: CellMask): { start: MazePoint, end: MazePoint } | null {
+export function findFarthestMaskCells(
+  mask: CellMask,
+  topology: ShapeGridTopology = SQUARE_TOPOLOGY,
+): { start: MazePoint, end: MazePoint } | null {
   const first = findFirstMaskCell(mask)
   if (!first) {
     return null
   }
 
-  const start = bfsFarthest(mask, first)
-  const end = bfsFarthest(mask, start)
+  const start = bfsFarthest(mask, first, topology)
+  const end = bfsFarthest(mask, start, topology)
   return { end, start }
 }
 
@@ -297,9 +425,9 @@ function findFirstMaskCell(mask: CellMask): MazePoint | null {
   return null
 }
 
-function bfsFarthest(mask: CellMask, from: MazePoint): MazePoint {
+function bfsFarthest(mask: CellMask, from: MazePoint, topology: ShapeGridTopology): MazePoint {
   const rows = mask.length
-  const cols = mask[0]?.length ?? 0
+  const cols = getMaskCols(mask)
   const visited = new Uint8Array(rows * cols)
   const queue: number[] = [from.y * cols + from.x]
   visited[queue[0]] = 1
@@ -312,8 +440,9 @@ function bfsFarthest(mask: CellMask, from: MazePoint): MazePoint {
     last = current
     const x = current % cols
     const y = (current - x) / cols
-    for (const [nx, ny] of [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]] as const) {
-      if (nx < 0 || nx >= cols || ny < 0 || ny >= rows || !mask[ny][nx]) {
+    for (const neighborPoint of getShapeCellNeighbors(x, y, cols, rows, topology)) {
+      const { x: nx, y: ny } = neighborPoint
+      if (!mask[ny]?.[nx]) {
         continue
       }
       const neighbor = ny * cols + nx
@@ -329,7 +458,7 @@ function bfsFarthest(mask: CellMask, from: MazePoint): MazePoint {
 
 /**
  * Cell-based magic wand: flood fills from the clicked cell across currently
- * kept, 4-connected cells whose average image color stays within `tolerance`
+ * kept, topology-connected cells whose average image color stays within `tolerance`
  * (0-255 per-channel) of the clicked cell's average color, clearing their
  * pixels from the mask. Comparing against the fixed seed cell keeps
  * gradients from letting the fill creep into genuinely different colors.
@@ -342,17 +471,18 @@ export function removeSimilarCells(
   clickedCol: number,
   clickedRow: number,
   tolerance: number,
+  topology: ShapeGridTopology = SQUARE_TOPOLOGY,
 ): number {
   const rows = cellMask.length
-  const cols = cellMask[0]?.length ?? 0
-  if (clickedCol < 0 || clickedCol >= cols || clickedRow < 0 || clickedRow >= rows) {
+  const cols = getMaskCols(cellMask)
+  if (!isShapeCellCoordinate(clickedCol, clickedRow, cols, rows, topology)) {
     return 0
   }
   if (!cellMask[clickedRow][clickedCol]) {
     return 0
   }
 
-  const averages = buildCellAverageColors(image, pixelMask, cols, rows)
+  const averages = buildCellAverageColors(image, pixelMask, cols, rows, topology)
   const seed = clickedRow * cols + clickedCol
   const thresholdSquared = tolerance * tolerance * 3
   const isSimilar = (cell: number): boolean => {
@@ -374,10 +504,11 @@ export function removeSimilarCells(
     removed += 1
     const col = cell % cols
     const row = (cell - col) / cols
-    clearCellPixels(pixelMask, col, row, cols, rows)
+    setShapeCellPixels(pixelMask, col, row, cols, rows, topology, 0)
 
-    for (const [nc, nr] of [[col - 1, row], [col + 1, row], [col, row - 1], [col, row + 1]] as const) {
-      if (nc < 0 || nc >= cols || nr < 0 || nr >= rows || !cellMask[nr][nc]) {
+    for (const neighborPoint of getShapeCellNeighbors(col, row, cols, rows, topology)) {
+      const { x: nc, y: nr } = neighborPoint
+      if (!cellMask[nr]?.[nc]) {
         continue
       }
       const neighbor = nr * cols + nc
@@ -401,31 +532,25 @@ function buildCellAverageColors(
   pixelMask: PixelMask,
   cols: number,
   rows: number,
+  topology: ShapeGridTopology,
 ): Float64Array {
   const { data } = image
-  const { height, width } = pixelMask
   const averages = new Float64Array(rows * cols * 3)
 
   for (let row = 0; row < rows; row += 1) {
-    const startY = Math.floor((row * height) / rows)
-    const endY = Math.max(startY + 1, Math.floor(((row + 1) * height) / rows))
-    for (let col = 0; col < cols; col += 1) {
-      const startX = Math.floor((col * width) / cols)
-      const endX = Math.max(startX + 1, Math.floor(((col + 1) * width) / cols))
-
+    const rowCols = getShapeRowCellCount(row, cols, topology)
+    for (let col = 0; col < rowCols; col += 1) {
       let red = 0
       let green = 0
       let blue = 0
       let count = 0
-      for (let y = startY; y < endY; y += 1) {
-        for (let x = startX; x < endX; x += 1) {
-          const offset = (y * width + x) * 4
-          red += data[offset]
-          green += data[offset + 1]
-          blue += data[offset + 2]
-          count += 1
-        }
-      }
+      visitShapeCellPixels(pixelMask, col, row, cols, rows, topology, (pixel) => {
+        const offset = pixel * 4
+        red += data[offset]
+        green += data[offset + 1]
+        blue += data[offset + 2]
+        count += 1
+      })
       const cell = (row * cols + col) * 3
       averages[cell] = red / count
       averages[cell + 1] = green / count
@@ -434,27 +559,6 @@ function buildCellAverageColors(
   }
 
   return averages
-}
-
-/** Clears every pixel covered by a cell, using buildCellMask's boundaries. */
-function clearCellPixels(
-  pixelMask: PixelMask,
-  col: number,
-  row: number,
-  cols: number,
-  rows: number,
-): void {
-  const { data, height, width } = pixelMask
-  const startX = Math.floor((col * width) / cols)
-  const endX = Math.max(startX + 1, Math.floor(((col + 1) * width) / cols))
-  const startY = Math.floor((row * height) / rows)
-  const endY = Math.max(startY + 1, Math.floor(((row + 1) * height) / rows))
-
-  for (let y = startY; y < endY; y += 1) {
-    for (let x = startX; x < endX; x += 1) {
-      data[y * width + x] = 0
-    }
-  }
 }
 
 /** Hex color per cell (row-major grid), `null` for cells outside the mask. */
@@ -471,22 +575,19 @@ export function buildCellColors(
   cellMask: CellMask,
   cols: number,
   rows: number,
+  topology: ShapeGridTopology = SQUARE_TOPOLOGY,
 ): CellColors {
   const { data } = image
-  const { height, width } = pixelMask
   const colors: CellColors = []
 
   for (let row = 0; row < rows; row += 1) {
-    const startY = Math.floor((row * height) / rows)
-    const endY = Math.max(startY + 1, Math.floor(((row + 1) * height) / rows))
     const line: (string | null)[] = []
-    for (let col = 0; col < cols; col += 1) {
+    const rowCols = getShapeRowCellCount(row, cols, topology)
+    for (let col = 0; col < rowCols; col += 1) {
       if (!cellMask[row]?.[col]) {
         line.push(null)
         continue
       }
-      const startX = Math.floor((col * width) / cols)
-      const endX = Math.max(startX + 1, Math.floor(((col + 1) * width) / cols))
 
       let red = 0
       let green = 0
@@ -496,21 +597,19 @@ export function buildCellColors(
       let totalGreen = 0
       let totalBlue = 0
       let totalCount = 0
-      for (let y = startY; y < endY; y += 1) {
-        for (let x = startX; x < endX; x += 1) {
-          const offset = (y * width + x) * 4
-          totalRed += data[offset]
-          totalGreen += data[offset + 1]
-          totalBlue += data[offset + 2]
-          totalCount += 1
-          if (pixelMask.data[y * width + x] === 1) {
-            red += data[offset]
-            green += data[offset + 1]
-            blue += data[offset + 2]
-            keptCount += 1
-          }
+      visitShapeCellPixels(pixelMask, col, row, cols, rows, topology, (pixel) => {
+        const offset = pixel * 4
+        totalRed += data[offset]
+        totalGreen += data[offset + 1]
+        totalBlue += data[offset + 2]
+        totalCount += 1
+        if (pixelMask.data[pixel] === 1) {
+          red += data[offset]
+          green += data[offset + 1]
+          blue += data[offset + 2]
+          keptCount += 1
         }
-      }
+      })
 
       if (keptCount === 0) {
         red = totalRed
@@ -528,6 +627,136 @@ export function buildCellColors(
   }
 
   return colors
+}
+
+/** Sets all pixel samples covered by one grid cell. */
+export function setShapeCellPixels(
+  pixelMask: PixelMask,
+  col: number,
+  row: number,
+  cols: number,
+  rows: number,
+  topology: ShapeGridTopology,
+  value: 0 | 1,
+): void {
+  visitShapeCellPixels(pixelMask, col, row, cols, rows, topology, (pixel) => {
+    pixelMask.data[pixel] = value
+  })
+}
+
+function visitShapeCellPixels(
+  pixelMask: Pick<PixelMask, 'height' | 'width'>,
+  col: number,
+  row: number,
+  cols: number,
+  rows: number,
+  topology: ShapeGridTopology,
+  visit: (pixel: number) => void,
+): void {
+  const polygon = getShapeCellPolygon(pixelMask, col, row, cols, rows, topology)
+  if (!polygon) {
+    return
+  }
+  const minX = Math.max(0, Math.floor(Math.min(...polygon.map(point => point.x))))
+  const maxX = Math.min(pixelMask.width - 1, Math.ceil(Math.max(...polygon.map(point => point.x))) - 1)
+  const minY = Math.max(0, Math.floor(Math.min(...polygon.map(point => point.y))))
+  const maxY = Math.min(pixelMask.height - 1, Math.ceil(Math.max(...polygon.map(point => point.y))) - 1)
+  let visited = 0
+  for (let y = minY; y <= maxY; y += 1) {
+    for (let x = minX; x <= maxX; x += 1) {
+      if (isPointInPolygon(x + 0.5, y + 0.5, polygon, false)) {
+        visit(y * pixelMask.width + x)
+        visited += 1
+      }
+    }
+  }
+  if (visited === 0) {
+    const centerX = polygon.reduce((sum, point) => sum + point.x, 0) / polygon.length
+    const centerY = polygon.reduce((sum, point) => sum + point.y, 0) / polygon.length
+    const x = Math.min(pixelMask.width - 1, Math.max(0, Math.floor(centerX)))
+    const y = Math.min(pixelMask.height - 1, Math.max(0, Math.floor(centerY)))
+    visit(y * pixelMask.width + x)
+  }
+}
+
+function getShapeCellNeighbors(
+  col: number,
+  row: number,
+  cols: number,
+  rows: number,
+  topology: ShapeGridTopology,
+): MazePoint[] {
+  const candidates: MazePoint[] = [
+    { x: col - 1, y: row },
+    { x: col + 1, y: row },
+  ]
+  if (topology.type === 'square') {
+    candidates.push({ x: col, y: row - 1 }, { x: col, y: row + 1 })
+  }
+  else {
+    const orientationUp = (topology.layout === 'triangle' ? col : row + col) % 2 === 0
+    if (topology.layout === 'triangle') {
+      candidates.push(orientationUp
+        ? { x: col + 1, y: row + 1 }
+        : { x: col - 1, y: row - 1 })
+    }
+    else {
+      candidates.push({ x: col, y: row + (orientationUp ? 1 : -1) })
+    }
+  }
+  return candidates.filter(point => isShapeCellCoordinate(point.x, point.y, cols, rows, topology))
+}
+
+function getShapeRowCellCount(row: number, cols: number, topology: ShapeGridTopology): number {
+  return topology.type === 'triangle' && topology.layout === 'triangle' ? row * 2 + 1 : cols
+}
+
+function isShapeCellCoordinate(
+  col: number,
+  row: number,
+  cols: number,
+  rows: number,
+  topology: ShapeGridTopology,
+): boolean {
+  return row >= 0
+    && row < rows
+    && col >= 0
+    && col < getShapeRowCellCount(row, cols, topology)
+}
+
+function getMaskCols(mask: CellMask): number {
+  return mask.reduce((max, line) => Math.max(max, line.length), 0)
+}
+
+function isPointInPolygon(
+  x: number,
+  y: number,
+  polygon: PixelPoint[],
+  includeBoundary = true,
+): boolean {
+  let inside = false
+  for (let current = 0, previous = polygon.length - 1; current < polygon.length; previous = current++) {
+    const a = polygon[current]
+    const b = polygon[previous]
+    if (isPointOnSegment(x, y, a, b)) {
+      return includeBoundary
+    }
+    if ((a.y > y) !== (b.y > y) && x < ((b.x - a.x) * (y - a.y)) / (b.y - a.y) + a.x) {
+      inside = !inside
+    }
+  }
+  return inside
+}
+
+function isPointOnSegment(x: number, y: number, a: PixelPoint, b: PixelPoint): boolean {
+  const cross = (x - a.x) * (b.y - a.y) - (y - a.y) * (b.x - a.x)
+  if (Math.abs(cross) > 1e-7) {
+    return false
+  }
+  return x >= Math.min(a.x, b.x) - 1e-7
+    && x <= Math.max(a.x, b.x) + 1e-7
+    && y >= Math.min(a.y, b.y) - 1e-7
+    && y <= Math.max(a.y, b.y) + 1e-7
 }
 
 function rgbToHex(red: number, green: number, blue: number): string {
