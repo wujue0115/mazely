@@ -21,11 +21,13 @@ const json = JSON.stringify(topology)
 localStorage.setItem('maze', json)
 ```
 
-The serialized value contains rows, columns, and open internal edge IDs.
+The serialized value contains the grid type, dimensions, triangle layout and
+side size when applicable, and open internal edge IDs.
 
 ## Restoring into a Compatible Grid
 
-Create a grid with the saved dimensions before applying its open edges:
+Create a grid with the saved topology and dimensions before applying its open
+edges:
 
 ```ts
 import {
@@ -34,19 +36,36 @@ import {
 } from 'mazely'
 
 const topology = JSON.parse(localStorage.getItem('maze')!)
+const grid = topology.type === 'triangle'
+  ? topology.triangleLayout === 'triangle'
+    ? {
+        type: 'triangle' as const,
+        layout: 'triangle' as const,
+        size: topology.size,
+      }
+    : {
+        type: 'triangle' as const,
+        layout: 'rectangle' as const,
+        rows: topology.rows,
+        cols: topology.cols,
+      }
+  : {
+      type: 'square' as const,
+      rows: topology.rows,
+      cols: topology.cols,
+    }
+
 const restoredMaze = createMaze({
-  grid: {
-    type: 'square',
-    rows: topology.rows,
-    cols: topology.cols,
-  },
+  grid,
 })
 
 applySerializedGrid(restoredMaze.grid, topology)
 ```
 
-The target dimensions must match. Unknown edge IDs are rejected before any
-target edge is changed.
+The target grid type, triangle layout, and dimensions must match. Unknown edge
+IDs are rejected before any target edge is changed. Serialized data created
+before topology metadata was added has no `type` and is treated as square by
+the example above.
 
 Validate JSON from users, URLs, or remote storage before passing it to the
 API.
@@ -82,7 +101,9 @@ applySerializedGrid(restoredMaze.grid, savedMaze.topology)
 
 Core serialization preserves:
 
+- grid type
 - rows and columns
+- triangle layout and side size
 - open and closed internal edges
 
 Store these separately when your application needs them:

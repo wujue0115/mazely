@@ -10,7 +10,7 @@ lower-level runtime class.
 
 ## `createMaze()`
 
-Creates a square maze with an optional seed.
+Creates a maze with an optional seed and configurable grid topology.
 
 ```ts
 declare function createMaze(options?: CreateMazeOptions): Maze
@@ -41,16 +41,33 @@ When `grid` is omitted, the factory creates a `21 × 21` square grid.
 ### Grid Options
 
 ```ts
-interface MazeGridOptions {
-  type: 'square'
-  rows: number
-  cols: number
-  mask?: readonly (readonly boolean[])[]
-}
+type MazeGridOptions
+  = | {
+    type: 'square'
+    rows: number
+    cols: number
+    mask?: readonly (readonly boolean[])[]
+  }
+  | {
+    type: 'triangle'
+    layout: 'triangle'
+    size: number
+    mask?: readonly (readonly boolean[])[]
+  }
+  | {
+    type: 'triangle'
+    layout: 'rectangle'
+    rows: number
+    cols: number
+    mask?: readonly (readonly boolean[])[]
+  }
 ```
 
-Rows and columns must be positive integers. When provided, `mask` is indexed
-as `mask[row][column]` and must leave at least one active cell.
+All dimensions must be positive integers. A triangular boundary's `size` is the number
+of smallest triangles on every outer side and produces `size²` cells within a
+triangular boundary. A rectangular boundary uses `rows` and `cols` for a grid
+made from triangular cells. When provided, `mask` is indexed as
+`mask[row][column]` and must leave at least one active cell.
 
 ## `maze.grid`
 
@@ -58,7 +75,7 @@ The grid owned by the instance:
 
 ```ts
 interface Maze {
-  readonly grid: MazeGrid<SquareCell>
+  readonly grid: MazeGrid<GridCell>
 }
 ```
 

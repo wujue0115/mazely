@@ -41,7 +41,7 @@ import {
 | API                                 | Purpose                                           |
 | ----------------------------------- | ------------------------------------------------- |
 | [Grid and graph](/api/grid)         | Read cells, edges, neighbors, and reachable cells |
-| [Serialization](/api/serialization) | Save and restore square-grid topology             |
+| [Serialization](/api/serialization) | Save and restore grid topology                    |
 
 ## Public Defaults
 

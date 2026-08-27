@@ -43,6 +43,28 @@ const result = maze.getSolveResult()
 // { solved: true, path: [{ x, y }, ...], visitedCount, algorithm }
 ```
 
+## Grid Topologies
+
+Create either square cells or alternating up/down triangle cells. Triangle
+grids can use a triangular outer boundary:
+
+```ts
+const triangle = new Mazely({
+  grid: {
+    type: 'triangle',
+    layout: 'triangle',
+    size: 20,
+  },
+  seed: 'triangles',
+})
+
+triangle.generate('prim').finish()
+```
+
+Use `{ type: 'triangle', layout: 'rectangle', rows, cols }` for a rectangular
+outer boundary made from triangle cells. Both square and triangle grids accept
+connected cell masks.
+
 Each applied step exposes a `payload` describing the carve/expand direction
 (`from`/`to` cell IDs). Applications may use it as renderer input; the package
 does not provide rendering or animation scheduling:
@@ -77,6 +99,11 @@ maze.solve('flood', {
 
 All generation algorithms support connected masks and finish with a spanning
 tree. Generation rejects a disconnected mask before changing the grid.
+
+Triangle grids support `aldous-broder`, `dfs`, `growing-tree`,
+`hunt-and-kill`, `kruskal`, `prim`, `traversal`, and `wilson`. Read
+`MAZE_GENERATION_CAPABILITIES[algorithm].supportedGridTypes` when building
+topology-aware controls; the remaining generators are square-only.
 
 Runtime registries and guards are exported as
 `MAZE_GENERATION_ALGORITHMS`, `MAZE_SOLVING_ALGORITHMS`,

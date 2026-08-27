@@ -1,11 +1,11 @@
 ---
-description: Serialize square-grid topology to JSON-safe data and apply it to a compatible Mazely grid.
+description: Serialize maze topology to JSON-safe data and apply it to a compatible Mazely grid.
 ---
 
 # Serialization
 
-The serialization API preserves square-grid dimensions and open edge IDs. It
-does not serialize a `Maze` instance or `StepPlayer`.
+The serialization API preserves grid topology, dimensions, and open edge IDs.
+It does not serialize a `Maze` instance or `StepPlayer`.
 
 For a complete persistence flow, see
 [Saving and Restoring a Maze](/recipes/save-and-restore).
@@ -18,6 +18,9 @@ Returns a JSON-safe topology value:
 function serializeGrid(grid: MazeGrid): SerializedMaze
 
 interface SerializedMaze {
+  type?: 'square' | 'triangle'
+  triangleLayout?: 'triangle' | 'rectangle'
+  size?: number
   rows: number
   cols: number
   openedEdgeIds: string[]
@@ -66,7 +69,9 @@ grid is modified.
 
 The format preserves:
 
+- grid type and triangle boundary shape
 - rows and columns
+- triangle side size
 - open and closed internal edges
 
 It does not preserve:

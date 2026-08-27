@@ -92,8 +92,8 @@ explicit control over their execution. Common uses include:
 - generated puzzles
 - deterministic fixtures and tests
 
-Mazely currently supports square grids. Triangle, hexagonal, and polar grid
-topologies are not included in v0.1.
+Mazely supports square and triangular grids. Hexagonal and polar grid
+topologies are not currently included.
 
 ## What to Read Next
 

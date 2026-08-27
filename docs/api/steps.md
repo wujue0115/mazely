@@ -29,7 +29,7 @@ grid and cell metadata as the source of truth for persistent state.
 ## Cell IDs in Payloads
 
 `from` and `to` are topology-neutral `CellId` values, not `{ x, y }` points.
-For the built-in square grid, convert them explicitly:
+For built-in coordinate grids, convert them explicitly:
 
 ```ts
 import { cellIdToPoint } from 'mazely'

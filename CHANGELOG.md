@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added triangular grids with triangular and rectangular outer layouts,
+  optional masks, `TriangleCell`, `TriangleGrid`, and `createTriangleGrid()`.
+- Added triangle-aware generation and solving across topology-neutral grid
+  traversal, editing, and public package exports.
+- Added grid type, triangle layout, and triangle side-size metadata to compact
+  grid serialization while retaining compatibility with older square data.
+
+### Changed
+
+- Added `supportedGridTypes` to generation algorithm capabilities. Triangle
+  grids support Aldous-Broder, DFS, Growing Tree, Hunt-and-Kill, Kruskal, Prim,
+  Random Traversal, and Wilson generation.
+
 ## [0.3.0] - 2026-08-06
 
 ### Fixed

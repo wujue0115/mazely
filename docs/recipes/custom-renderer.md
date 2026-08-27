@@ -62,6 +62,11 @@ This approachable version can trace a shared internal wall twice. A renderer
 handling very large grids can iterate `grid.edges` once and draw the outer
 boundary separately.
 
+This example is intentionally square-specific. A triangle renderer should use
+`TriangleCell.orientation` and the cell's three boundary segments rather than
+projecting `row` and `col` as square pixels. Generation, solving, metadata, and
+step playback remain topology-neutral; only the geometry projection changes.
+
 ## Drawing Visited Cells and the Final Path
 
 Solvers write persistent visit metadata to cells:

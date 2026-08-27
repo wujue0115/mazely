@@ -11,7 +11,7 @@ pnpm add mazely
 ## Highlights
 
 - Stable `createMaze()` entry point with the complete public API and types
-- `createMaze()` with friendly defaults (21x21 square grid)
+- Square and triangular grids with a friendly 21x21 square default
 
 ## Usage
 
@@ -28,6 +28,18 @@ maze.solve('bfs', { start: { x: 0, y: 0 }, end: { x: 20, y: 20 } }).finish()
 
 const result = maze.getSolveResult()
 console.log(result?.solved, result?.path.length)
+```
+
+Triangular grids use alternating up/down cells and can have a triangular or
+rectangular outer boundary:
+
+```ts
+const triangle = createMaze({
+  grid: { type: 'triangle', layout: 'triangle', size: 20 },
+  seed: 'triangles',
+})
+
+triangle.generate('dfs').finish()
 ```
 
 The package exposes incremental steps but does not provide rendering, animation

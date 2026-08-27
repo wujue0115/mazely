@@ -39,7 +39,7 @@ renderers.
 - Twelve maze generation algorithms and five solving algorithms
 - `StepPlayer` API for incremental execution or immediate completion
 - Deterministic generation with string or numeric seeds
-- Square grids with optional masks for custom maze shapes
+- Square and triangular grids with optional masks for custom maze shapes
 - Transactional maze editing and compact grid serialization
 - No animation loop, DOM, Canvas, WebGL, or renderer dependency
 - Full TypeScript types and ESM output
@@ -162,6 +162,40 @@ generation.finish()
 The main package also exports algorithm factories, grid types, `StepPlayer`,
 serialization helpers, seeded random utilities, and all public TypeScript
 types.
+
+Triangular grids use alternating up/down cells with at most three neighbors:
+
+```ts
+const triangle = createMaze({
+  grid: {
+    type: 'triangle',
+    layout: 'triangle',
+    size: 20,
+  },
+  seed: 'triangles',
+})
+
+triangle.generate('prim').finish()
+```
+
+`size` is the number of smallest triangles along each side. A grid of size
+`n` contains `n²` cells and has a triangular outer boundary.
+
+Triangle grids currently support Aldous-Broder, DFS, Growing Tree,
+Hunt-and-Kill, Kruskal, Prim, Random Traversal, and Wilson generation.
+
+Use a rectangular boundary when the outer shape should remain rectangular:
+
+```ts
+const triangleRectangle = createMaze({
+  grid: {
+    type: 'triangle',
+    layout: 'rectangle',
+    rows: 20,
+    cols: 40,
+  },
+})
+```
 
 ## Algorithms
 

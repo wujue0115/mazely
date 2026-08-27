@@ -14,23 +14,24 @@ between any two cells until the maze is edited.
 
 ## Choosing a Generation Algorithm
 
-| ID                   | Algorithm             | Uses start | Character                                                   |
-| -------------------- | --------------------- | :--------: | ----------------------------------------------------------- |
-| `aldous-broder`      | Aldous-Broder         |     No     | Random walk; unbiased but often slow                        |
-| `binary-tree`        | Binary Tree           |     No     | Fast with a strong diagonal bias                            |
-| `dfs`                | Recursive Backtracker |    Yes     | Long corridors and deep branches                            |
-| `eller`              | Eller's               |     No     | Row-oriented generation with low working memory             |
-| `growing-tree`       | Growing Tree          |    Yes     | Newest-cell strategy; similar character to backtracking     |
-| `hunt-and-kill`      | Hunt-and-Kill         |    Yes     | Random walks separated by visible row scans                 |
-| `kruskal`            | Randomized Kruskal    |     No     | Joins many small regions into a spanning tree               |
-| `prim`               | Randomized Prim       |    Yes     | Expands from a frontier with many short branches            |
-| `recursive-division` | Recursive Division    |     No     | Starts open and adds walls recursively                      |
-| `sidewinder`         | Sidewinder            |     No     | Horizontal runs with a directional bias                     |
-| `traversal`          | Random Traversal      |    Yes     | Chooses a uniformly random edge from the active frontier    |
-| `wilson`             | Wilson's              |     No     | Loop-erased random walks; unbiased spanning-tree generation |
+| ID                   | Algorithm             | Uses start | Grid types       | Character                                                   |
+| -------------------- | --------------------- | :--------: | ---------------- | ----------------------------------------------------------- |
+| `aldous-broder`      | Aldous-Broder         |     No     | Square, Triangle | Random walk; unbiased but often slow                        |
+| `binary-tree`        | Binary Tree           |     No     | Square           | Fast with a strong diagonal bias                            |
+| `dfs`                | Recursive Backtracker |    Yes     | Square, Triangle | Long corridors and deep branches                            |
+| `eller`              | Eller's               |     No     | Square           | Row-oriented generation with low working memory             |
+| `growing-tree`       | Growing Tree          |    Yes     | Square, Triangle | Newest-cell strategy; similar character to backtracking     |
+| `hunt-and-kill`      | Hunt-and-Kill         |    Yes     | Square, Triangle | Random walks separated by visible row scans                 |
+| `kruskal`            | Randomized Kruskal    |     No     | Square, Triangle | Joins many small regions into a spanning tree               |
+| `prim`               | Randomized Prim       |    Yes     | Square, Triangle | Expands from a frontier with many short branches            |
+| `recursive-division` | Recursive Division    |     No     | Square           | Starts open and adds walls recursively                      |
+| `sidewinder`         | Sidewinder            |     No     | Square           | Horizontal runs with a directional bias                     |
+| `traversal`          | Random Traversal      |    Yes     | Square, Triangle | Chooses a uniformly random edge from the active frontier    |
+| `wilson`             | Wilson's              |     No     | Square, Triangle | Loop-erased random walks; unbiased spanning-tree generation |
 
-`usesStart` is also available at runtime through
-`MAZE_GENERATION_CAPABILITIES`.
+`usesStart` and `supportedGridTypes` are also available at runtime through
+`MAZE_GENERATION_CAPABILITIES`. Calling a generator with an unsupported grid
+type throws before generation begins.
 
 If the application does not need a specific visual style, `dfs` is the
 default. It is fast and produces long, recognizable corridors.

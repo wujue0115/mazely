@@ -4,6 +4,27 @@ All notable changes to the continuously deployed Mazely Studio app are
 documented in this file. Studio versions advance independently from the
 published `mazely` and `@mazely/core` packages.
 
+## [Unreleased]
+
+### Added
+
+- Added triangular-grid generation, solving, and editing with triangular and
+  rectangular outer layouts in the WebGL 2D view and SVG export.
+- Added topology-aware algorithm availability so square-only generators are
+  disabled when a triangular grid is selected.
+
+### Fixed
+
+- Kept passage widths consistent when rendering thick triangular walls,
+  including 60-degree and 120-degree junctions and terminal wall cuts.
+- Removed small protrusions where solution path segments meet on triangular
+  grids by using joined path geometry.
+
+### Known limitations
+
+- Triangular grids do not yet support the 3D view, image-shaped masks, or
+  saving to Studio `.maze` files.
+
 ## [0.6.1] - 2026-08-15
 
 ### Fixed
