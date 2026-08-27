@@ -3,11 +3,13 @@ import { app } from '../app-state'
 import { bumpGenerationCacheVersion, bumpSolveCacheVersion } from '../derived'
 import {
   generationSelect,
+  gridTypeSelect,
   loadMazeButton,
   loadMazeFileInput,
   saveMazeButton,
   shapeColorsInput,
   solvingSelect,
+  triangleLayoutField,
   useViewportRatioInput,
   wallHeightRange,
   wallRange,
@@ -134,6 +136,7 @@ async function loadMazeFile(file: File): Promise<void> {
 
     app.mazeWidth = loaded.maze.cols
     app.mazeHeight = loaded.maze.rows
+    app.gridType = loaded.runtime.grid.type
     app.lockedGridRatio = loaded.maze.cols / loaded.maze.rows
     app.hasValidGridDimensions = true
     app.useViewportRatio = false
@@ -153,6 +156,8 @@ async function loadMazeFile(file: File): Promise<void> {
     app.floodDepthByKey = {}
 
     generationSelect.value = loaded.maze.algorithm
+    gridTypeSelect.value = loaded.runtime.grid.type
+    triangleLayoutField.classList.add('is-hidden')
     solvingSelect.value = loaded.solve.algorithm
     useViewportRatioInput.checked = false
     if (loaded.solve.status === 'generated') {

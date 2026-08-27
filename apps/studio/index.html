@@ -241,6 +241,22 @@
           </section>
 
           <section class="field-group">
+            <label class="micro-label" for="grid-type">Topology</label>
+            <select id="grid-type">
+              <option value="square" selected>Square</option>
+              <option value="triangle">Triangle</option>
+            </select>
+          </section>
+
+          <section id="triangle-layout-field" class="field-group is-hidden">
+            <label class="micro-label" for="triangle-layout">Grid Layout</label>
+            <select id="triangle-layout">
+              <option value="triangle" selected>Triangle · Side size</option>
+              <option value="rectangle">Rectangle · Rows × columns</option>
+            </select>
+          </section>
+
+          <section class="field-group">
             <div class="field-head">
               <span class="micro-label">Grid Geometry</span>
               <label class="micro-check" for="use-viewport-ratio">

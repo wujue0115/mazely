@@ -1,4 +1,4 @@
-import type { Maze, MazeSolvingStep, StepPlayer } from 'mazely'
+import type { Maze, MazeGridType, MazeSolvingStep, StepPlayer, TriangleGridLayout } from 'mazely'
 import type { GenerationPreview } from './controllers/generation'
 import type { AppliedShape, ShapeEditorApi } from './controllers/shape-editor'
 import type { CustomFloodTheme, FloodThemeSelection } from './flood'
@@ -29,6 +29,8 @@ import { parseGridDimension, parseRange } from './utils'
 
 export interface AppState {
   activeTab: PanelTab
+  gridType: MazeGridType
+  triangleLayout: TriangleGridLayout
   mazeWidth: number
   mazeHeight: number
   hasValidGridDimensions: boolean
@@ -151,14 +153,20 @@ export function createSolidMazeState(
   height: number,
   algorithm: MazeGenerationAlgorithm,
   shape: AppliedShape | null,
+  gridType: MazeGridType = 'square',
+  triangleLayout: TriangleGridLayout = 'triangle',
 ): { maze: MazeViewState, runtime: Maze } {
   const runtime = createMaze({
-    grid: { cols: width, mask: shape?.cellMask ?? undefined, rows: height, type: 'square' },
+    grid: gridType === 'triangle'
+      ? triangleLayout === 'triangle'
+        ? { layout: 'triangle', size: width, type: 'triangle' }
+        : { cols: width, layout: 'rectangle', rows: height, type: 'triangle' }
+      : { cols: width, mask: shape?.cellMask ?? undefined, rows: height, type: 'square' },
   })
   const start = shape?.start ?? { x: 0, y: 0 }
-  const end = shape?.end ?? { x: width - 1, y: height - 1 }
+  const end = shape?.end ?? { x: runtime.grid.cols - 1, y: runtime.grid.rows - 1 }
   return {
-    maze: createMazeViewState(width, height, algorithm, start, end),
+    maze: createMazeViewState(runtime.grid.cols, runtime.grid.rows, algorithm, start, end),
     runtime,
   }
 }
@@ -185,6 +193,8 @@ export function initAppState(options: {
   Object.assign<AppState, AppState>(app, {
     activePointerId: null,
     activeTab: 'generate',
+    gridType: 'square',
+    triangleLayout: 'triangle',
     cachedGenerationFrontierHeads: [],
     cachedGenerationFrontierTrailEdges: new Set<string>(),
     cachedGenerationFrontierTrailEdgesVersion: -1,

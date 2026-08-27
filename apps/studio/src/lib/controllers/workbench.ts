@@ -1,6 +1,7 @@
+import type { MazeGridType, TriangleGridLayout } from 'mazely'
 import type { PanelTab } from '../types'
 import type { AppliedShape } from './shape-editor'
-import { pointToCellId } from 'mazely'
+import { MAZE_GENERATION_CAPABILITIES, pointToCellId } from 'mazely'
 import { getGenerationAlgorithm, shouldUseRandomGenerationStart } from '../algorithms'
 import { app, createSolidMazeState } from '../app-state'
 import {
@@ -22,12 +23,13 @@ import {
   tabPanelGenerate,
   tabPanelSolve,
   tabSolve,
+  triangleLayoutField,
   useViewportRatioInput,
 } from '../dom'
 import { key } from '../point'
 import { fitMazeInView, render } from '../renderer'
 import { getRandomMaskPoint } from '../shape-mask'
-import { clamp, getRandomMazePoint, GRID_DIMENSION_MAX, parseGridDimensionOptional } from '../utils'
+import { clamp, GRID_DIMENSION_MAX, parseGridDimensionOptional } from '../utils'
 import { cancelPointSelection, syncPointSelectionUi } from './maze-editor'
 import {
   clearGenerationPreviewState,
@@ -151,7 +153,9 @@ function getAutomaticGenerationStart() {
   if (app.shape) {
     return getRandomMaskPoint(app.shape.cellMask) ?? app.shape.start
   }
-  return getRandomMazePoint(app.mazeWidth, app.mazeHeight)
+  const cells = app.mazeRuntime?.grid.cells ?? []
+  const cell = cells[Math.floor(Math.random() * cells.length)]
+  return cell ? { x: cell.col, y: cell.row } : { x: 0, y: 0 }
 }
 
 function prepareClosedMazeForEdit(): void {
@@ -244,6 +248,8 @@ function rebuildMazeForShapeChange(): void {
     app.mazeHeight,
     getGenerationAlgorithm(generationSelect.value),
     app.shape,
+    app.gridType,
+    app.triangleLayout,
   )
   app.maze = solidMazeState.maze
   app.mazeRuntime = solidMazeState.runtime
@@ -268,16 +274,81 @@ function rebuildMazeForShapeChange(): void {
 
 export function syncShapePanel(): void {
   const activeShape = app.shape
-  shapeStatus.textContent = activeShape
-    ? `Shape active — ${activeShape.cols}×${activeShape.rows} cells.`
-    : 'Full rectangle — upload an image to shape the maze.'
+  shapeStatus.textContent = app.gridType === 'triangle'
+    ? 'Image shapes are not available for triangle grids yet.'
+    : activeShape
+      ? `Shape active — ${activeShape.cols}×${activeShape.rows} cells.`
+      : 'Full rectangle — upload an image to shape the maze.'
   shapeStatus.classList.toggle('is-shaped', activeShape !== null)
   shapeEditButton.classList.toggle('is-hidden', !app.shapeEditor?.hasSource())
   shapeClearButton.classList.toggle('is-hidden', activeShape === null)
   shapeColorsToggle.classList.toggle('is-hidden', activeShape === null)
 }
 
+export function setGridType(gridType: MazeGridType): void {
+  if (app.gridType === gridType) {
+    return
+  }
+  stopGenerationAnimation()
+  stopSolveAnimation()
+  clearGenerationPreviewState()
+  app.gridType = gridType
+  app.shape = null
+  app.useViewportRatio = false
+  app.lockGridRatio = false
+  useViewportRatioInput.checked = false
+  lockGridRatioInput.checked = false
+  triangleLayoutField.classList.toggle('is-hidden', gridType !== 'triangle')
+
+  const selected = getGenerationAlgorithm(generationSelect.value)
+  if (!(MAZE_GENERATION_CAPABILITIES[selected].supportedGridTypes as readonly string[]).includes(gridType)) {
+    generationSelect.value = 'dfs'
+  }
+  for (const option of Array.from(generationSelect.options)) {
+    const algorithm = getGenerationAlgorithm(option.value)
+    option.disabled = !(MAZE_GENERATION_CAPABILITIES[algorithm].supportedGridTypes as readonly string[])
+      .includes(gridType)
+  }
+
+  rebuildMazeForShapeChange()
+  showToast(`${gridType === 'triangle' ? 'Triangle' : 'Square'} grid selected.`)
+}
+
+export function setTriangleLayout(layout: TriangleGridLayout): void {
+  if (app.triangleLayout === layout || app.gridType !== 'triangle') {
+    return
+  }
+  stopGenerationAnimation()
+  stopSolveAnimation()
+  clearGenerationPreviewState()
+  app.triangleLayout = layout
+  rebuildMazeForShapeChange()
+  showToast(`${layout === 'triangle' ? 'Triangular' : 'Rectangular'} layout selected.`)
+}
+
 export function syncGridDimensionInputs(changedBy: 'width' | 'height' | 'none' = 'none'): boolean {
+  if (app.gridType === 'triangle' && app.triangleLayout === 'triangle') {
+    const size = parseGridDimensionOptional(mazeWidthInput.value)
+    app.useViewportRatio = false
+    app.lockGridRatio = false
+    useViewportRatioInput.checked = false
+    lockGridRatioInput.checked = false
+    useViewportRatioInput.disabled = true
+    lockGridRatioInput.disabled = true
+    mazeHeightInput.disabled = true
+    mazeHeightField.classList.add('is-hidden')
+    dimensionGrid.classList.add('is-ratio')
+    mazeWidthLabel.textContent = 'SIZE'
+    if (size == null) {
+      return false
+    }
+    app.mazeWidth = size
+    app.mazeHeight = size
+    mazeWidthInput.value = String(size)
+    mazeHeightInput.value = String(size)
+    return true
+  }
+
   const shapeLocked = app.shape !== null
   mazeWidthInput.disabled = shapeLocked
   useViewportRatioInput.disabled = shapeLocked
@@ -354,8 +425,12 @@ export function applyGridDimensionChange(changedBy: 'width' | 'height' | 'none' 
   }
 
   const wasValid = app.hasValidGridDimensions
-  const previousWidth = app.maze.cols || app.mazeWidth
-  const previousHeight = app.maze.rows || app.mazeHeight
+  const previousWidth = app.gridType === 'triangle' && app.triangleLayout === 'triangle'
+    ? (app.maze.cols + 1) / 2
+    : (app.maze.cols || app.mazeWidth)
+  const previousHeight = app.gridType === 'triangle'
+    ? app.maze.rows
+    : (app.maze.rows || app.mazeHeight)
   const valid = syncGridDimensionInputs(changedBy)
 
   if (!valid) {
@@ -381,6 +456,8 @@ export function applyGridDimensionChange(changedBy: 'width' | 'height' | 'none' 
     app.mazeHeight,
     getGenerationAlgorithm(generationSelect.value),
     app.shape,
+    app.gridType,
+    app.triangleLayout,
   )
   app.maze = solidMazeState.maze
   app.mazeRuntime = solidMazeState.runtime

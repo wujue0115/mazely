@@ -169,6 +169,9 @@ export function getHuntScanSegment(
   if (preview?.algorithm !== 'hunt-and-kill' || preview.huntScanRow === null) {
     return null
   }
+  if (preview.runtime.grid.type === 'triangle') {
+    return null
+  }
   return {
     from: { x: -0.5, y: preview.huntScanRow },
     to: { x: preview.view.cols - 0.5, y: preview.huntScanRow },

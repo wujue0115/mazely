@@ -9,6 +9,7 @@ import {
   editStartReadout,
   exportButton,
   generationSelect,
+  gridTypeSelect,
   loadMazeButton,
   lockGridRatioInput,
   mazeHeightInput,
@@ -18,6 +19,8 @@ import {
   resetButton,
   runButton,
   saveMazeButton,
+  shapeEditButton,
+  shapeUploadButton,
   solveEndPoint,
   solveEndReadout,
   solvePointsGrid,
@@ -29,7 +32,9 @@ import {
   statusText,
   stepButton,
   toast,
+  triangleLayoutSelect,
   useViewportRatioInput,
+  view3dButton,
   visitedText,
   wallLabel,
 } from '../dom'
@@ -73,9 +78,15 @@ export function syncUi(): void {
   loadMazeButton.disabled = app.generating || app.running
   saveMazeButton.disabled = app.generating
     || app.running
+    || app.gridType === 'triangle'
     || !app.hasGeneratedMaze
     || partialGeneration
     || partialSolve
+  gridTypeSelect.disabled = app.generating || app.running
+  triangleLayoutSelect.disabled = app.generating || app.running || app.gridType !== 'triangle'
+  shapeUploadButton.disabled = app.gridType === 'triangle'
+  shapeEditButton.disabled = app.gridType === 'triangle'
+  view3dButton.disabled = app.gridType === 'triangle'
 
   syncUiState({
     activeTab: app.activeTab,
@@ -115,6 +126,13 @@ export function syncUi(): void {
     wallThickness: app.wallThickness,
     widthInput: mazeWidthInput,
   })
+  if (app.gridType === 'triangle') {
+    useViewportRatioInput.disabled = true
+    if (app.triangleLayout === 'triangle') {
+      mazeHeightInput.disabled = true
+      lockGridRatioInput.disabled = true
+    }
+  }
 }
 
 export function maybeSyncUi(): void {

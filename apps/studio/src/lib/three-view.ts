@@ -2,7 +2,7 @@ import type { Maze } from 'mazely'
 import type { MazePoint } from './maze-types'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
-import { countSquareGridLines, visitSquareGridLines } from './runtime'
+import { countGridLines, visitReferenceGridLines } from './runtime'
 import {
   BASE_WHEEL_ZOOM_STEP,
   clamp,
@@ -318,9 +318,9 @@ export class ThreeMazeView {
         this.gridMesh.geometry.dispose()
       }
 
-      const positions = new Float32Array(countSquareGridLines(state.runtime) * 18)
+      const positions = new Float32Array(countGridLines(state.runtime) * 18)
       let offset = 0
-      visitSquareGridLines(state.runtime, (fromX, fromY, toX, toY) => {
+      visitReferenceGridLines(state.runtime, (fromX, fromY, toX, toY) => {
         const dx = toX - fromX
         const dz = toY - fromY
         const length = Math.hypot(dx, dz)

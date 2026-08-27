@@ -128,19 +128,23 @@ function createCurrentMaze(): GenerationPreview {
   const generationAlgorithm = getGenerationAlgorithm(generationSelect.value)
 
   const runtime = createMaze({
-    grid: { cols: app.mazeWidth, mask: app.shape?.cellMask, rows: app.mazeHeight, type: 'square' },
+    grid: app.gridType === 'triangle'
+      ? app.triangleLayout === 'triangle'
+        ? { layout: 'triangle', size: app.mazeWidth, type: 'triangle' }
+        : { cols: app.mazeWidth, layout: 'rectangle', rows: app.mazeHeight, type: 'triangle' }
+      : { cols: app.mazeWidth, mask: app.shape?.cellMask, rows: app.mazeHeight, type: 'square' },
   })
   const start = app.generatePointMode === 'manual'
     ? app.generateManualStart
     : app.maze.start
-  const end = app.shape?.end ?? { x: app.mazeWidth - 1, y: app.mazeHeight - 1 }
+  const end = app.shape?.end ?? { x: runtime.grid.cols - 1, y: runtime.grid.rows - 1 }
   const player = runtime.generate(generationAlgorithm, { start })
 
   return createGenerationPreview({
     algorithm: generationAlgorithm,
     player,
     runtime,
-    view: createMazeViewState(app.mazeWidth, app.mazeHeight, generationAlgorithm, start, end),
+    view: createMazeViewState(runtime.grid.cols, runtime.grid.rows, generationAlgorithm, start, end),
   })
 }
 

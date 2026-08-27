@@ -104,6 +104,30 @@ describe('buildMazeSvg', () => {
     expect(svg).not.toContain('x1="20" y1="0" x2="20" y2="20"')
   })
 
+  it('exports triangular cells, bounds, walls, and centroid markers', () => {
+    const runtime = createMaze({ grid: { layout: 'triangle', size: 2, type: 'triangle' } })
+    runtime.openAllEdges()
+    const svg = buildMazeSvg({
+      maze: {
+        algorithm: 'dfs',
+        cols: 2,
+        end: { x: 2, y: 1 },
+        rows: 2,
+        start: { x: 0, y: 0 },
+      },
+      runtime,
+      theme: DEFAULT_STYLE_THEME,
+      visibleElements: DEFAULT_STYLE_VISIBILITY,
+    })
+
+    expect(svg).toContain('width="40"')
+    expect(svg.match(/<polygon /g)).toHaveLength(4)
+    expect(svg).not.toContain('<rect ')
+    expect(svg).toContain('cx="20"')
+    expect(svg).toContain('cx="30"')
+    expect(svg).toContain('r="3.685"')
+  })
+
   it('escapes theme colors used in SVG attributes', () => {
     const runtime = createMaze({ grid: { cols: 1, rows: 1, type: 'square' } })
     const svg = buildMazeSvg({

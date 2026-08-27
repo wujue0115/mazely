@@ -1,10 +1,11 @@
 import type { Maze } from 'mazely'
 import { createMaze } from 'mazely'
 import { describe, expect, it } from 'vitest'
+import { getCellCenter, hitTestCell } from '../src/lib/grid-geometry'
 import {
-  countSquareGridLines,
+  countGridLines,
   hasOpenCellEdge,
-  visitSquareGridLines,
+  visitReferenceGridLines,
 } from '../src/lib/runtime'
 
 describe('square grid reference lines', () => {
@@ -12,7 +13,7 @@ describe('square grid reference lines', () => {
     const runtime = createMaze({ grid: { cols: 2, rows: 2, type: 'square' } })
     const lines = collectLines(runtime)
 
-    expect(countSquareGridLines(runtime)).toBe(12)
+    expect(countGridLines(runtime)).toBe(12)
     expect(lines).toHaveLength(12)
     expect(new Set(lines).size).toBe(lines.length)
     expect(lines).toContain('0,0>1,0')
@@ -51,9 +52,42 @@ describe('square grid reference lines', () => {
   })
 })
 
+describe('triangle grid reference lines', () => {
+  it('visits each triangular boundary exactly once', () => {
+    const runtime = createMaze({ grid: { layout: 'triangle', size: 4, type: 'triangle' } })
+    const lines = collectLines(runtime)
+
+    expect(runtime.grid.cells).toHaveLength(16)
+    expect(runtime.grid.edges).toHaveLength(18)
+    expect(lines).toHaveLength(30)
+    expect(new Set(lines).size).toBe(lines.length)
+  })
+
+  it('hit-tests offset cells in a triangular outer boundary', () => {
+    const runtime = createMaze({ grid: { layout: 'triangle', size: 4, type: 'triangle' } })
+    const topCell = runtime.grid.getCell('0:0')!
+    const bottomCell = runtime.grid.getCell('3:6')!
+
+    expect(hitTestCell(runtime, getCellCenter(topCell))?.id).toBe(topCell.id)
+    expect(hitTestCell(runtime, getCellCenter(bottomCell))?.id).toBe(bottomCell.id)
+  })
+
+  it('supports a rectangular rows-by-columns triangle grid', () => {
+    const runtime = createMaze({
+      grid: { cols: 3, layout: 'rectangle', rows: 4, type: 'triangle' },
+    })
+    const lines = collectLines(runtime)
+
+    expect(runtime.grid.cells).toHaveLength(12)
+    expect(runtime.grid.edges).toHaveLength(13)
+    expect(lines).toHaveLength(23)
+    expect(new Set(lines).size).toBe(lines.length)
+  })
+})
+
 function collectLines(runtime: Maze): string[] {
   const lines: string[] = []
-  visitSquareGridLines(runtime, (fromX, fromY, toX, toY) => {
+  visitReferenceGridLines(runtime, (fromX, fromY, toX, toY) => {
     lines.push(`${fromX},${fromY}>${toX},${toY}`)
   })
   return lines

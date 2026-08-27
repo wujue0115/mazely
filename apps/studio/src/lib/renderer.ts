@@ -29,6 +29,7 @@ import {
 } from './derived'
 import { canvasWrap, ctx, generationSelect } from './dom'
 import { getFloodDepthColor } from './flood'
+import { getOverlayScale, getSharedBoundary, TRIANGLE_HEIGHT } from './grid-geometry'
 import { key, parsePointKey } from './point'
 import { hasOpenCellEdge } from './runtime'
 import { FIXED_CELL_SIZE, ZOOM_MAX, ZOOM_MIN } from './types'
@@ -79,8 +80,8 @@ export function getZoomBounds(targetMaze: MazeViewState = getActiveMazeView()): 
     return { fit: 1, max: ZOOM_MAX, min: ZOOM_MIN }
   }
 
-  const mazePixelWidth = cols * FIXED_CELL_SIZE
-  const mazePixelHeight = rows * FIXED_CELL_SIZE
+  const mazePixelWidth = (app.gridType === 'triangle' ? (cols + 1) / 2 : cols) * FIXED_CELL_SIZE
+  const mazePixelHeight = (app.gridType === 'triangle' ? rows * TRIANGLE_HEIGHT : rows) * FIXED_CELL_SIZE
   const rawFitZoom = Math.min(width / mazePixelWidth, height / mazePixelHeight)
   const fitZoom = clamp(rawFitZoom * FOCUS_VIEW_SCALE, FOCUS_ZOOM_MIN, ZOOM_MAX)
 
@@ -251,7 +252,10 @@ function renderWebgl2dView(
   const hintRings: Webgl2dOverlayRing[] = []
   const pushPolyline = (points: MazePoint[], color: string, width: number): void => {
     for (let index = 0; index < points.length - 1; index += 1) {
-      segments.push({ color, from: points[index], to: points[index + 1], width })
+      segments.push({ cap: 'butt', color, from: points[index], to: points[index + 1], width })
+    }
+    for (let index = 1; index < points.length - 1; index += 1) {
+      dots.push({ color, point: points[index], radius: width / 2 })
     }
   }
 
@@ -371,6 +375,19 @@ function renderWebgl2dView(
     rings: hintRings,
     segments: hintSegments,
   }, clamp(app.wallThickness / FIXED_CELL_SIZE, 0.04, 0.4))
+
+  const overlayScale = getOverlayScale(activeRuntime)
+  if (overlayScale !== 1) {
+    for (const segment of segments) {
+      segment.width *= overlayScale
+    }
+    for (const dot of [...dots, ...hintDots]) {
+      dot.radius *= overlayScale
+    }
+    for (const ring of [...rings, ...hintRings]) {
+      ring.radius *= overlayScale
+    }
+  }
 
   const floodStarted = floodActive && (app.running || app.stepState.visitedCount > 0)
   const pointMarkers = getPointMarkerVisibility({
@@ -517,6 +534,9 @@ function pushEditPreviewOverlays(out: {
     ...getInsetEdgeFillSegment(segment, wallThickness),
     width: wallThickness,
   })
+  if (app.mazeRuntime?.grid.type === 'triangle') {
+    return
+  }
   pushEdgeBorderSegments(out.borderSegments, segment, wallThickness)
 }
 
@@ -540,20 +560,28 @@ function getEdgeOutlineSegment(
   from: MazePoint,
   to: MazePoint,
 ): { from: MazePoint, to: MazePoint } {
+  if (app.mazeRuntime?.grid.type === 'triangle') {
+    const fromCell = app.mazeRuntime.grid.getCell(`${from.y}:${from.x}`)
+    const toCell = app.mazeRuntime.grid.getCell(`${to.y}:${to.x}`)
+    const boundary = fromCell && toCell ? getSharedBoundary(fromCell, toCell) : null
+    if (boundary) {
+      return boundary
+    }
+  }
   if (from.y === to.y) {
-    const boundaryX = Math.max(from.x, to.x) - 0.5
+    const boundaryX = Math.max(from.x, to.x)
     const y = from.y
     return {
-      from: { x: boundaryX, y: y - 0.5 },
-      to: { x: boundaryX, y: y + 0.5 },
+      from: { x: boundaryX, y },
+      to: { x: boundaryX, y: y + 1 },
     }
   }
 
   const x = from.x
-  const boundaryY = Math.max(from.y, to.y) - 0.5
+  const boundaryY = Math.max(from.y, to.y)
   return {
-    from: { x: x - 0.5, y: boundaryY },
-    to: { x: x + 0.5, y: boundaryY },
+    from: { x, y: boundaryY },
+    to: { x: x + 1, y: boundaryY },
   }
 }
 
@@ -593,6 +621,16 @@ function getInsetEdgeFillSegment(
   line: { from: MazePoint, to: MazePoint },
   wallThickness: number,
 ): { from: MazePoint, to: MazePoint } {
+  if (app.mazeRuntime?.grid.type === 'triangle') {
+    const dx = line.to.x - line.from.x
+    const dy = line.to.y - line.from.y
+    const length = Math.hypot(dx, dy)
+    const insetRatio = length > 0 ? Math.min(0.45, wallThickness / 2 / length) : 0
+    return {
+      from: { x: line.from.x + dx * insetRatio, y: line.from.y + dy * insetRatio },
+      to: { x: line.to.x - dx * insetRatio, y: line.to.y - dy * insetRatio },
+    }
+  }
   const inset = wallThickness / 2
   if (line.from.x === line.to.x) {
     const top = Math.min(line.from.y, line.to.y)

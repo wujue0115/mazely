@@ -50,7 +50,9 @@ import {
   invalidateGenerationPreview,
   setActiveTab,
   setGeneratePointMode,
+  setGridType,
   setSolvePointMode,
+  setTriangleLayout,
   syncGridDimensionInputs,
   syncShapePanel,
 } from './lib/controllers/workbench'
@@ -69,6 +71,7 @@ import {
   generatePointsAutoInput,
   generateStartButton,
   generationSelect,
+  gridTypeSelect,
   lockGridRatioInput,
   mazeHeightInput,
   mazeWidthInput,
@@ -109,6 +112,7 @@ import {
   tabSolve,
   themesPanel,
   topNav,
+  triangleLayoutSelect,
   useViewportRatioInput,
   view2dButton,
   view3dButton,
@@ -158,6 +162,16 @@ tabEdit.addEventListener('click', () => {
 })
 
 generationSelect.addEventListener('change', invalidateGenerationPreview)
+gridTypeSelect.addEventListener('change', () => {
+  const gridType = gridTypeSelect.value === 'triangle' ? 'triangle' : 'square'
+  if (gridType === 'triangle' && app.view3d) {
+    setView3d(false)
+  }
+  setGridType(gridType)
+})
+triangleLayoutSelect.addEventListener('change', () => {
+  setTriangleLayout(triangleLayoutSelect.value === 'rectangle' ? 'rectangle' : 'triangle')
+})
 solvingSelect.addEventListener('change', () => setSolvePointMode(solvePointsAutoInput.checked))
 generatePointsAutoInput.addEventListener('change', () => setGeneratePointMode(generatePointsAutoInput.checked))
 solvePointsAutoInput.addEventListener('change', () => setSolvePointMode(solvePointsAutoInput.checked))
