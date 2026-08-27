@@ -12,8 +12,14 @@ published `mazely` and `@mazely/core` packages.
   rectangular outer layouts in the WebGL 2D view and SVG export.
 - Added topology-aware algorithm availability so square-only generators are
   disabled when a triangular grid is selected.
-- Added image-shaped triangle mazes with polygon-based image sampling, cell
-  colors, editing tools, and triangle-aware connectivity checks.
+- Added image-shaped triangle mazes on rectangular outer layouts, with
+  polygon-based image sampling, cell colors, editing tools, and triangle-aware
+  connectivity checks.
+
+### Changed
+
+- Grid topology and Triangle layout changes now ask for confirmation before
+  discarding an existing maze, applied shape, or generation progress.
 
 ### Fixed
 

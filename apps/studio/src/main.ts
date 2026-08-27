@@ -7,6 +7,7 @@ import {
   shouldShowFloodVisualization,
 } from './lib/algorithms'
 import { app, initAppState } from './lib/app-state'
+import { confirmMazeReplacement, initConfirmationDialog } from './lib/controllers/confirmation-dialog'
 import { initFloodThemeEditor } from './lib/controllers/flood-theme-editor'
 import { initImageExport } from './lib/controllers/image-export'
 import {
@@ -125,6 +126,7 @@ import {
 } from './lib/dom'
 import { buildExportFilename, downloadBlob } from './lib/export-image'
 import { buildMazeSvg } from './lib/export-svg'
+import { shouldConfirmMazeReplacement } from './lib/maze-replacement'
 import { key, parsePointKey } from './lib/point'
 import { ensureThreeView, fitMazeInView, render, resetView } from './lib/renderer'
 import { parseRange, resizeHighResCanvas } from './lib/utils'
@@ -162,15 +164,38 @@ tabEdit.addEventListener('click', () => {
 })
 
 generationSelect.addEventListener('change', invalidateGenerationPreview)
-gridTypeSelect.addEventListener('change', () => {
+gridTypeSelect.addEventListener('change', async () => {
   const gridType = gridTypeSelect.value === 'triangle' ? 'triangle' : 'square'
+  if (gridType === app.gridType) {
+    return
+  }
+  const confirmed = await confirmGridReplacement({
+    message: `Changing to a ${gridType === 'triangle' ? 'Triangle' : 'Square'} grid will discard the current maze.`,
+    title: 'Change grid topology?',
+  })
+  if (!confirmed) {
+    gridTypeSelect.value = app.gridType
+    return
+  }
   if (gridType === 'triangle' && app.view3d) {
     setView3d(false)
   }
   setGridType(gridType)
 })
-triangleLayoutSelect.addEventListener('change', () => {
-  setTriangleLayout(triangleLayoutSelect.value === 'rectangle' ? 'rectangle' : 'triangle')
+triangleLayoutSelect.addEventListener('change', async () => {
+  const layout = triangleLayoutSelect.value === 'rectangle' ? 'rectangle' : 'triangle'
+  if (layout === app.triangleLayout) {
+    return
+  }
+  const confirmed = await confirmGridReplacement({
+    message: 'Changing the Triangle layout will discard the current maze.',
+    title: 'Change Triangle layout?',
+  })
+  if (!confirmed) {
+    triangleLayoutSelect.value = app.triangleLayout
+    return
+  }
+  setTriangleLayout(layout)
 })
 solvingSelect.addEventListener('change', () => setSolvePointMode(solvePointsAutoInput.checked))
 generatePointsAutoInput.addEventListener('change', () => setGeneratePointMode(generatePointsAutoInput.checked))
@@ -290,6 +315,7 @@ app.shapeEditor = initShapeEditor({
   onApply: applyShape,
   showToast,
 })
+initConfirmationDialog()
 initFloodThemeEditor()
 initMazeEditor()
 initMazeFileActions()
@@ -381,8 +407,15 @@ function getExportSolveFrontierTrails() {
   return getSolveFrontierTrails(heads)
 }
 
-shapeUploadButton.addEventListener('click', () => shapeFileInput.click())
-shapeEditButton.addEventListener('click', () => {
+shapeUploadButton.addEventListener('click', async () => {
+  if (await prepareImageShapeLayout()) {
+    shapeFileInput.click()
+  }
+})
+shapeEditButton.addEventListener('click', async () => {
+  if (!(await prepareImageShapeLayout())) {
+    return
+  }
   if (!app.shapeEditor?.reopen()) {
     shapeFileInput.click()
   }
@@ -392,6 +425,33 @@ shapeColorsInput.addEventListener('change', () => {
   app.showShapeColors = shapeColorsInput.checked
   render()
 })
+
+interface GridReplacementDialogOptions {
+  title: string
+  message: string
+}
+
+async function confirmGridReplacement(options: GridReplacementDialogOptions): Promise<boolean> {
+  return !shouldConfirmMazeReplacement(app) || confirmMazeReplacement(options)
+}
+
+async function prepareImageShapeLayout(): Promise<boolean> {
+  if (app.gridType !== 'triangle' || app.triangleLayout === 'rectangle') {
+    return true
+  }
+
+  const confirmed = await confirmGridReplacement({
+    message: 'Image-shaped Triangle mazes require the rectangular layout. Continuing will discard the current maze.',
+    title: 'Use rectangular Triangle layout?',
+  })
+  if (!confirmed) {
+    return false
+  }
+
+  triangleLayoutSelect.value = 'rectangle'
+  setTriangleLayout('rectangle')
+  return true
+}
 
 railWorkbenchButton.addEventListener('click', () => togglePanel('workbench'))
 railThemesButton.addEventListener('click', () => togglePanel('themes'))

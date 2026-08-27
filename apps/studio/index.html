@@ -836,6 +836,34 @@
       </section>
     </div>
 
+    <div
+      id="confirmation-dialog"
+      class="export-dialog confirmation-dialog is-hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="confirmation-dialog-title"
+      aria-describedby="confirmation-dialog-message"
+    >
+      <button
+        id="confirmation-dialog-backdrop"
+        class="export-dialog-backdrop"
+        type="button"
+        aria-label="Cancel change"
+      ></button>
+      <section class="export-dialog-window confirmation-dialog-window">
+        <header class="export-dialog-header">
+          <h2 id="confirmation-dialog-title">Change grid topology?</h2>
+        </header>
+        <div class="confirmation-dialog-body">
+          <p id="confirmation-dialog-message"></p>
+        </div>
+        <footer class="confirmation-dialog-footer">
+          <button id="confirmation-dialog-cancel" class="ghost-btn" type="button">Cancel</button>
+          <button id="confirmation-dialog-confirm" class="cta-btn" type="button">Confirm</button>
+        </footer>
+      </section>
+    </div>
+
     <div id="shape-editor" class="shape-editor is-hidden" role="dialog" aria-modal="true" aria-label="Shape studio">
       <div id="shape-editor-backdrop" class="shape-editor-backdrop"></div>
       <div class="shape-editor-window">
