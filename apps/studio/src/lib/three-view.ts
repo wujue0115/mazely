@@ -2,6 +2,14 @@ import type { Maze } from 'mazely'
 import type { MazePoint } from './maze-types'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
+import {
+  getCellCenter,
+  getGridBounds,
+  getOverlayScale,
+  getPointCenter,
+  TRIANGLE_HEIGHT,
+  visitClosedWalls,
+} from './grid-geometry'
 import { countGridLines, visitReferenceGridLines } from './runtime'
 import {
   BASE_WHEEL_ZOOM_STEP,
@@ -9,6 +17,7 @@ import {
   getMazeScaledWheelZoomStep,
   getViewportPixelRatio,
 } from './utils'
+import { buildTriangleWallPositions } from './webgl-2d-view'
 
 /** Grid-adjacent line segment drawn flat on the floor (2D trail/path lines). */
 export interface ThreeOverlaySegment {
@@ -68,6 +77,170 @@ const MOBILE_FIT_VIEW_SCALE = 0.8
 const MOBILE_VIEWPORT_WIDTH = 767
 const ORBIT_ROTATE_SPEED = 0.005
 
+/** Equilateral triangular floor tile with its centroid at the local origin. */
+export function createTriangleFloorGeometry(depth = FLOOR_DEPTH): THREE.BufferGeometry {
+  const apexZ = -TRIANGLE_HEIGHT * 2 / 3
+  const baseZ = TRIANGLE_HEIGHT / 3
+  const positions = [
+    0,
+    0,
+    apexZ,
+    0.5,
+    0,
+    baseZ,
+    -0.5,
+    0,
+    baseZ,
+    0,
+    -depth,
+    apexZ,
+    0.5,
+    -depth,
+    baseZ,
+    -0.5,
+    -depth,
+    baseZ,
+  ]
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+  geometry.setIndex([
+    0,
+    2,
+    1,
+    3,
+    4,
+    5,
+    0,
+    1,
+    4,
+    0,
+    4,
+    3,
+    1,
+    2,
+    5,
+    1,
+    5,
+    4,
+    2,
+    0,
+    3,
+    2,
+    3,
+    5,
+  ])
+  const flatGeometry = geometry.toNonIndexed()
+  geometry.dispose()
+  flatGeometry.computeVertexNormals()
+  return flatGeometry
+}
+
+export function setThreeWallMatrix(
+  matrix: THREE.Matrix4,
+  segment: { from: { x: number, y: number }, to: { x: number, y: number } },
+  height: number,
+  thickness: number,
+): void {
+  const dx = segment.to.x - segment.from.x
+  const dz = segment.to.y - segment.from.y
+  const length = Math.hypot(dx, dz)
+  matrix.makeRotationY(-Math.atan2(dz, dx))
+  matrix.scale(new THREE.Vector3(length + thickness, height, thickness))
+  matrix.setPosition(
+    (segment.from.x + segment.to.x) / 2,
+    height / 2,
+    (segment.from.y + segment.to.y) / 2,
+  )
+}
+
+/** Extrudes the exact 2D Triangle wall footprint, preserving every junction cut. */
+export function buildTriangleWallGeometry(
+  runtime: Maze,
+  thickness: number,
+  height: number,
+): THREE.BufferGeometry {
+  const footprint = buildTriangleWallPositions(runtime, thickness)
+  const positions: number[] = []
+  const edges = new Map<string, {
+    count: number
+    from: { x: number, z: number }
+    to: { x: number, z: number }
+  }>()
+  const pushFace = (
+    a: { point: { x: number, z: number }, y: number },
+    b: { point: { x: number, z: number }, y: number },
+    c: { point: { x: number, z: number }, y: number },
+  ): void => {
+    positions.push(
+      a.point.x,
+      a.y,
+      a.point.z,
+      b.point.x,
+      b.y,
+      b.point.z,
+      c.point.x,
+      c.y,
+      c.point.z,
+    )
+  }
+
+  for (let offset = 0; offset < footprint.length; offset += 9) {
+    const source = [0, 1, 2].map(index => ({
+      x: footprint[offset + index * 3],
+      z: -footprint[offset + index * 3 + 1],
+    }))
+    const [a, b, c] = source
+    const abX = b.x - a.x
+    const abZ = b.z - a.z
+    const acX = c.x - a.x
+    const acZ = c.z - a.z
+    const top = abZ * acX - abX * acZ >= 0 ? [a, b, c] : [a, c, b]
+
+    pushFace(
+      { point: top[0], y: height },
+      { point: top[1], y: height },
+      { point: top[2], y: height },
+    )
+    pushFace(
+      { point: top[2], y: 0 },
+      { point: top[1], y: 0 },
+      { point: top[0], y: 0 },
+    )
+    for (let index = 0; index < 3; index += 1) {
+      const from = top[index]
+      const to = top[(index + 1) % 3]
+      const fromKey = `${from.x.toFixed(6)},${from.z.toFixed(6)}`
+      const toKey = `${to.x.toFixed(6)},${to.z.toFixed(6)}`
+      const edgeKey = fromKey < toKey ? `${fromKey}>${toKey}` : `${toKey}>${fromKey}`
+      const edge = edges.get(edgeKey)
+      edges.set(edgeKey, edge
+        ? { ...edge, count: edge.count + 1 }
+        : { count: 1, from, to })
+    }
+  }
+
+  for (const edge of edges.values()) {
+    if (edge.count !== 1) {
+      continue
+    }
+    pushFace(
+      { point: edge.from, y: height },
+      { point: edge.to, y: height },
+      { point: edge.to, y: 0 },
+    )
+    pushFace(
+      { point: edge.from, y: height },
+      { point: edge.to, y: 0 },
+      { point: edge.from, y: 0 },
+    )
+  }
+
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+  geometry.computeVertexNormals()
+  return geometry
+}
+
 /**
  * Real-3D maze renderer: walls are extruded boxes on top of a colored floor
  * grid. Instanced meshes keep large mazes cheap; rendering is on demand
@@ -86,7 +259,7 @@ export class ThreeMazeView {
   private readonly mazeGroup = new THREE.Group()
   private readonly container: HTMLElement
 
-  private readonly wallMaterial = new THREE.MeshLambertMaterial()
+  private readonly wallMaterial = new THREE.MeshLambertMaterial({ side: THREE.DoubleSide })
   private readonly floorMaterial = new THREE.MeshLambertMaterial()
   private readonly gridMaterial = new THREE.MeshBasicMaterial({
     depthWrite: false,
@@ -96,11 +269,13 @@ export class ThreeMazeView {
   })
 
   private readonly boxGeometry = new THREE.BoxGeometry(1, 1, 1)
+  private readonly triangleFloorGeometry = createTriangleFloorGeometry()
   // Overlays mirror the 2D canvas trails: flat unlit lines plus flat marker
   // discs, both instanced so per-step rebuilds stay cheap.
   private readonly overlayLineMaterial = new THREE.MeshBasicMaterial()
   private readonly overlayDotMaterial = new THREE.MeshBasicMaterial()
   private readonly discGeometry = new THREE.CylinderGeometry(1, 1, 1, 24)
+  private readonly triangleWallMesh = new THREE.Mesh(new THREE.BufferGeometry(), this.wallMaterial)
 
   private wallMesh: THREE.InstancedMesh | null = null
   private floorMesh: THREE.InstancedMesh | null = null
@@ -159,7 +334,8 @@ export class ThreeMazeView {
       new THREE.CylinderGeometry(0.25, 0.25, START_END_POINT_DISC_HEIGHT, 24),
       new THREE.MeshBasicMaterial(),
     )
-    this.mazeGroup.add(this.startMesh, this.endMesh)
+    this.triangleWallMesh.frustumCulled = false
+    this.mazeGroup.add(this.triangleWallMesh, this.startMesh, this.endMesh)
 
     window.addEventListener('keydown', this.onKeyDown)
     window.addEventListener('keyup', this.onKeyUp)
@@ -247,14 +423,14 @@ export class ThreeMazeView {
   }
 
   sync(state: ThreeViewSyncState): void {
-    const { rows, cols } = state.runtime.grid
-    this.syncedRows = rows
-    this.syncedCols = cols
-    this.gridSpan = Math.max(rows, cols)
-    this.syncControlsToMazeSize(rows, cols)
-    this.ensureMeshes(rows, cols)
-    this.mazeGroup.position.set(-cols / 2, 0, -rows / 2)
-    this.fitCameraIfNeeded(rows, cols)
+    const bounds = getGridBounds(state.runtime)
+    this.syncedRows = bounds.height
+    this.syncedCols = bounds.width
+    this.gridSpan = Math.max(bounds.height, bounds.width)
+    this.syncControlsToMazeSize(bounds.height, bounds.width)
+    this.ensureMeshes(state.runtime)
+    this.mazeGroup.position.set(-bounds.width / 2, 0, -bounds.height / 2)
+    this.fitCameraIfNeeded(state.runtime, bounds.height, bounds.width)
 
     this.wallMaterial.color.set(state.wallColor)
     this.syncFloor(state)
@@ -265,9 +441,10 @@ export class ThreeMazeView {
     this.renderFrame()
   }
 
-  private ensureMeshes(rows: number, cols: number): void {
-    const wallCapacity = rows * (cols + 1) + cols * (rows + 1)
-    const floorCapacity = rows * cols
+  private ensureMeshes(runtime: Maze): void {
+    const wallCapacity = runtime.grid.cells.length * 4
+    const floorCapacity = runtime.grid.cells.length
+    const floorGeometry = runtime.grid.type === 'triangle' ? this.triangleFloorGeometry : this.boxGeometry
 
     if (!this.wallMesh || this.wallMesh.instanceMatrix.count < wallCapacity) {
       if (this.wallMesh) {
@@ -279,12 +456,14 @@ export class ThreeMazeView {
       this.mazeGroup.add(this.wallMesh)
     }
 
-    if (!this.floorMesh || this.floorMesh.instanceMatrix.count < floorCapacity) {
+    if (!this.floorMesh
+      || this.floorMesh.instanceMatrix.count < floorCapacity
+      || this.floorMesh.geometry !== floorGeometry) {
       if (this.floorMesh) {
         this.mazeGroup.remove(this.floorMesh)
         this.floorMesh.dispose()
       }
-      this.floorMesh = new THREE.InstancedMesh(this.boxGeometry, this.floorMaterial, floorCapacity)
+      this.floorMesh = new THREE.InstancedMesh(floorGeometry, this.floorMaterial, floorCapacity)
       this.floorMesh.frustumCulled = false
       this.mazeGroup.add(this.floorMesh)
     }
@@ -297,8 +476,20 @@ export class ThreeMazeView {
     let index = 0
 
     for (const cell of state.runtime.grid.cells) {
-      matrix.makeScale(1, FLOOR_DEPTH, 1)
-      matrix.setPosition(cell.col + 0.5, -FLOOR_DEPTH / 2, cell.row + 0.5)
+      const center = getCellCenter(cell)
+      if (state.runtime.grid.type === 'triangle') {
+        if ('orientation' in cell && cell.orientation === 'down') {
+          matrix.makeRotationY(Math.PI)
+        }
+        else {
+          matrix.identity()
+        }
+        matrix.setPosition(center.x, 0, center.y)
+      }
+      else {
+        matrix.makeScale(1, FLOOR_DEPTH, 1)
+        matrix.setPosition(center.x, -FLOOR_DEPTH / 2, center.y)
+      }
       mesh.setMatrixAt(index, matrix)
       mesh.setColorAt(index, color.set(state.getCellColor(cell.col, cell.row)))
       index += 1
@@ -367,6 +558,7 @@ export class ThreeMazeView {
     const mesh = this.wallMesh!
     if (!state.wallsVisible) {
       mesh.count = 0
+      this.triangleWallMesh.visible = false
       return
     }
 
@@ -375,53 +567,40 @@ export class ThreeMazeView {
     const thickness = state.wallThickness
     let index = 0
 
-    const addHorizontalWall = (x: number, lineZ: number): void => {
-      matrix.makeScale(1 + thickness, height, thickness)
-      matrix.setPosition(x + 0.5, height / 2, lineZ)
-      mesh.setMatrixAt(index, matrix)
-      index += 1
+    if (state.runtime.grid.type === 'triangle') {
+      mesh.count = 0
+      this.triangleWallMesh.geometry.dispose()
+      this.triangleWallMesh.geometry = buildTriangleWallGeometry(state.runtime, thickness, height)
+      this.triangleWallMesh.visible = true
     }
-    const addVerticalWall = (lineX: number, y: number): void => {
-      matrix.makeScale(thickness, height, 1 + thickness)
-      matrix.setPosition(lineX, height / 2, y + 0.5)
-      mesh.setMatrixAt(index, matrix)
-      index += 1
-    }
-
-    // Interior closed edges are drawn by the cell on their top/left side; a
-    // missing bottom/right edge means a grid or shape-mask boundary, which
-    // no neighbor will draw.
-    for (const cell of state.runtime.grid.cells) {
-      const x = cell.col
-      const y = cell.row
-      if (!cell.edges.top?.opened) {
-        addHorizontalWall(x, y)
-      }
-      if (!cell.edges.left?.opened) {
-        addVerticalWall(x, y)
-      }
-      if (!cell.edges.bottom) {
-        addHorizontalWall(x, y + 1)
-      }
-      if (!cell.edges.right) {
-        addVerticalWall(x + 1, y)
-      }
+    else {
+      this.triangleWallMesh.visible = false
+      visitClosedWalls(state.runtime, (segment) => {
+        setThreeWallMatrix(matrix, segment, height, thickness)
+        mesh.setMatrixAt(index, matrix)
+        index += 1
+      })
+      mesh.count = index
     }
 
-    mesh.count = index
     mesh.instanceMatrix.needsUpdate = true
   }
 
   private syncMarkers(state: ThreeViewSyncState): void {
+    const markerScale = getOverlayScale(state.runtime)
     this.startMesh.visible = state.start !== null
     if (state.start) {
-      this.startMesh.position.set(state.start.x + 0.5, START_END_POINT_DISC_Y, state.start.y + 0.5)
+      const center = getPointCenter(state.runtime, state.start)
+      this.startMesh.position.set(center.x, START_END_POINT_DISC_Y, center.y)
+      this.startMesh.scale.set(markerScale, 1, markerScale)
       ;(this.startMesh.material as THREE.MeshBasicMaterial).color.set(state.startColor)
     }
 
     this.endMesh.visible = state.end !== null
     if (state.end) {
-      this.endMesh.position.set(state.end.x + 0.5, START_END_POINT_DISC_Y, state.end.y + 0.5)
+      const center = getPointCenter(state.runtime, state.end)
+      this.endMesh.position.set(center.x, START_END_POINT_DISC_Y, center.y)
+      this.endMesh.scale.set(markerScale, 1, markerScale)
       ;(this.endMesh.material as THREE.MeshBasicMaterial).color.set(state.endColor)
     }
   }
@@ -455,24 +634,22 @@ export class ThreeMazeView {
     const color = new THREE.Color()
     const lineHeight = OVERLAY_LINE_HEIGHT
     const lineY = OVERLAY_LINE_Y
+    const overlayScale = getOverlayScale(state.runtime)
 
     const lineMesh = this.overlayLineMesh
     if (lineMesh) {
       let index = 0
       for (const segment of state.segments) {
-        const dx = segment.to.x - segment.from.x
-        const dz = segment.to.y - segment.from.y
-        const centerX = (segment.from.x + segment.to.x) / 2 + 0.5
-        const centerZ = (segment.from.y + segment.to.y) / 2 + 0.5
-        // Segments run between grid-adjacent cells, so they are axis-aligned;
-        // extending by the width gives square caps that merge at joints,
-        // matching the 2D round line joins closely enough.
-        if (dz === 0) {
-          matrix.makeScale(Math.abs(dx) + segment.width, lineHeight, segment.width)
-        }
-        else {
-          matrix.makeScale(segment.width, lineHeight, Math.abs(dz) + segment.width)
-        }
+        const from = getPointCenter(state.runtime, segment.from)
+        const to = getPointCenter(state.runtime, segment.to)
+        const dx = to.x - from.x
+        const dz = to.y - from.y
+        const width = segment.width * overlayScale
+        const length = Math.hypot(dx, dz)
+        matrix.makeRotationY(-Math.atan2(dz, dx))
+        matrix.scale(new THREE.Vector3(length + width, lineHeight, width))
+        const centerX = (from.x + to.x) / 2
+        const centerZ = (from.y + to.y) / 2
         matrix.setPosition(centerX, lineY, centerZ)
         lineMesh.setMatrixAt(index, matrix)
         lineMesh.setColorAt(index, color.set(segment.color))
@@ -489,8 +666,10 @@ export class ThreeMazeView {
     if (dotMesh) {
       let index = 0
       for (const dot of state.dots) {
-        matrix.makeScale(dot.radius, OVERLAY_DOT_HEIGHT, dot.radius)
-        matrix.setPosition(dot.point.x + 0.5, OVERLAY_DOT_Y, dot.point.y + 0.5)
+        const center = getPointCenter(state.runtime, dot.point)
+        const radius = dot.radius * overlayScale
+        matrix.makeScale(radius, OVERLAY_DOT_HEIGHT, radius)
+        matrix.setPosition(center.x, OVERLAY_DOT_Y, center.y)
         dotMesh.setMatrixAt(index, matrix)
         dotMesh.setColorAt(index, color.set(dot.color))
         index += 1
@@ -503,16 +682,16 @@ export class ThreeMazeView {
     }
   }
 
-  private fitCameraIfNeeded(rows: number, cols: number): void {
-    if (this.fittedGridKey !== '') {
+  private fitCameraIfNeeded(runtime: Maze, rows: number, cols: number): void {
+    const nextKey = `${runtime.grid.type}:${rows}x${cols}`
+    if (this.fittedGridKey === nextKey) {
       return
     }
-    this.fittedGridKey = `${rows}x${cols}`
     this.fitCameraToMaze(rows, cols)
+    this.fittedGridKey = nextKey
   }
 
   private fitCameraToMaze(rows: number, cols: number): void {
-    this.fittedGridKey = `${rows}x${cols}`
     const distance = this.getFitCameraDistance(rows, cols)
     const direction = new THREE.Vector3(0, 1.05, 0.95).normalize()
     this.camera.position.copy(direction.multiplyScalar(distance))

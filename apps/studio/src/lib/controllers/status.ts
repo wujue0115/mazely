@@ -86,7 +86,7 @@ export function syncUi(): void {
   triangleLayoutSelect.disabled = app.generating || app.running || app.gridType !== 'triangle'
   shapeUploadButton.disabled = app.generating || app.running
   shapeEditButton.disabled = app.generating || app.running
-  view3dButton.disabled = app.gridType === 'triangle'
+  view3dButton.disabled = false
 
   syncUiState({
     activeTab: app.activeTab,

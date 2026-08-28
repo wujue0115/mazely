@@ -177,9 +177,6 @@ gridTypeSelect.addEventListener('change', async () => {
     gridTypeSelect.value = app.gridType
     return
   }
-  if (gridType === 'triangle' && app.view3d) {
-    setView3d(false)
-  }
   setGridType(gridType)
 })
 triangleLayoutSelect.addEventListener('change', async () => {

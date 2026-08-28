@@ -9,7 +9,7 @@ published `mazely` and `@mazely/core` packages.
 ### Added
 
 - Added triangular-grid generation, solving, and editing with triangular and
-  rectangular outer layouts in the WebGL 2D view and SVG export.
+  rectangular outer layouts in the WebGL 2D and 3D views and SVG export.
 - Added topology-aware algorithm availability so square-only generators are
   disabled when a triangular grid is selected.
 - Added image-shaped triangle mazes on rectangular outer layouts, with
@@ -25,13 +25,13 @@ published `mazely` and `@mazely/core` packages.
 
 - Kept passage widths consistent when rendering thick triangular walls,
   including 60-degree and 120-degree junctions and terminal wall cuts.
+- Matched Triangle 3D wall junctions and terminal cuts to the 2D geometry.
 - Removed small protrusions where solution path segments meet on triangular
   grids by using joined path geometry.
 
 ### Known limitations
 
-- Triangular grids do not yet support the 3D view or saving to Studio `.maze`
-  files.
+- Triangular grids do not yet support saving to Studio `.maze` files.
 
 ## [0.6.1] - 2026-08-15
 

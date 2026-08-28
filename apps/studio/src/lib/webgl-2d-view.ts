@@ -159,7 +159,7 @@ function clipPolygon(
   return clipped
 }
 
-function buildTriangleWallPositions(runtime: Maze, thickness: number): Float32Array {
+export function buildTriangleWallPositions(runtime: Maze, thickness: number): Float32Array {
   const positions: number[] = []
   const closedWallKeys = new Set<string>()
   const wallCounts = new Map<string, number>()
