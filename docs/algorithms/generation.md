@@ -30,8 +30,10 @@ between any two cells until the maze is edited.
 | `wilson`             | Wilson's              |     No     | Square, Triangle | Loop-erased random walks; unbiased spanning-tree generation |
 
 `usesStart` and `supportedGridTypes` are also available at runtime through
-`MAZE_GENERATION_CAPABILITIES`. Calling a generator with an unsupported grid
-type throws before generation begins.
+`MAZE_GENERATION_CAPABILITIES`. All built-in generators currently support both
+square and triangle grids. The runtime still validates capability metadata and
+throws before generation begins if a future generator does not support the
+selected grid type.
 
 If the application does not need a specific visual style, `dfs` is the
 default. It is fast and produces long, recognizable corridors.

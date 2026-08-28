@@ -100,10 +100,9 @@ maze.solve('flood', {
 All generation algorithms support connected masks and finish with a spanning
 tree. Generation rejects a disconnected mask before changing the grid.
 
-Triangle grids support `aldous-broder`, `dfs`, `growing-tree`,
-`hunt-and-kill`, `kruskal`, `prim`, `traversal`, and `wilson`. Read
-`MAZE_GENERATION_CAPABILITIES[algorithm].supportedGridTypes` when building
-topology-aware controls; the remaining generators are square-only.
+All built-in generation algorithms support both square and triangle grids.
+Read `MAZE_GENERATION_CAPABILITIES[algorithm].supportedGridTypes` when building
+topology-aware controls so they remain aligned with runtime capabilities.
 
 Runtime registries and guards are exported as
 `MAZE_GENERATION_ALGORITHMS`, `MAZE_SOLVING_ALGORITHMS`,

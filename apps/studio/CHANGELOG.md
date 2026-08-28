@@ -10,8 +10,8 @@ published `mazely` and `@mazely/core` packages.
 
 - Added triangular-grid generation, solving, and editing with triangular and
   rectangular outer layouts in the WebGL 2D and 3D views and SVG export.
-- Added topology-aware algorithm availability so square-only generators are
-  disabled when a triangular grid is selected.
+- Added topology-aware algorithm availability driven by core capability
+  metadata.
 - Added image-shaped triangle mazes on rectangular outer layouts, with
   polygon-based image sampling, cell colors, editing tools, and triangle-aware
   connectivity checks.
