@@ -15,6 +15,8 @@ published `mazely` and `@mazely/core` packages.
 - Added image-shaped triangle mazes on rectangular outer layouts, with
   polygon-based image sampling, cell colors, editing tools, and triangle-aware
   connectivity checks.
+- Added `.maze` save and load support for triangular and rectangular Triangle
+  layouts, including masks, cell colors, and solve state.
 
 ### Changed
 
@@ -28,10 +30,6 @@ published `mazely` and `@mazely/core` packages.
 - Matched Triangle 3D wall junctions and terminal cuts to the 2D geometry.
 - Removed small protrusions where solution path segments meet on triangular
   grids by using joined path geometry.
-
-### Known limitations
-
-- Triangular grids do not yet support saving to Studio `.maze` files.
 
 ## [0.6.1] - 2026-08-15
 

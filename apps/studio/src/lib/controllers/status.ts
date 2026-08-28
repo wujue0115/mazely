@@ -78,7 +78,6 @@ export function syncUi(): void {
   loadMazeButton.disabled = app.generating || app.running
   saveMazeButton.disabled = app.generating
     || app.running
-    || app.gridType === 'triangle'
     || !app.hasGeneratedMaze
     || partialGeneration
     || partialSolve

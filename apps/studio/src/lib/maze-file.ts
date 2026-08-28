@@ -1,4 +1,4 @@
-import type { Maze, SquareCell } from 'mazely'
+import type { GridCell, Maze, SquareCell, TriangleGrid } from 'mazely'
 import type { AppliedShape } from './controllers/shape-editor'
 import type { CustomFloodTheme, FloodThemeSelection } from './flood'
 import type {
@@ -26,10 +26,13 @@ import { DEFAULT_STYLE_THEME, DEFAULT_STYLE_VISIBILITY } from './types'
 const MAGIC = new Uint8Array([0x4D, 0x5A, 0x4C, 0x59]) // MZLY
 const HEADER_SIZE = 16
 const VERSION_MAJOR = 1
-const VERSION_MINOR = 0
+const VERSION_MINOR = 1
 const CODEC_NONE = 0
 const CODEC_GZIP = 1
 const TOPOLOGY_SQUARE = 0
+const TOPOLOGY_TRIANGLE = 1
+const TRIANGLE_LAYOUT_TRIANGLE = 0
+const TRIANGLE_LAYOUT_RECTANGLE = 1
 const MAX_UNCOMPRESSED_SIZE = 64 * 1024 * 1024
 
 const CHUNK_META = 1
@@ -97,8 +100,11 @@ interface MazeFileMeta {
 
 interface DecodedTopology {
   cols: number
+  layout?: 'triangle' | 'rectangle'
   mask: boolean[][] | null
   rows: number
+  size?: number
+  type: 'square' | 'triangle'
 }
 
 interface DecodedState {
@@ -202,6 +208,7 @@ export async function decodeMazeFile(file: ArrayBuffer | Uint8Array): Promise<Lo
         cols: topology.cols,
         end: state.end,
         rows: topology.rows,
+        ...(topology.size === undefined ? {} : { size: topology.size }),
         start: state.start,
       }
     : null
@@ -238,11 +245,32 @@ export class MazeFileError extends Error {
 function encodeTopology(runtime: Maze): Uint8Array {
   const { rows, cols } = runtime.grid
   const active = new Set(runtime.grid.cells.map(cell => slotFromCell(cell, cols)))
-  const hasMask = active.size !== rows * cols
   const writer = new ByteWriter()
-  writer.u8(TOPOLOGY_SQUARE)
-  writer.varint(rows)
-  writer.varint(cols)
+
+  let expectedActiveCells: number
+  if (runtime.grid.type === 'triangle') {
+    const grid = runtime.grid as TriangleGrid
+    writer.u8(TOPOLOGY_TRIANGLE)
+    if (grid.layout === 'triangle') {
+      writer.u8(TRIANGLE_LAYOUT_TRIANGLE)
+      writer.varint(grid.size!)
+      expectedActiveCells = grid.size! ** 2
+    }
+    else {
+      writer.u8(TRIANGLE_LAYOUT_RECTANGLE)
+      writer.varint(rows)
+      writer.varint(cols)
+      expectedActiveCells = rows * cols
+    }
+  }
+  else {
+    writer.u8(TOPOLOGY_SQUARE)
+    writer.varint(rows)
+    writer.varint(cols)
+    expectedActiveCells = rows * cols
+  }
+
+  const hasMask = active.size !== expectedActiveCells
   writer.u8(hasMask ? 1 : 0)
   if (hasMask) {
     writer.bytes(encodeBitset(rows * cols, slot => active.has(slot)))
@@ -253,14 +281,40 @@ function encodeTopology(runtime: Maze): Uint8Array {
 function decodeTopology(bytes: Uint8Array): DecodedTopology {
   const reader = new ByteReader(bytes)
   const topology = reader.u8()
-  if (topology !== TOPOLOGY_SQUARE) {
+  if (topology !== TOPOLOGY_SQUARE && topology !== TOPOLOGY_TRIANGLE) {
     throw new MazeFileError(`Unsupported maze topology codec ${topology}.`)
   }
 
-  const rows = reader.varint()
-  const cols = reader.varint()
+  let type: DecodedTopology['type'] = 'square'
+  let layout: DecodedTopology['layout']
+  let size: number | undefined
+  let rows: number
+  let cols: number
+  if (topology === TOPOLOGY_TRIANGLE) {
+    type = 'triangle'
+    const layoutCodec = reader.u8()
+    if (layoutCodec === TRIANGLE_LAYOUT_TRIANGLE) {
+      layout = 'triangle'
+      size = reader.varint()
+      rows = size
+      cols = size * 2 - 1
+    }
+    else if (layoutCodec === TRIANGLE_LAYOUT_RECTANGLE) {
+      layout = 'rectangle'
+      rows = reader.varint()
+      cols = reader.varint()
+    }
+    else {
+      throw new MazeFileError(`Unsupported triangle layout codec ${layoutCodec}.`)
+    }
+  }
+  else {
+    rows = reader.varint()
+    cols = reader.varint()
+  }
+
   if (rows < 1 || cols < 1 || rows > 500 || cols > 500) {
-    throw new MazeFileError(`Invalid square topology dimensions ${cols}x${rows}.`)
+    throw new MazeFileError(`Invalid ${type} topology dimensions ${cols}x${rows}.`)
   }
 
   const flags = reader.u8()
@@ -272,10 +326,14 @@ function decodeTopology(bytes: Uint8Array): DecodedTopology {
   if (mask && !mask.some(row => row.some(Boolean))) {
     throw new MazeFileError('The topology mask excludes every cell.')
   }
-  return { cols, mask, rows }
+  return { cols, layout, mask, rows, size, type }
 }
 
 function encodeLinks(runtime: Maze): Uint8Array {
+  if (runtime.grid.type === 'triangle') {
+    return encodeBitset(runtime.grid.edges.length, index => runtime.grid.edges[index].opened)
+  }
+
   const { rows, cols } = runtime.grid
   const rightCount = rows * Math.max(cols - 1, 0)
   const linkCount = rightCount + Math.max(rows - 1, 0) * cols
@@ -298,6 +356,34 @@ function encodeLinks(runtime: Maze): Uint8Array {
 }
 
 function createRuntime(topology: DecodedTopology, links: Uint8Array): Maze {
+  if (topology.type === 'triangle') {
+    const runtime = createMaze({
+      grid: topology.layout === 'triangle'
+        ? {
+            layout: 'triangle',
+            mask: topology.mask ?? undefined,
+            size: topology.size!,
+            type: 'triangle',
+          }
+        : {
+            cols: topology.cols,
+            layout: 'rectangle',
+            mask: topology.mask ?? undefined,
+            rows: topology.rows,
+            type: 'triangle',
+          },
+    })
+    if (links.length !== bitsetSize(runtime.grid.edges.length)) {
+      throw new MazeFileError('The LINKS chunk has an invalid length.')
+    }
+    runtime.grid.edges.forEach((edge, index) => {
+      if (readBit(links, index)) {
+        edge.open()
+      }
+    })
+    return runtime
+  }
+
   const rightCount = topology.rows * Math.max(topology.cols - 1, 0)
   const linkCount = rightCount + Math.max(topology.rows - 1, 0) * topology.cols
   if (links.length !== bitsetSize(linkCount)) {
@@ -347,11 +433,16 @@ function encodeState(options: MazeFileSaveOptions): Uint8Array {
 
   writer.varint(options.solve.path.length)
   if (options.solve.path.length > 0) {
-    writer.varint(pointToSlot(options.solve.path[0], rows, cols))
-    writer.bytes(packTwoBitValues(
-      options.solve.path.slice(1).map((point, index) =>
-        directionBetween(options.solve.path[index], point)),
-    ))
+    if (options.runtime.grid.type === 'triangle') {
+      options.solve.path.forEach(point => writer.varint(pointToSlot(point, rows, cols)))
+    }
+    else {
+      writer.varint(pointToSlot(options.solve.path[0], rows, cols))
+      writer.bytes(packTwoBitValues(
+        options.solve.path.slice(1).map((point, index) =>
+          directionBetween(options.solve.path[index], point)),
+      ))
+    }
   }
 
   const head = options.solve.head
@@ -392,21 +483,33 @@ function decodeState(bytes: Uint8Array, topology: DecodedTopology, runtime: Maze
     throw new MazeFileError('The saved path is longer than the topology allows.')
   }
   if (pathLength > 0) {
-    let current = slotToPoint(reader.varint(), topology)
-    assertActiveCell(runtime, current, 'path')
-    path.push(current)
-    const directions = unpackTwoBitValues(reader.bytes(bitsetSize((pathLength - 1) * 2)), pathLength - 1)
-    for (const direction of directions) {
-      const next = movePoint(current, direction)
-      assertOpenStep(runtime, current, next)
-      path.push(next)
-      current = next
+    if (topology.type === 'triangle') {
+      for (let index = 0; index < pathLength; index += 1) {
+        const point = slotToPoint(reader.varint(), topology)
+        assertActiveCell(runtime, point, 'path')
+        if (index > 0) {
+          assertOpenStep(runtime, path[index - 1], point)
+        }
+        path.push(point)
+      }
+    }
+    else {
+      let current = slotToPoint(reader.varint(), topology)
+      assertActiveCell(runtime, current, 'path')
+      path.push(current)
+      const directions = unpackTwoBitValues(reader.bytes(bitsetSize((pathLength - 1) * 2)), pathLength - 1)
+      for (const direction of directions) {
+        const next = movePoint(current, direction)
+        assertOpenStep(runtime, current, next)
+        path.push(next)
+        current = next
+      }
     }
   }
 
   const headCount = reader.varint()
   if (headCount > 1) {
-    throw new MazeFileError('Square .maze v1 files support at most one solve head.')
+    throw new MazeFileError('.maze v1 files support at most one solve head.')
   }
   const head = headCount === 1 ? slotToPoint(reader.varint(), topology) : null
   if (head) {
@@ -574,7 +677,7 @@ function slotToPoint(slot: number, topology: DecodedTopology): MazePoint {
   return { x: slot % topology.cols, y: Math.floor(slot / topology.cols) }
 }
 
-function slotFromCell(cell: SquareCell, cols: number): number {
+function slotFromCell(cell: GridCell, cols: number): number {
   return cell.row * cols + cell.col
 }
 

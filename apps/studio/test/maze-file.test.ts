@@ -60,6 +60,7 @@ describe('.maze v1 codec', () => {
 
     expect(new TextDecoder().decode(encoded.subarray(0, 4))).toBe('MZLY')
     expect(encoded[4]).toBe(1)
+    expect(encoded[5]).toBe(1)
     expect(loaded.maze).toEqual({
       algorithm: 'dfs',
       cols: 3,
@@ -71,6 +72,115 @@ describe('.maze v1 codec', () => {
     expect(loaded.pointPreferences).toMatchObject({
       generateMode: 'manual',
       solveMode: 'auto',
+    })
+    expect(openedEdgeIds(loaded.runtime)).toEqual(openedEdgeIds(runtime))
+
+    const legacyVersion = encoded.slice()
+    legacyVersion[5] = 0
+    await expect(decodeMazeFile(legacyVersion)).resolves.toMatchObject({ maze: loaded.maze })
+  })
+
+  it('round-trips a solved triangle outer layout and its diagonal path', async () => {
+    const runtime = createMaze({ grid: { layout: 'triangle', size: 3, type: 'triangle' } })
+    runtime.setEdgeOpenedBetween({ x: 0, y: 0 }, { x: 1, y: 1 }, true)
+    runtime.setEdgeOpenedBetween({ x: 1, y: 1 }, { x: 2, y: 1 }, true)
+    const path = [
+      { x: 0, y: 0 },
+      { x: 1, y: 1 },
+      { x: 2, y: 1 },
+    ]
+
+    const encoded = await encodeMazeFile({
+      appearance,
+      pointPreferences: {
+        ...pointPreferences,
+        solveManualEnd: { x: 2, y: 1 },
+      },
+      maze: {
+        algorithm: 'dfs',
+        cols: 5,
+        end: { x: 2, y: 1 },
+        rows: 3,
+        start: { x: 0, y: 0 },
+      },
+      runtime,
+      shape: null,
+      solve: {
+        algorithm: 'dfs',
+        head: { x: 2, y: 1 },
+        path,
+        status: 'solved',
+        visited: Object.fromEntries(path.map(point => [`${point.x},${point.y}`, true])),
+      },
+    })
+    const loaded = await decodeMazeFile(encoded)
+
+    expect(loaded.runtime.grid).toMatchObject({
+      cols: 5,
+      layout: 'triangle',
+      rows: 3,
+      size: 3,
+      type: 'triangle',
+    })
+    expect(loaded.solve.path).toEqual(path)
+    expect(openedEdgeIds(loaded.runtime)).toEqual(openedEdgeIds(runtime))
+  })
+
+  it('round-trips a masked rectangular triangle layout and cell colors', async () => {
+    const mask = [
+      [true, true, true],
+      [true, true, false],
+    ]
+    const runtime = createMaze({
+      grid: { cols: 3, layout: 'rectangle', mask, rows: 2, type: 'triangle' },
+    })
+    runtime.setEdgeOpenedBetween({ x: 0, y: 0 }, { x: 0, y: 1 }, true)
+    runtime.setEdgeOpenedBetween({ x: 0, y: 1 }, { x: 1, y: 1 }, true)
+
+    const encoded = await encodeMazeFile({
+      appearance,
+      pointPreferences: {
+        ...pointPreferences,
+        solveManualEnd: { x: 1, y: 1 },
+      },
+      maze: {
+        algorithm: 'prim',
+        cols: 3,
+        end: { x: 1, y: 1 },
+        rows: 2,
+        start: { x: 0, y: 0 },
+      },
+      runtime,
+      shape: {
+        cellColors: [
+          ['#112233', '#445566', '#778899'],
+          ['#abcdef', '#fedcba', null],
+        ],
+        cellMask: mask,
+        cols: 3,
+        end: { x: 1, y: 1 },
+        rows: 2,
+        start: { x: 0, y: 0 },
+      },
+      solve: {
+        algorithm: 'bfs',
+        head: null,
+        path: [],
+        status: 'running',
+        visited: {},
+      },
+    })
+    const loaded = await decodeMazeFile(encoded)
+
+    expect(loaded.runtime.grid).toMatchObject({ layout: 'rectangle', type: 'triangle' })
+    expect(loaded.shape).toMatchObject({
+      cellColors: [
+        ['#112233', '#445566', '#778899'],
+        ['#abcdef', '#fedcba', null],
+      ],
+      cellMask: mask,
+      cols: 3,
+      rows: 2,
     })
     expect(openedEdgeIds(loaded.runtime)).toEqual(openedEdgeIds(runtime))
   })
