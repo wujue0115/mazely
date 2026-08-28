@@ -17,6 +17,13 @@ published `mazely` and `@mazely/core` packages.
   connectivity checks.
 - Added `.maze` save and load support for triangular and rectangular Triangle
   layouts, including masks, cell colors, and solve state.
+- Added Binary Tree generation for Triangle grids, including masked triangular
+  and rectangular layouts.
+- Added Eller's generation for Triangle grids with orientation-aware cross-row
+  links.
+- Added Sidewinder generation for Triangle grids with orientation-aware runs.
+- Added Recursive Division generation for Triangle grids using connected
+  topology partitions.
 
 ### Changed
 

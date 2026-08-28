@@ -17,15 +17,15 @@ between any two cells until the maze is edited.
 | ID                   | Algorithm             | Uses start | Grid types       | Character                                                   |
 | -------------------- | --------------------- | :--------: | ---------------- | ----------------------------------------------------------- |
 | `aldous-broder`      | Aldous-Broder         |     No     | Square, Triangle | Random walk; unbiased but often slow                        |
-| `binary-tree`        | Binary Tree           |     No     | Square           | Fast with a strong diagonal bias                            |
+| `binary-tree`        | Binary Tree           |     No     | Square, Triangle | Fast with a strong directional bias                         |
 | `dfs`                | Recursive Backtracker |    Yes     | Square, Triangle | Long corridors and deep branches                            |
-| `eller`              | Eller's               |     No     | Square           | Row-oriented generation with low working memory             |
+| `eller`              | Eller's               |     No     | Square, Triangle | Row-oriented generation with low working memory             |
 | `growing-tree`       | Growing Tree          |    Yes     | Square, Triangle | Newest-cell strategy; similar character to backtracking     |
 | `hunt-and-kill`      | Hunt-and-Kill         |    Yes     | Square, Triangle | Random walks separated by visible row scans                 |
 | `kruskal`            | Randomized Kruskal    |     No     | Square, Triangle | Joins many small regions into a spanning tree               |
 | `prim`               | Randomized Prim       |    Yes     | Square, Triangle | Expands from a frontier with many short branches            |
-| `recursive-division` | Recursive Division    |     No     | Square           | Starts open and adds walls recursively                      |
-| `sidewinder`         | Sidewinder            |     No     | Square           | Horizontal runs with a directional bias                     |
+| `recursive-division` | Recursive Division    |     No     | Square, Triangle | Starts open and adds walls recursively                      |
+| `sidewinder`         | Sidewinder            |     No     | Square, Triangle | Horizontal runs with a directional bias                     |
 | `traversal`          | Random Traversal      |    Yes     | Square, Triangle | Chooses a uniformly random edge from the active frontier    |
 | `wilson`             | Wilson's              |     No     | Square, Triangle | Loop-erased random walks; unbiased spanning-tree generation |
 
@@ -62,10 +62,11 @@ generation `start` option.
 
 ## Binary Tree
 
-Binary Tree visits cells in row-major order and links each cell to a random
-available north or west neighbor. It is fast and simple, but its directional
-choice creates a visible diagonal bias and predictable corridors along the
-top and left boundaries.
+On square grids, Binary Tree visits cells in row-major order and links each
+cell to a random available north or west neighbor. On triangle grids, it works
+outward from the first active cell in topology-distance layers and links each
+cell to one of up to two available neighbors in the preceding layer. It is fast
+and simple, but its directional choice creates a visible bias.
 
 ```ts
 maze.generate('binary-tree').finish()
@@ -75,8 +76,10 @@ It emits one `carve` for each selected link and does not use `start`.
 
 **Simplified flow:**
 
-1. Read the cells from the top-left toward the bottom-right.
-2. For each cell, collect its available north and west neighbors.
+1. Read square cells from the top-left, or build distance layers for triangle
+   cells from the first active cell.
+2. Collect the available north/west neighbors on Square, or up to two neighbors
+   from the preceding Triangle distance layer.
 3. Choose one candidate at random and open the connecting edge.
 4. Continue until every cell has been processed.
 
@@ -104,8 +107,9 @@ maze.generate('dfs', {
 
 Eller's algorithm processes the grid row by row. It tracks connected sets
 within the current row, joins some adjacent sets horizontally, and carries
-each set into the next row through at least one vertical link. The final row
-joins every remaining set.
+each set into the next row through at least one cross-row link. On triangle
+grids, it accounts for alternating cell orientation and the half-cell shift of
+cross-row neighbors. The final row joins every remaining set.
 
 ```ts
 maze.generate('eller').finish()
@@ -204,11 +208,16 @@ const player = maze.generate('recursive-division')
 A renderer should respond to the step patches rather than assuming generation
 always opens walls.
 
+Square grids are divided with straight horizontal or vertical walls. Triangle
+grids are divided into connected topology regions using balanced spanning-tree
+cuts; all cross-region edges are closed except for one randomly selected
+passage.
+
 **Simplified flow:**
 
 1. Start with every internal edge open.
-2. Select one remaining rectangular region.
-3. Split it with a horizontal or vertical wall, leaving one random passage.
+2. Select one remaining geometric or topology region.
+3. Split it into two connected regions, leaving one random passage.
 4. Add the two resulting regions to the work list.
 5. Continue until no region can be divided further.
 
@@ -236,8 +245,10 @@ const random = createGrowingTreeAlgorithm('random')
 ## Sidewinder
 
 Sidewinder builds horizontal runs from west to east. When it closes a run, it
-chooses one cell in that run to connect north. The top row becomes a long
-horizontal corridor and the rest of the maze has a strong directional bias.
+chooses one eligible cell in that run for a cross-row connection. On triangle
+grids, it keeps enough alternating-orientation cells in the remaining run to
+guarantee a later cross-row link. The top row becomes a long horizontal
+corridor and the rest of the maze has a strong directional bias.
 
 ```ts
 maze.generate('sidewinder').finish()
@@ -250,8 +261,9 @@ horizontal run.
 
 1. Process one row from west to east while collecting a horizontal run.
 2. Randomly decide whether to extend the run east or close it.
-3. When closing, choose one cell in the run that can connect north.
-4. Open that northern edge and begin a new run.
+3. When closing, choose one cell in the run that can connect to the previous
+   row.
+4. Open that cross-row edge and begin a new run.
 5. Repeat for every row.
 
 ## Random Traversal

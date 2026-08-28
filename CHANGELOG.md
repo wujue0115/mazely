@@ -19,8 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Added `supportedGridTypes` to generation algorithm capabilities. Triangle
-  grids support Aldous-Broder, DFS, Growing Tree, Hunt-and-Kill, Kruskal, Prim,
-  Random Traversal, and Wilson generation.
+  grids support Aldous-Broder, Binary Tree, DFS, Eller's, Growing Tree,
+  Hunt-and-Kill, Kruskal, Prim, Random Traversal, Recursive Division,
+  Sidewinder, and Wilson generation.
 
 ## [0.3.0] - 2026-08-06
 

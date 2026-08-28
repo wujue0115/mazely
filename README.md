@@ -181,8 +181,9 @@ triangle.generate('prim').finish()
 `size` is the number of smallest triangles along each side. A grid of size
 `n` contains `n²` cells and has a triangular outer boundary.
 
-Triangle grids currently support Aldous-Broder, DFS, Growing Tree,
-Hunt-and-Kill, Kruskal, Prim, Random Traversal, and Wilson generation.
+Triangle grids currently support Aldous-Broder, Binary Tree, DFS, Eller's,
+Growing Tree, Hunt-and-Kill, Kruskal, Prim, Random Traversal, Recursive
+Division, Sidewinder, and Wilson generation.
 
 Use a rectangular boundary when the outer shape should remain rectangular:
 

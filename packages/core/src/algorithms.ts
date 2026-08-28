@@ -36,15 +36,15 @@ export interface MazeSolvingAlgorithmCapabilities {
 
 export const MAZE_GENERATION_CAPABILITIES = Object.freeze({
   'aldous-broder': { supportedGridTypes: ['square', 'triangle'], supportsMasks: true, usesStart: false },
-  'binary-tree': { supportedGridTypes: ['square'], supportsMasks: true, usesStart: false },
+  'binary-tree': { supportedGridTypes: ['square', 'triangle'], supportsMasks: true, usesStart: false },
   'dfs': { supportedGridTypes: ['square', 'triangle'], supportsMasks: true, usesStart: true },
-  'eller': { supportedGridTypes: ['square'], supportsMasks: true, usesStart: false },
+  'eller': { supportedGridTypes: ['square', 'triangle'], supportsMasks: true, usesStart: false },
   'growing-tree': { supportedGridTypes: ['square', 'triangle'], supportsMasks: true, usesStart: true },
   'hunt-and-kill': { supportedGridTypes: ['square', 'triangle'], supportsMasks: true, usesStart: true },
   'kruskal': { supportedGridTypes: ['square', 'triangle'], supportsMasks: true, usesStart: false },
   'prim': { supportedGridTypes: ['square', 'triangle'], supportsMasks: true, usesStart: true },
-  'recursive-division': { supportedGridTypes: ['square'], supportsMasks: true, usesStart: false },
-  'sidewinder': { supportedGridTypes: ['square'], supportsMasks: true, usesStart: false },
+  'recursive-division': { supportedGridTypes: ['square', 'triangle'], supportsMasks: true, usesStart: false },
+  'sidewinder': { supportedGridTypes: ['square', 'triangle'], supportsMasks: true, usesStart: false },
   'traversal': { supportedGridTypes: ['square', 'triangle'], supportsMasks: true, usesStart: true },
   'wilson': { supportedGridTypes: ['square', 'triangle'], supportsMasks: true, usesStart: false },
 } satisfies Record<MazeGenerationAlgorithm, MazeGenerationAlgorithmCapabilities>)
