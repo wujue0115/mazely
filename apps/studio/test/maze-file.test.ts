@@ -126,6 +126,79 @@ describe('.maze v1 codec', () => {
     expect(openedEdgeIds(loaded.runtime)).toEqual(openedEdgeIds(runtime))
   })
 
+  it.each([250, 251, 500])('round-trips a triangle outer layout with size %i', async (size) => {
+    const runtime = createMaze({ grid: { layout: 'triangle', size, type: 'triangle' } })
+    const end = { x: size * 2 - 2, y: size - 1 }
+    const encoded = await encodeMazeFile({
+      appearance,
+      pointPreferences: {
+        ...pointPreferences,
+        solveManualEnd: end,
+      },
+      maze: {
+        algorithm: 'dfs',
+        cols: size * 2 - 1,
+        end,
+        rows: size,
+        start: { x: 0, y: 0 },
+      },
+      runtime,
+      shape: null,
+      solve: {
+        algorithm: 'dfs',
+        head: null,
+        path: [],
+        status: 'running',
+        visited: {},
+      },
+    })
+
+    const loaded = await decodeMazeFile(encoded)
+
+    expect(loaded.runtime.grid).toMatchObject({
+      cols: size * 2 - 1,
+      layout: 'triangle',
+      rows: size,
+      size,
+      type: 'triangle',
+    })
+  })
+
+  it.each([
+    { grid: { cols: 501, rows: 1, type: 'square' } as const, label: 'square' },
+    {
+      grid: { cols: 501, layout: 'rectangle', rows: 1, type: 'triangle' } as const,
+      label: 'rectangular triangle',
+    },
+  ])('keeps the 500-column limit for $label layouts', async ({ grid }) => {
+    const runtime = createMaze({ grid })
+    const encoded = await encodeMazeFile({
+      appearance,
+      pointPreferences: {
+        ...pointPreferences,
+        solveManualEnd: { x: 500, y: 0 },
+      },
+      maze: {
+        algorithm: 'dfs',
+        cols: 501,
+        end: { x: 500, y: 0 },
+        rows: 1,
+        start: { x: 0, y: 0 },
+      },
+      runtime,
+      shape: null,
+      solve: {
+        algorithm: 'dfs',
+        head: null,
+        path: [],
+        status: 'running',
+        visited: {},
+      },
+    })
+
+    await expect(decodeMazeFile(encoded)).rejects.toThrow('Invalid')
+  })
+
   it('round-trips a masked rectangular triangle layout and cell colors', async () => {
     const mask = [
       [true, true, true],

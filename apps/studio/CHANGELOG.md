@@ -32,6 +32,8 @@ published `mazely` and `@mazely/core` packages.
 
 ### Fixed
 
+- Allowed `.maze` files to reload triangular outer layouts up to the Studio
+  size limit, including their derived logical column counts above 500.
 - Kept passage widths consistent when rendering thick triangular walls,
   including 60-degree and 120-degree junctions and terminal wall cuts.
 - Matched Triangle 3D wall junctions and terminal cuts to the 2D geometry.

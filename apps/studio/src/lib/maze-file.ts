@@ -22,6 +22,7 @@ import {
 } from './flood'
 import { key, parsePointKey } from './point'
 import { DEFAULT_STYLE_THEME, DEFAULT_STYLE_VISIBILITY } from './types'
+import { GRID_DIMENSION_MAX } from './utils'
 
 const MAGIC = new Uint8Array([0x4D, 0x5A, 0x4C, 0x59]) // MZLY
 const HEADER_SIZE = 16
@@ -313,7 +314,12 @@ function decodeTopology(bytes: Uint8Array): DecodedTopology {
     cols = reader.varint()
   }
 
-  if (rows < 1 || cols < 1 || rows > 500 || cols > 500) {
+  if (layout === 'triangle'
+    && (size === undefined || size < 1 || size > GRID_DIMENSION_MAX)) {
+    throw new MazeFileError(`Invalid triangle topology size ${size}.`)
+  }
+  if (layout !== 'triangle'
+    && (rows < 1 || cols < 1 || rows > GRID_DIMENSION_MAX || cols > GRID_DIMENSION_MAX)) {
     throw new MazeFileError(`Invalid ${type} topology dimensions ${cols}x${rows}.`)
   }
 
