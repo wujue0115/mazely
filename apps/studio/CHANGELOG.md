@@ -6,6 +6,8 @@ published `mazely` and `@mazely/core` packages.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-08-31
+
 ### Added
 
 - Added triangular-grid generation, solving, and editing with triangular and
