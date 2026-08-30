@@ -1,19 +1,25 @@
+import type { TriangleGrid } from 'mazely'
 import { cellIdToPoint, pointToCellId, traverseGrid } from 'mazely'
 import { app } from '../app-state'
 import { bumpGenerationCacheVersion, bumpSolveCacheVersion } from '../derived'
 import {
   generationSelect,
+  gridTypeSelect,
   loadMazeButton,
   loadMazeFileInput,
   saveMazeButton,
   shapeColorsInput,
   solvingSelect,
+  triangleLayoutField,
+  triangleLayoutSelect,
   useViewportRatioInput,
   wallHeightRange,
   wallRange,
 } from '../dom'
 import { DEFAULT_CUSTOM_FLOOD_THEME } from '../flood'
+import { triangleRectangleCellColsToVisualCols } from '../grid-geometry'
 import {
+  createMazeFilename,
   decodeMazeFile,
   encodeMazeFile,
   MazeFileError,
@@ -105,7 +111,7 @@ async function saveMazeFile(): Promise<void> {
         visited: app.stepState.visited,
       },
     })
-    downloadBytes(`mazely-${app.maze.cols}x${app.maze.rows}.maze`, bytes)
+    downloadBytes(createMazeFilename(app.mazeRuntime!), bytes)
     showToast('Maze file saved.')
   }
   catch (error) {
@@ -132,9 +138,20 @@ async function loadMazeFile(file: File): Promise<void> {
     stopSolveAnimation()
     clearGenerationPreviewState()
 
-    app.mazeWidth = loaded.maze.cols
-    app.mazeHeight = loaded.maze.rows
-    app.lockedGridRatio = loaded.maze.cols / loaded.maze.rows
+    app.gridType = loaded.runtime.grid.type
+    if (loaded.runtime.grid.type === 'triangle') {
+      const grid = loaded.runtime.grid as TriangleGrid
+      app.triangleLayout = grid.layout
+      app.mazeWidth = grid.layout === 'triangle'
+        ? grid.size!
+        : triangleRectangleCellColsToVisualCols(grid.cols)
+      app.mazeHeight = grid.layout === 'triangle' ? grid.size! : grid.rows
+    }
+    else {
+      app.mazeWidth = loaded.maze.cols
+      app.mazeHeight = loaded.maze.rows
+    }
+    app.lockedGridRatio = app.mazeWidth / app.mazeHeight
     app.hasValidGridDimensions = true
     app.useViewportRatio = false
     app.maze = loaded.maze
@@ -153,6 +170,9 @@ async function loadMazeFile(file: File): Promise<void> {
     app.floodDepthByKey = {}
 
     generationSelect.value = loaded.maze.algorithm
+    gridTypeSelect.value = loaded.runtime.grid.type
+    triangleLayoutSelect.value = app.triangleLayout
+    triangleLayoutField.classList.toggle('is-hidden', app.gridType !== 'triangle')
     solvingSelect.value = loaded.solve.algorithm
     useViewportRatioInput.checked = false
     if (loaded.solve.status === 'generated') {

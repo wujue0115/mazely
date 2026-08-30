@@ -37,22 +37,19 @@ renderers.
 ## Features
 
 - Twelve maze generation algorithms and five solving algorithms
-- `StepPlayer` API for incremental execution or immediate completion
 - Deterministic generation with string or numeric seeds
-- Square grids with optional masks for custom maze shapes
-- Transactional maze editing and compact grid serialization
-- No animation loop, DOM, Canvas, WebGL, or renderer dependency
-- Full TypeScript types and ESM output
+- Square and triangular grids with custom masks
+- Step-by-step execution or immediate completion
+- Transactional maze editing with lifecycle events
+- JSON-safe maze serialization
+- Framework-agnostic TypeScript API with ESM support
 
-## Package Scope
+## Built with Mazely
 
-Mazely provides maze state, algorithms, progress steps, events, editing, and
-serialization. It does not draw a maze, schedule animation frames, or provide
-playback UI controls.
-
-[Mazely Studio](https://studio.mazely.dev) is a separate application built on
-top of the packages. Its 2D and 3D rendering, animation timing, interface, and
-export features belong to Studio and are not part of the `mazely` npm API.
+- [Mazely Studio](https://studio.mazely.dev/) - an interactive maze playground
+  for generating, solving, editing, and visualizing mazes.
+- [V-CONF × Mazely](https://v-conf.mazely.dev/) - interactive 3D Vue and Vite
+  logo mazes for V-CONF.
 
 ## Packages
 
@@ -162,6 +159,41 @@ generation.finish()
 The main package also exports algorithm factories, grid types, `StepPlayer`,
 serialization helpers, seeded random utilities, and all public TypeScript
 types.
+
+Triangular grids use alternating up/down cells with at most three neighbors:
+
+```ts
+const triangle = createMaze({
+  grid: {
+    type: 'triangle',
+    layout: 'triangle',
+    size: 20,
+  },
+  seed: 'triangles',
+})
+
+triangle.generate('prim').finish()
+```
+
+`size` is the number of smallest triangles along each side. A grid of size
+`n` contains `n²` cells and has a triangular outer boundary.
+
+Triangle grids currently support Aldous-Broder, Binary Tree, DFS, Eller's,
+Growing Tree, Hunt-and-Kill, Kruskal, Prim, Random Traversal, Recursive
+Division, Sidewinder, and Wilson generation.
+
+Use a rectangular boundary when the outer shape should remain rectangular:
+
+```ts
+const triangleRectangle = createMaze({
+  grid: {
+    type: 'triangle',
+    layout: 'rectangle',
+    rows: 20,
+    cols: 40,
+  },
+})
+```
 
 ## Algorithms
 

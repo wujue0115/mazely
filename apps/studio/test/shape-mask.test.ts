@@ -6,6 +6,8 @@ import {
   countMaskCells,
   findFarthestMaskCells,
   findMaskRegions,
+  findShapeCellAtPixel,
+  getShapeGridDimensions,
   keepLargestMaskRegion,
   prunePixelMaskToCells,
   removeSimilarCells,
@@ -97,6 +99,32 @@ describe('shape-mask', () => {
     expect(cellMask).toEqual([[true, false], [true, false]])
   })
 
+  it('builds ragged masks for a triangular outer layout', () => {
+    const pixelMask = { data: new Uint8Array(120 * 104).fill(1), height: 104, width: 120 }
+    const topology = { layout: 'triangle', type: 'triangle' } as const
+    const dimensions = getShapeGridDimensions(120, 104, 3, topology)
+    const cellMask = buildCellMask(pixelMask, dimensions.cols, dimensions.rows, topology)
+
+    expect(dimensions).toEqual({ cols: 5, rows: 3 })
+    expect(cellMask.map(row => row.length)).toEqual([1, 3, 5])
+    expect(countMaskCells(cellMask)).toBe(9)
+  })
+
+  it('uses visual width for rectangular triangle image grids', () => {
+    const topology = { layout: 'rectangle', type: 'triangle' } as const
+
+    expect(getShapeGridDimensions(200, 100, 4, topology)).toEqual({ cols: 7, rows: 2 })
+  })
+
+  it('hit-tests the actual polygons of rectangular triangle cells', () => {
+    const bitmap = { height: 100, width: 150 }
+    const topology = { layout: 'rectangle', type: 'triangle' } as const
+
+    expect(findShapeCellAtPixel(bitmap, 50, 67, 2, 1, topology)).toEqual({ x: 0, y: 0 })
+    expect(findShapeCellAtPixel(bitmap, 100, 33, 2, 1, topology)).toEqual({ x: 1, y: 0 })
+    expect(findShapeCellAtPixel(bitmap, 1, 1, 2, 1, topology)).toBeNull()
+  })
+
   it('counts connected regions with 4-connectivity', () => {
     const mask = maskFromStrings([
       '##..#',
@@ -109,6 +137,26 @@ describe('shape-mask', () => {
     expect(regions.count).toBe(3)
     expect(regions.cellCount).toBe(7)
     expect(regions.largestSize).toBe(4)
+  })
+
+  it('uses triangle orientation for vertical connectivity', () => {
+    const topology = { layout: 'rectangle', type: 'triangle' } as const
+
+    expect(findMaskRegions([[true, false], [true, false]], topology).count).toBe(1)
+    expect(findMaskRegions([[false, true], [false, true]], topology).count).toBe(2)
+  })
+
+  it('keeps the largest region using triangle adjacency', () => {
+    const topology = { layout: 'rectangle', type: 'triangle' } as const
+    const pruned = keepLargestMaskRegion([
+      [true, false, true],
+      [true, false, false],
+    ], topology)
+
+    expect(pruned).toEqual([
+      [true, false, false],
+      [true, false, false],
+    ])
   })
 
   it('keeps only the largest region', () => {

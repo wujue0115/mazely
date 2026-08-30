@@ -1,4 +1,4 @@
-import type { CellId, MazeAlgorithm, MazeContext, MazeGenerationStep, SquareCell } from '../types'
+import type { CellId, GridCell, MazeAlgorithm, MazeContext, MazeGenerationStep } from '../types'
 import { buildCarveStep } from './shared'
 
 class UnionFind {
@@ -39,10 +39,10 @@ class UnionFind {
   }
 }
 
-class KruskalSquareAlgorithm implements MazeAlgorithm<SquareCell, MazeGenerationStep> {
+class KruskalAlgorithm implements MazeAlgorithm<GridCell, MazeGenerationStep> {
   name = 'kruskal';
 
-  * generate(context: MazeContext<SquareCell>): IterableIterator<MazeGenerationStep> {
+  * generate(context: MazeContext<GridCell>): IterableIterator<MazeGenerationStep> {
     const cellIndexById = new Map<CellId, number>()
     context.grid.cells.forEach((cell, index) => {
       cellIndexById.set(cell.id, index)
@@ -67,6 +67,6 @@ class KruskalSquareAlgorithm implements MazeAlgorithm<SquareCell, MazeGeneration
   }
 }
 
-export function createKruskalAlgorithm(): MazeAlgorithm<SquareCell, MazeGenerationStep> {
-  return new KruskalSquareAlgorithm()
+export function createKruskalAlgorithm(): MazeAlgorithm<GridCell, MazeGenerationStep> {
+  return new KruskalAlgorithm()
 }

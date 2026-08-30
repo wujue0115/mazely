@@ -26,8 +26,8 @@ same separation applies to SVG, WebGL, terminal, and game renderers.
 
 ## Generating a Shaped Maze
 
-Use a boolean mask to exclude square-grid cells, validate connected shapes,
-and choose valid start and end points.
+Use a boolean mask to exclude grid cells, validate connected shapes according
+to the selected topology, and choose valid start and end points.
 
 [Generate a masked maze →](/recipes/masked-maze)
 

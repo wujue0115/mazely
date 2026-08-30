@@ -1,7 +1,15 @@
-import type { CellId, MazeGrid } from '../types'
+import type { CellId, GridCell, MazeGrid } from '../types'
 import { MazeEdge, pointToCellId, SquareCell } from '../types'
 
-class SquareGrid implements MazeGrid<SquareCell> {
+export interface SquareGrid extends MazeGrid<GridCell> {
+  readonly type: 'square'
+  readonly cells: SquareCell[]
+  getCell: (id: CellId) => SquareCell | undefined
+  getNeighbors: (cell: GridCell) => SquareCell[]
+}
+
+class SquareGridImpl implements SquareGrid {
+  readonly type = 'square' as const
   readonly rows: number
   readonly cols: number
   readonly cells: SquareCell[]
@@ -67,11 +75,11 @@ class SquareGrid implements MazeGrid<SquareCell> {
     return this.cellsById.get(id)
   }
 
-  getNeighbors(cell: SquareCell): SquareCell[] {
+  getNeighbors(cell: GridCell): SquareCell[] {
     return cell.getNeighbors() as SquareCell[]
   }
 
-  getEdges(cell: SquareCell) {
+  getEdges(cell: GridCell) {
     return cell.getEdges()
   }
 }
@@ -79,11 +87,11 @@ class SquareGrid implements MazeGrid<SquareCell> {
 /** Cell inclusion mask indexed as `mask[row][col]`; `true` keeps the cell. */
 export type SquareGridMask = readonly (readonly boolean[])[]
 
-export function createSquareGrid(rows: number, cols: number, mask?: SquareGridMask): MazeGrid<SquareCell> {
+export function createSquareGrid(rows: number, cols: number, mask?: SquareGridMask): SquareGrid {
   if (!Number.isInteger(rows) || !Number.isInteger(cols) || rows <= 0 || cols <= 0) {
     throw new TypeError(`rows and cols must be positive integers, received rows=${rows}, cols=${cols}`)
   }
-  const grid = new SquareGrid(rows, cols, mask)
+  const grid = new SquareGridImpl(rows, cols, mask)
   if (grid.cells.length === 0) {
     throw new TypeError('mask excludes every cell; at least one cell must remain')
   }

@@ -4,6 +4,56 @@ All notable changes to the continuously deployed Mazely Studio app are
 documented in this file. Studio versions advance independently from the
 published `mazely` and `@mazely/core` packages.
 
+## [Unreleased]
+
+## [0.7.0] - 2026-08-31
+
+### Added
+
+- Added triangular-grid generation, solving, and editing with triangular and
+  rectangular outer layouts in the WebGL 2D and 3D views and SVG export.
+- Added topology-aware algorithm availability driven by core capability
+  metadata.
+- Added image-shaped triangle mazes on rectangular outer layouts, with
+  polygon-based image sampling, cell colors, editing tools, and triangle-aware
+  connectivity checks.
+- Added `.maze` save and load support for triangular and rectangular Triangle
+  layouts, including masks, cell colors, and solve state.
+- Added Binary Tree generation for Triangle grids, including masked triangular
+  and rectangular layouts.
+- Added Eller's generation for Triangle grids with orientation-aware cross-row
+  links.
+- Added Sidewinder generation for Triangle grids with orientation-aware runs.
+- Added Recursive Division generation for Triangle grids using connected
+  topology partitions.
+
+### Changed
+
+- Grid topology and Triangle layout changes now ask for confirmation before
+  discarding an existing maze, applied shape, or generation progress.
+- Maze download filenames now include the local save date and time.
+- Defined the initial versioned `.maze` v1 format with canonical topology links
+  and explicit shape-presence metadata.
+
+### Fixed
+
+- Improved large Triangle animation performance by caching wall topology,
+  junction geometry, and 3D extrusion chunks while preserving live appearance
+  updates.
+- Allowed `.maze` files to reload triangular outer layouts up to the Studio
+  size limit, including their derived logical column counts above 500.
+- Preserved image shapes and their cell colors when every grid cell is kept in
+  saved `.maze` files.
+- Enabled viewport-ratio sizing for rectangular Triangle layouts using their
+  triangular cell dimensions.
+- Displayed Hunt-and-Kill row scan lines for rectangular and triangular
+  Triangle layouts in both 2D and 3D views.
+- Kept passage widths consistent when rendering thick triangular walls,
+  including 60-degree and 120-degree junctions and terminal wall cuts.
+- Matched Triangle 3D wall junctions and terminal cuts to the 2D geometry.
+- Removed small protrusions where solution path segments meet on triangular
+  grids by using joined path geometry.
+
 ## [0.6.1] - 2026-08-15
 
 ### Fixed

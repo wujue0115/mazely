@@ -1,4 +1,5 @@
 import type {
+  GridCell,
   MazeEditor,
   MazeGenerationAlgorithm,
   MazeGenerationStep,
@@ -14,7 +15,6 @@ import type {
   MazeSolvingAlgorithm,
   MazeSolvingStep,
   SolveMazeResult,
-  SquareCell,
   StepPlayer,
 } from '@mazely/core'
 import { Mazely as MazelyRuntime } from '@mazely/core'
@@ -32,6 +32,7 @@ export type {
   MazeGenerationAlgorithmCapabilities,
   MazeGenerationStep,
   MazeGrid,
+  MazeGridType,
   MazeHuntScanPayload,
   MazelyEventHandler,
   MazelyEventName,
@@ -58,11 +59,16 @@ export type {
   RandomLike,
   SerializedMaze,
   SolveMazeResult,
+  SquareGrid,
   SquareGridMask,
   StepPlayerEvent,
   StepPlayerEventPayload,
   StepPlayerOptions,
   StepPlayerProgress,
+  TriangleGrid,
+  TriangleGridLayout,
+  TriangleGridMask,
+  TriangleOrientation,
 } from '@mazely/core'
 
 export {
@@ -88,9 +94,11 @@ export {
   createSolveFloodAlgorithm,
   createSquareGrid,
   createTraversalAlgorithm,
+  createTriangleGrid,
   createWilsonAlgorithm,
   getLinkedNeighbors,
   getReachableCellIds,
+  GridCell,
   isMazeGenerationAlgorithm,
   isMazeSolvingAlgorithm,
   MAZE_GENERATION_ALGORITHMS,
@@ -107,6 +115,7 @@ export {
   SquareCell,
   StepPlayer,
   traverseGrid,
+  TriangleCell,
   withSpanningTreeGuarantee,
 } from '@mazely/core'
 
@@ -120,7 +129,7 @@ export type MazeEventName = MazelyEventName
 export type MazeGridOptions = MazelyGridOptions
 
 export interface Maze {
-  readonly grid: MazeGrid<SquareCell>
+  readonly grid: MazeGrid<GridCell>
 
   generate: (
     algorithm: MazeGenerationAlgorithm,

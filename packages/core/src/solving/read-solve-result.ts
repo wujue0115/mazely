@@ -1,8 +1,8 @@
-import type { MazeGrid, MazePoint, MazeSolvingAlgorithm, SolveMazeResult, SquareCell } from '../types'
+import type { GridCell, MazeGrid, MazePoint, MazeSolvingAlgorithm, SolveMazeResult } from '../types'
 import { pointToCellId } from '../types'
 
 export function readSolveResult(options: {
-  grid: MazeGrid<SquareCell>
+  grid: MazeGrid<GridCell>
   end: MazePoint
   algorithm: MazeSolvingAlgorithm
 }): SolveMazeResult {
@@ -19,10 +19,10 @@ export function readSolveResult(options: {
   }
 }
 
-function reconstructPath(grid: MazeGrid<SquareCell>, end: SquareCell): MazePoint[] {
+function reconstructPath(grid: MazeGrid<GridCell>, end: GridCell): MazePoint[] {
   const out: MazePoint[] = []
   const seen = new Set<string>()
-  let current: SquareCell | undefined = end
+  let current: GridCell | undefined = end
 
   while (current && !seen.has(current.id)) {
     seen.add(current.id)

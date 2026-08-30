@@ -1149,7 +1149,7 @@ input[type='checkbox'].switch:checked::before {
 /* ---------- Side panels ---------- */
 
 .side-panel {
-  --side-panel-height: min(720px, calc(100vh - 102px));
+  --side-panel-height: min(724px, calc(100vh - 102px));
   --side-panel-width: min(var(--panel-width), 100vw);
 
   position: fixed;
@@ -1631,6 +1631,7 @@ input[type='checkbox'].switch:checked::before {
   align-items: center;
   justify-content: space-between;
   gap: var(--ui-gap-sm);
+  margin-top: var(--ui-gap-sm);
 }
 
 .shape-status {
@@ -1930,6 +1931,28 @@ input[type='checkbox'].switch:checked::before {
 
 .export-dialog-footer {
   padding: var(--ui-pad-lg);
+}
+
+.confirmation-dialog-window {
+  width: min(460px, calc(100vw - 32px));
+}
+
+.confirmation-dialog-body {
+  padding: var(--ui-pad-lg);
+}
+
+.confirmation-dialog-body p {
+  margin: 0;
+  color: var(--on-surface-variant);
+  font: var(--text-body-md);
+  line-height: 1.55;
+}
+
+.confirmation-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--ui-gap-sm);
+  padding: 0 var(--ui-pad-lg) var(--ui-pad-lg);
 }
 
 .flood-curve-window {

@@ -1,16 +1,23 @@
-import type { MazeAlgorithm, MazeContext, MazeGenerationStep, SquareCell } from '../types'
+import type { GridCell, MazeAlgorithm, MazeContext, MazeGenerationStep } from '../types'
 import { edgeBetween } from './grid-helpers'
 import { buildCarveStep } from './shared'
 
-class BinaryTreeSquareAlgorithm implements MazeAlgorithm<SquareCell, MazeGenerationStep> {
+class BinaryTreeAlgorithm implements MazeAlgorithm<GridCell, MazeGenerationStep> {
   name = 'binary-tree';
 
-  * generate(context: MazeContext<SquareCell>): IterableIterator<MazeGenerationStep> {
+  * generate(context: MazeContext<GridCell>): IterableIterator<MazeGenerationStep> {
     const cells = [...context.grid.cells].sort((a, b) => a.row - b.row || a.col - b.col)
+    const triangleDepths = context.grid.type === 'triangle'
+      ? getTriangleDepths(context, cells[0])
+      : null
 
     for (const cell of cells) {
-      const candidates = context.grid.getNeighbors(cell)
-        .filter(neighbor => neighbor.row < cell.row || neighbor.col < cell.col)
+      const candidates = triangleDepths
+        ? context.grid.getNeighbors(cell)
+            .filter(neighbor => triangleDepths.get(neighbor.id) === triangleDepths.get(cell.id)! - 1)
+            .slice(0, 2)
+        : context.grid.getNeighbors(cell)
+            .filter(neighbor => neighbor.row < cell.row || neighbor.col < cell.col)
       if (candidates.length === 0) {
         continue
       }
@@ -24,6 +31,23 @@ class BinaryTreeSquareAlgorithm implements MazeAlgorithm<SquareCell, MazeGenerat
   }
 }
 
-export function createBinaryTreeAlgorithm(): MazeAlgorithm<SquareCell, MazeGenerationStep> {
-  return new BinaryTreeSquareAlgorithm()
+export function createBinaryTreeAlgorithm(): MazeAlgorithm<GridCell, MazeGenerationStep> {
+  return new BinaryTreeAlgorithm()
+}
+
+function getTriangleDepths(context: MazeContext<GridCell>, root: GridCell): Map<string, number> {
+  const depths = new Map<string, number>([[root.id, 0]])
+  const queue = [root]
+  for (let index = 0; index < queue.length; index += 1) {
+    const cell = queue[index]
+    const depth = depths.get(cell.id)!
+    for (const neighbor of context.grid.getNeighbors(cell)) {
+      if (depths.has(neighbor.id)) {
+        continue
+      }
+      depths.set(neighbor.id, depth + 1)
+      queue.push(neighbor)
+    }
+  }
+  return depths
 }

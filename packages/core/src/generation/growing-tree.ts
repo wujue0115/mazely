@@ -1,4 +1,4 @@
-import type { CellId, MazeAlgorithm, MazeContext, MazeEdge, MazeGenerationStep, MazePoint, SquareCell } from '../types'
+import type { CellId, GridCell, MazeAlgorithm, MazeContext, MazeEdge, MazeGenerationStep, MazePoint } from '../types'
 import { buildCarveStep, resolveStartCell } from './shared'
 
 /**
@@ -11,18 +11,18 @@ export type GrowingTreeStrategy = 'random' | 'newest' | 'oldest'
 
 interface FrontierEdge {
   edge: MazeEdge
-  from: SquareCell
-  to: SquareCell
+  from: GridCell
+  to: GridCell
 }
 
-class GrowingTreeSquareAlgorithm implements MazeAlgorithm<SquareCell, MazeGenerationStep> {
+class GrowingTreeAlgorithm implements MazeAlgorithm<GridCell, MazeGenerationStep> {
   constructor(
     public readonly name: string,
     private readonly strategy: GrowingTreeStrategy,
     private readonly start?: MazePoint,
   ) {}
 
-  * generate(context: MazeContext<SquareCell>): IterableIterator<MazeGenerationStep> {
+  * generate(context: MazeContext<GridCell>): IterableIterator<MazeGenerationStep> {
     const first = resolveStartCell(context, this.start)
     if (!first) {
       return
@@ -46,7 +46,7 @@ class GrowingTreeSquareAlgorithm implements MazeAlgorithm<SquareCell, MazeGenera
     }
   }
 
-  private pickIndex(context: MazeContext<SquareCell>, length: number): number {
+  private pickIndex(context: MazeContext<GridCell>, length: number): number {
     if (this.strategy === 'newest')
       return length - 1
     if (this.strategy === 'oldest')
@@ -55,14 +55,14 @@ class GrowingTreeSquareAlgorithm implements MazeAlgorithm<SquareCell, MazeGenera
   }
 
   private pushFrontierEdges(
-    context: MazeContext<SquareCell>,
-    cell: SquareCell,
+    context: MazeContext<GridCell>,
+    cell: GridCell,
     visited: Set<CellId>,
     frontier: FrontierEdge[],
   ): void {
     const candidates: FrontierEdge[] = []
     for (const edge of context.grid.getEdges(cell)) {
-      const other = edge.getOther(cell) as SquareCell | null
+      const other = edge.getOther(cell) as GridCell | null
       if (!other || visited.has(other.id)) {
         continue
       }
@@ -78,10 +78,10 @@ class GrowingTreeSquareAlgorithm implements MazeAlgorithm<SquareCell, MazeGenera
 export function createGrowingTreeAlgorithm(
   strategy: GrowingTreeStrategy,
   start?: MazePoint,
-): MazeAlgorithm<SquareCell, MazeGenerationStep> {
-  return new GrowingTreeSquareAlgorithm(`growing-tree-${strategy}`, strategy, start)
+): MazeAlgorithm<GridCell, MazeGenerationStep> {
+  return new GrowingTreeAlgorithm(`growing-tree-${strategy}`, strategy, start)
 }
 
-export function createTraversalAlgorithm(start?: MazePoint): MazeAlgorithm<SquareCell, MazeGenerationStep> {
-  return new GrowingTreeSquareAlgorithm('traversal', 'random', start)
+export function createTraversalAlgorithm(start?: MazePoint): MazeAlgorithm<GridCell, MazeGenerationStep> {
+  return new GrowingTreeAlgorithm('traversal', 'random', start)
 }

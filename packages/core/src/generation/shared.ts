@@ -1,10 +1,10 @@
-import type { MazeCell, MazeContext, MazeEdge, MazeGenerationStep, MazePoint, SquareCell } from '../types'
+import type { GridCell, MazeCell, MazeContext, MazeEdge, MazeGenerationStep, MazePoint } from '../types'
 import { pointToCellId } from '../types'
 
 export function resolveStartCell(
-  context: MazeContext<SquareCell>,
+  context: MazeContext<GridCell>,
   start?: MazePoint,
-): SquareCell | undefined {
+): GridCell | undefined {
   if (start) {
     return context.grid.getCell(pointToCellId(start)) ?? context.grid.cells[0]
   }

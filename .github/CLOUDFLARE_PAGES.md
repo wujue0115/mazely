@@ -83,7 +83,7 @@ tsconfig.json
 ```
 
 Package paths are included because Studio resolves the monorepo package source
-directly. Studio displays the current `packages/mazely/package.json` version
+directly. Studio displays its current `apps/studio/package.json` version
 using the `vX.Y.Z` format.
 
 ## Deployment behavior

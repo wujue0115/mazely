@@ -1,12 +1,12 @@
-import type { CellId, MazeAlgorithm, MazeContext, MazeGenerationStep, SquareCell } from '../types'
+import type { CellId, GridCell, MazeAlgorithm, MazeContext, MazeGenerationStep } from '../types'
 import { edgeBetween } from './grid-helpers'
 import { buildCarveStep } from './shared'
 
-class WilsonSquareAlgorithm implements MazeAlgorithm<SquareCell, MazeGenerationStep> {
+class WilsonAlgorithm implements MazeAlgorithm<GridCell, MazeGenerationStep> {
   name = 'wilson';
 
-  * generate(context: MazeContext<SquareCell>): IterableIterator<MazeGenerationStep> {
-    const unvisited = new Map<CellId, SquareCell>(context.grid.cells.map(cell => [cell.id, cell]))
+  * generate(context: MazeContext<GridCell>): IterableIterator<MazeGenerationStep> {
+    const unvisited = new Map<CellId, GridCell>(context.grid.cells.map(cell => [cell.id, cell]))
     if (unvisited.size === 0) {
       return
     }
@@ -16,7 +16,7 @@ class WilsonSquareAlgorithm implements MazeAlgorithm<SquareCell, MazeGenerationS
 
     while (unvisited.size > 0) {
       let current = context.random.pick([...unvisited.values()])
-      const path: SquareCell[] = [current]
+      const path: GridCell[] = [current]
       const pathIndex = new Map<CellId, number>([[current.id, 0]])
 
       while (unvisited.has(current.id)) {
@@ -58,6 +58,6 @@ class WilsonSquareAlgorithm implements MazeAlgorithm<SquareCell, MazeGenerationS
   }
 }
 
-export function createWilsonAlgorithm(): MazeAlgorithm<SquareCell, MazeGenerationStep> {
-  return new WilsonSquareAlgorithm()
+export function createWilsonAlgorithm(): MazeAlgorithm<GridCell, MazeGenerationStep> {
+  return new WilsonAlgorithm()
 }

@@ -22,7 +22,7 @@ generation.finish()
 
 Every built-in generator:
 
-- supports connected square-grid masks
+- supports connected masks for each compatible grid topology
 - produces a spanning tree across all active cells
 - is deterministic when the maze has a seed
 - emits typed `MazeGenerationStep` values
@@ -65,6 +65,7 @@ for (const algorithm of MAZE_GENERATION_ALGORITHMS) {
   console.log(
     algorithm,
     MAZE_GENERATION_CAPABILITIES[algorithm].usesStart,
+    MAZE_GENERATION_CAPABILITIES[algorithm].supportedGridTypes,
   )
 }
 

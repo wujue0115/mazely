@@ -99,7 +99,7 @@
         <span>Mazely Studio</span>
       </h1>
       <span class="top-nav-sep" aria-hidden="true"></span>
-      <span id="package-version" class="top-nav-version">v0.6.1</span>
+      <span id="package-version" class="top-nav-version">v0.7.0</span>
       <a
         class="top-nav-github"
         href="https://github.com/wujue0115/mazely"
@@ -241,9 +241,25 @@
           </section>
 
           <section class="field-group">
+            <label class="micro-label" for="grid-type">Topology</label>
+            <select id="grid-type">
+              <option value="square" selected>Square</option>
+              <option value="triangle">Triangle</option>
+            </select>
+          </section>
+
+          <section id="triangle-layout-field" class="field-group is-hidden">
+            <label class="micro-label" for="triangle-layout">Grid Layout</label>
+            <select id="triangle-layout">
+              <option value="triangle" selected>triangle</option>
+              <option value="rectangle">rectangle</option>
+            </select>
+          </section>
+
+          <section class="field-group">
             <div class="field-head">
               <span class="micro-label">Grid Geometry</span>
-              <label class="micro-check" for="use-viewport-ratio">
+              <label id="viewport-ratio-toggle" class="micro-check" for="use-viewport-ratio">
                 <input id="use-viewport-ratio" type="checkbox" />
                 <span>Viewport ratio</span>
               </label>
@@ -313,8 +329,8 @@
             <div class="shape-foot">
               <p id="shape-status" class="shape-status">Full rectangle — upload an image to shape the maze.</p>
               <label class="micro-check shape-colors-toggle is-hidden" for="shape-colors-visible">
-                <span>Show colors</span>
                 <input id="shape-colors-visible" type="checkbox" checked />
+                <span>Show colors</span>
               </label>
             </div>
             <input id="shape-file-input" type="file" accept="image/*" class="sr-only" tabindex="-1" />
@@ -820,6 +836,34 @@
       </section>
     </div>
 
+    <div
+      id="confirmation-dialog"
+      class="export-dialog confirmation-dialog is-hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="confirmation-dialog-title"
+      aria-describedby="confirmation-dialog-message"
+    >
+      <button
+        id="confirmation-dialog-backdrop"
+        class="export-dialog-backdrop"
+        type="button"
+        aria-label="Cancel change"
+      ></button>
+      <section class="export-dialog-window confirmation-dialog-window">
+        <header class="export-dialog-header">
+          <h2 id="confirmation-dialog-title">Change grid topology?</h2>
+        </header>
+        <div class="confirmation-dialog-body">
+          <p id="confirmation-dialog-message"></p>
+        </div>
+        <footer class="confirmation-dialog-footer">
+          <button id="confirmation-dialog-cancel" class="ghost-btn" type="button">Cancel</button>
+          <button id="confirmation-dialog-confirm" class="cta-btn" type="button">Confirm</button>
+        </footer>
+      </section>
+    </div>
+
     <div id="shape-editor" class="shape-editor is-hidden" role="dialog" aria-modal="true" aria-label="Shape studio">
       <div id="shape-editor-backdrop" class="shape-editor-backdrop"></div>
       <div class="shape-editor-window">
@@ -926,7 +970,7 @@
             <section class="shape-editor-group">
               <h2>MAZE GRID</h2>
               <label class="dimension-field" for="shape-cols-input">
-                <span class="field-label">WIDTH (CELLS)</span>
+                <span id="shape-size-label" class="field-label">WIDTH (CELLS)</span>
                 <input id="shape-cols-input" type="number" min="4" max="500" step="1" value="60" />
               </label>
               <p id="shape-grid-label" class="speed-label"></p>

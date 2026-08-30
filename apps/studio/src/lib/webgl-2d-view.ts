@@ -1,15 +1,43 @@
-import type { Maze } from 'mazely'
+import type { Maze, MazeEdge } from 'mazely'
 import type { MazePoint } from './maze-types'
 import * as THREE from 'three'
-import { countSquareGridLines, visitSquareGridLines } from './runtime'
+import {
+  getCellBoundarySegments,
+  getCellCenter,
+  getCellPolygon,
+  getGridBounds,
+  getOverlayScale,
+  getPointCenter,
+  TRIANGLE_HEIGHT,
+  visitClosedWalls,
+} from './grid-geometry'
+import { countGridLines, visitReferenceGridLines } from './runtime'
 import { FIXED_CELL_SIZE } from './types'
 import { getViewportPixelRatio } from './utils'
+
+function createTriangleGeometry(): THREE.BufferGeometry {
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute([
+    0,
+    TRIANGLE_HEIGHT * 2 / 3,
+    0,
+    0.5,
+    -TRIANGLE_HEIGHT / 3,
+    0,
+    -0.5,
+    -TRIANGLE_HEIGHT / 3,
+    0,
+  ], 3))
+  geometry.setIndex([0, 1, 2])
+  return geometry
+}
 
 export interface Webgl2dOverlaySegment {
   from: MazePoint
   to: MazePoint
   color: string
   width: number
+  cap?: 'butt' | 'square'
 }
 
 export interface Webgl2dOverlayDot {
@@ -22,6 +50,14 @@ export interface Webgl2dOverlayRing {
   point: MazePoint
   color: string
   radius: number
+}
+
+export function getOverlaySegmentRenderLength(
+  segmentLength: number,
+  width: number,
+  cap: Webgl2dOverlaySegment['cap'] = 'square',
+): number {
+  return cap === 'butt' ? segmentLength : segmentLength + width
 }
 
 export interface Webgl2dViewState {
@@ -64,6 +100,533 @@ const HINT_BORDER_Z = 0.055
 const START_END_POINT_Z = 0.04
 const RING_Z = 0.06
 
+export function buildTriangleWallStripPositions(
+  polygon: Array<{ x: number, y: number }>,
+  segment: { from: { x: number, y: number }, to: { x: number, y: number } },
+  thickness: number,
+): Float32Array {
+  return triangulateWallPolygon(clipTriangleWallStrip(polygon, segment, thickness))
+}
+
+function clipTriangleWallStrip(
+  polygon: Array<{ x: number, y: number }>,
+  segment: { from: { x: number, y: number }, to: { x: number, y: number } },
+  thickness: number,
+): Array<{ x: number, y: number }> {
+  const dx = segment.to.x - segment.from.x
+  const dy = segment.to.y - segment.from.y
+  const length = Math.hypot(dx, dy)
+  const signedDistance = (point: { x: number, y: number }): number =>
+    (dx * (point.y - segment.from.y) - dy * (point.x - segment.from.x)) / length
+  let clipped = clipPolygon(polygon, point => thickness / 2 - signedDistance(point))
+  clipped = clipPolygon(clipped, point => thickness / 2 + signedDistance(point))
+  return clipped
+}
+
+function triangulateWallPolygon(polygon: Array<{ x: number, y: number }>): Float32Array {
+  const positions: number[] = []
+  for (let index = 1; index < polygon.length - 1; index += 1) {
+    for (const point of [polygon[0], polygon[index], polygon[index + 1]]) {
+      positions.push(point.x, -point.y, WALL_Z)
+    }
+  }
+  return new Float32Array(positions)
+}
+
+function clipPolygon(
+  polygon: Array<{ x: number, y: number }>,
+  distanceInside: (point: { x: number, y: number }) => number,
+): Array<{ x: number, y: number }> {
+  const clipped: Array<{ x: number, y: number }> = []
+  for (let index = 0; index < polygon.length; index += 1) {
+    const from = polygon[index]
+    const to = polygon[(index + 1) % polygon.length]
+    const fromDistance = distanceInside(from)
+    const toDistance = distanceInside(to)
+    const fromInside = fromDistance >= -1e-9
+    const toInside = toDistance >= -1e-9
+    if (fromInside) {
+      clipped.push(from)
+    }
+    if (fromInside !== toInside) {
+      const ratio = fromDistance / (fromDistance - toDistance)
+      clipped.push({
+        x: from.x + (to.x - from.x) * ratio,
+        y: from.y + (to.y - from.y) * ratio,
+      })
+    }
+  }
+  return clipped
+}
+
+const triangleWallBuildCaches = new WeakMap<Maze, TriangleWallBuildCache>()
+
+export function buildTriangleWallPositions(runtime: Maze, thickness: number): Float32Array {
+  return concatFloat32Arrays(buildTriangleWallPositionChunks(runtime, thickness))
+}
+
+export function buildTriangleWallPositionChunks(runtime: Maze, thickness: number): Float32Array[] {
+  let cache = triangleWallBuildCaches.get(runtime)
+  if (!cache || cache.thickness !== thickness) {
+    cache = createTriangleWallBuildCache(runtime, thickness)
+    triangleWallBuildCaches.set(runtime, cache)
+  }
+
+  const chunks: Float32Array[] = []
+  for (const wall of cache.walls) {
+    if (!isTriangleWallOpen(wall)) {
+      chunks.push(wall.positions)
+    }
+  }
+  for (const junction of cache.junctions.values()) {
+    const signature = getTriangleJunctionSignature(junction, cache)
+    if (junction.signature !== signature) {
+      junction.positions = buildTriangleJunctionPositions(junction, cache)
+      junction.signature = signature
+    }
+    chunks.push(junction.positions)
+  }
+  return chunks
+}
+
+interface TriangleWallOwner {
+  polygon: Array<{ x: number, y: number }>
+  segment: { from: { x: number, y: number }, to: { x: number, y: number } }
+}
+
+interface TriangleWallBuildRecord {
+  edge: MazeEdge | null
+  from: { x: number, y: number }
+  key: string
+  owners: TriangleWallOwner[]
+  positions: Float32Array
+  to: { x: number, y: number }
+}
+
+interface TriangleWallJunctionIncident {
+  direction: { x: number, y: number }
+  oppositeKey: string
+  points: Array<{ x: number, y: number }>
+  wall: TriangleWallBuildRecord
+}
+
+interface TriangleWallJunction {
+  incidents: TriangleWallJunctionIncident[]
+  positions: Float32Array
+  signature: string
+  x: number
+  y: number
+}
+
+interface TriangleWallBuildCache {
+  junctions: Map<string, TriangleWallJunction>
+  thickness: number
+  wallByKey: Map<string, TriangleWallBuildRecord>
+  walls: TriangleWallBuildRecord[]
+}
+
+function createTriangleWallBuildCache(runtime: Maze, thickness: number): TriangleWallBuildCache {
+  const wallByKey = new Map<string, TriangleWallBuildRecord>()
+  for (const cell of runtime.grid.cells) {
+    const polygon = getCellPolygon(cell)
+    for (const segment of getCellBoundarySegments(cell)) {
+      const key = wallSegmentKey(segment)
+      const wall = wallByKey.get(key) ?? {
+        edge: segment.edge,
+        from: segment.from,
+        key,
+        owners: [],
+        positions: new Float32Array(),
+        to: segment.to,
+      }
+      wall.edge ??= segment.edge
+      wall.owners.push({ polygon, segment })
+      wallByKey.set(key, wall)
+    }
+  }
+
+  const junctions = new Map<string, TriangleWallJunction>()
+  const walls = [...wallByKey.values()]
+  for (const wall of walls) {
+    const bodyChunks: Float32Array[] = []
+    const junctionPoints = new Map<string, Array<{ x: number, y: number }>>()
+    for (const owner of wall.owners) {
+      const strip = clipTriangleWallStrip(owner.polygon, owner.segment, thickness)
+      const jointStrip = [...strip]
+      bodyChunks.push(triangulateWallPolygon(strip))
+      if (wall.owners.length === 1) {
+        const outerStrip = clipTriangleWallStrip(
+          reflectPolygonAcrossLine(owner.polygon, owner.segment),
+          owner.segment,
+          thickness,
+        )
+        bodyChunks.push(triangulateWallPolygon(outerStrip))
+        jointStrip.push(...outerStrip)
+      }
+      for (const endpoint of [wall.from, wall.to]) {
+        const key = worldPointKey(endpoint)
+        const points = junctionPoints.get(key) ?? []
+        for (const point of jointStrip) {
+          if (Math.hypot(point.x - endpoint.x, point.y - endpoint.y) <= thickness * 1.01) {
+            points.push(point)
+          }
+        }
+        junctionPoints.set(key, points)
+      }
+    }
+    wall.positions = concatFloat32Arrays(bodyChunks)
+
+    const dx = wall.to.x - wall.from.x
+    const dy = wall.to.y - wall.from.y
+    const length = Math.hypot(dx, dy)
+    addTriangleJunctionIncident(junctions, wall.from, {
+      direction: { x: dx / length, y: dy / length },
+      oppositeKey: worldPointKey(wall.to),
+      points: junctionPoints.get(worldPointKey(wall.from)) ?? [],
+      wall,
+    })
+    addTriangleJunctionIncident(junctions, wall.to, {
+      direction: { x: -dx / length, y: -dy / length },
+      oppositeKey: worldPointKey(wall.from),
+      points: junctionPoints.get(worldPointKey(wall.to)) ?? [],
+      wall,
+    })
+  }
+
+  return { junctions, thickness, wallByKey, walls }
+}
+
+function addTriangleJunctionIncident(
+  junctions: Map<string, TriangleWallJunction>,
+  point: { x: number, y: number },
+  incident: TriangleWallJunctionIncident,
+): void {
+  const key = worldPointKey(point)
+  const junction = junctions.get(key) ?? {
+    incidents: [],
+    positions: new Float32Array(),
+    signature: '',
+    x: point.x,
+    y: point.y,
+  }
+  junction.incidents.push(incident)
+  junctions.set(key, junction)
+}
+
+function isTriangleWallOpen(wall: TriangleWallBuildRecord): boolean {
+  return wall.edge?.opened === true
+}
+
+function getTriangleJunctionSignature(
+  junction: TriangleWallJunction,
+  cache: TriangleWallBuildCache,
+): string {
+  const local = junction.incidents.map(incident => isTriangleWallOpen(incident.wall) ? '1' : '0').join('')
+  const opposite = junction.incidents.map((incident) => {
+    const oppositeJunction = cache.junctions.get(incident.oppositeKey)
+    return oppositeJunction?.incidents
+      .map(candidate => isTriangleWallOpen(candidate.wall) ? '1' : '0')
+      .join('') ?? ''
+  }).join('.')
+  return `${local}|${opposite}`
+}
+
+function buildTriangleJunctionPositions(
+  junction: TriangleWallJunction,
+  cache: TriangleWallBuildCache,
+): Float32Array {
+  const closed = junction.incidents.filter(incident => !isTriangleWallOpen(incident.wall))
+  if (closed.length === 0) {
+    return new Float32Array()
+  }
+
+  const points = closed.flatMap(incident => incident.points)
+  const directions = closed.map(incident => incident.direction)
+  let pointed60DegreeMiter: { x: number, y: number } | null = null
+  if (directions.length === 2) {
+    const oppositeWallKey = wallSegmentKey(get60DegreeOppositeWallSegment(
+      junction,
+      directions[0],
+      directions[1],
+    ))
+    const oppositeWall = cache.wallByKey.get(oppositeWallKey)
+    const miter120 = get120DegreeMiterPoint(directions[0], directions[1], cache.thickness / 2)
+    pointed60DegreeMiter = get60DegreeMiterPoint(
+      directions[0],
+      directions[1],
+      cache.thickness / 2,
+      oppositeWall !== undefined && !isTriangleWallOpen(oppositeWall),
+    )
+    if (miter120) {
+      points.push({ x: junction.x + miter120.x, y: junction.y + miter120.y })
+    }
+  }
+
+  const passageInset = getTrianglePassageInset(cache.thickness)
+  for (const incident of junction.incidents) {
+    if (isTriangleWallOpen(incident.wall)) {
+      points.push({
+        x: junction.x + incident.direction.x * passageInset,
+        y: junction.y + incident.direction.y * passageInset,
+      })
+    }
+  }
+  let jointPolygon = convexHull(points)
+  for (const incident of junction.incidents) {
+    if (isTriangleWallOpen(incident.wall)) {
+      jointPolygon = clipPolygon(jointPolygon, point =>
+        passageInset
+        - (point.x - junction.x) * incident.direction.x
+        - (point.y - junction.y) * incident.direction.y)
+    }
+  }
+  if (pointed60DegreeMiter) {
+    jointPolygon = convexHull([
+      ...jointPolygon,
+      {
+        x: junction.x + pointed60DegreeMiter.x,
+        y: junction.y + pointed60DegreeMiter.y,
+      },
+    ])
+  }
+  if (directions.length === 1) {
+    const wallDirection = directions[0]
+    const continuation = junction.incidents.find(incident => isTriangleWallOpen(incident.wall)
+      && incident.direction.x * wallDirection.x + incident.direction.y * wallDirection.y < -0.999)
+    if (continuation) {
+      const outward = { x: -wallDirection.x, y: -wallDirection.y }
+      const normal = { x: -wallDirection.y, y: wallDirection.x }
+      const oppositeJunction = cache.junctions.get(continuation.oppositeKey)
+      const oppositeWalls = oppositeJunction
+        ? oppositeJunction.incidents.filter(incident => !isTriangleWallOpen(incident.wall)).map(incident => incident.direction)
+        : []
+      const facingWalls = getFacingOppositeWalls(outward, oppositeWalls)
+      const pointsAt120DegreeJoint = has120DegreeWallJoint(facingWalls)
+      const terminalNormalSign = getParallelTerminalNormalSign(
+        outward,
+        normal,
+        cache.thickness,
+        facingWalls,
+      )
+      jointPolygon = convexHull([
+        ...jointPolygon,
+        getTriangleTerminalPoint(
+          junction,
+          outward,
+          normal,
+          cache.thickness,
+          pointsAt120DegreeJoint,
+          terminalNormalSign,
+        ),
+      ])
+    }
+  }
+  return triangulateWallPolygon(jointPolygon)
+}
+
+function concatFloat32Arrays(chunks: Float32Array[]): Float32Array {
+  const output = new Float32Array(chunks.reduce((total, chunk) => total + chunk.length, 0))
+  let offset = 0
+  for (const chunk of chunks) {
+    output.set(chunk, offset)
+    offset += chunk.length
+  }
+  return output
+}
+
+export function getTrianglePassageInset(thickness: number): number {
+  return thickness / Math.sqrt(3)
+}
+
+export function getTriangleTerminalPoint(
+  junction: { x: number, y: number },
+  outward: { x: number, y: number },
+  normal: { x: number, y: number },
+  thickness: number,
+  arrow: boolean,
+  normalSign = 1,
+): { x: number, y: number } {
+  const inset = getTrianglePassageInset(thickness)
+  return arrow
+    ? {
+        x: junction.x + outward.x * inset,
+        y: junction.y + outward.y * inset,
+      }
+    : {
+        x: junction.x + outward.x * inset * 1.5 + normal.x * thickness / 2 * normalSign,
+        y: junction.y + outward.y * inset * 1.5 + normal.y * thickness / 2 * normalSign,
+      }
+}
+
+export function getParallelTerminalNormalSign(
+  outward: { x: number, y: number },
+  normal: { x: number, y: number },
+  thickness: number,
+  oppositeWalls: Array<{ x: number, y: number }>,
+): 1 | -1 {
+  const inset = getTrianglePassageInset(thickness)
+  const candidates = [1, -1] as const
+  let bestSign: 1 | -1 = 1
+  let bestAlignment = -1
+  for (const sign of candidates) {
+    const capX = outward.x * inset + normal.x * thickness * sign
+    const capY = outward.y * inset + normal.y * thickness * sign
+    const capLength = Math.hypot(capX, capY)
+    for (const wall of oppositeWalls) {
+      if (Math.abs(wall.x * outward.x + wall.y * outward.y) > 0.999) {
+        continue
+      }
+      const alignment = Math.abs((capX * wall.x + capY * wall.y) / capLength)
+      if (alignment > bestAlignment) {
+        bestAlignment = alignment
+        bestSign = sign
+      }
+    }
+  }
+  return bestSign
+}
+
+export function getFacingOppositeWalls(
+  outward: { x: number, y: number },
+  oppositeWalls: Array<{ x: number, y: number }>,
+): Array<{ x: number, y: number }> {
+  const towardTerminal = { x: -outward.x, y: -outward.y }
+  const candidates = oppositeWalls.filter(wall =>
+    Math.abs(wall.x * outward.x + wall.y * outward.y) < 0.999)
+  if (candidates.length <= 1) {
+    return candidates
+  }
+  const scores = candidates.map(wall =>
+    wall.x * towardTerminal.x + wall.y * towardTerminal.y)
+  const bestScore = Math.max(...scores)
+  return candidates.filter((_, index) => Math.abs(scores[index] - bestScore) < 1e-5)
+}
+
+export function has120DegreeWallJoint(walls: Array<{ x: number, y: number }>): boolean {
+  for (let leftIndex = 0; leftIndex < walls.length; leftIndex += 1) {
+    for (let rightIndex = leftIndex + 1; rightIndex < walls.length; rightIndex += 1) {
+      const left = walls[leftIndex]
+      const right = walls[rightIndex]
+      const dot = left.x * right.x + left.y * right.y
+      if (Math.abs(dot + 0.5) > 1e-5) {
+        continue
+      }
+      return true
+    }
+  }
+  return false
+}
+
+function reflectPolygonAcrossLine(
+  polygon: Array<{ x: number, y: number }>,
+  segment: { from: { x: number, y: number }, to: { x: number, y: number } },
+): Array<{ x: number, y: number }> {
+  const dx = segment.to.x - segment.from.x
+  const dy = segment.to.y - segment.from.y
+  const lengthSquared = dx * dx + dy * dy
+  return polygon.map((point) => {
+    const projection = ((point.x - segment.from.x) * dx + (point.y - segment.from.y) * dy) / lengthSquared
+    const projectedX = segment.from.x + projection * dx
+    const projectedY = segment.from.y + projection * dy
+    return {
+      x: projectedX * 2 - point.x,
+      y: projectedY * 2 - point.y,
+    }
+  })
+}
+
+export function get120DegreeMiterPoint(
+  first: { x: number, y: number },
+  second: { x: number, y: number },
+  radius: number,
+): { x: number, y: number } | null {
+  return getAngleMiterPoint(first, second, radius, -0.5)
+}
+
+export function get60DegreeMiterPoint(
+  first: { x: number, y: number },
+  second: { x: number, y: number },
+  radius: number,
+  hasParallelOppositeWall: boolean,
+): { x: number, y: number } | null {
+  return hasParallelOppositeWall
+    ? null
+    : getAngleMiterPoint(first, second, radius, 0.5)
+}
+
+export function get60DegreeOppositeWallSegment(
+  junction: { x: number, y: number },
+  first: { x: number, y: number },
+  second: { x: number, y: number },
+): { from: { x: number, y: number }, to: { x: number, y: number } } {
+  return {
+    from: { x: junction.x - first.x, y: junction.y - first.y },
+    to: { x: junction.x - second.x, y: junction.y - second.y },
+  }
+}
+
+function getAngleMiterPoint(
+  first: { x: number, y: number },
+  second: { x: number, y: number },
+  radius: number,
+  expectedDot: number,
+): { x: number, y: number } | null {
+  const dot = first.x * second.x + first.y * second.y
+  if (Math.abs(dot - expectedDot) > 1e-5) {
+    return null
+  }
+  let left = first
+  let right = second
+  let cross = left.x * right.y - left.y * right.x
+  if (cross < 0) {
+    left = second
+    right = first
+    cross = -cross
+  }
+  const leftOuterNormal = { x: left.y, y: -left.x }
+  const rightOuterNormal = { x: -right.y, y: right.x }
+  const determinant = -cross
+  return {
+    x: (radius * rightOuterNormal.y - leftOuterNormal.y * radius) / determinant,
+    y: (leftOuterNormal.x * radius - radius * rightOuterNormal.x) / determinant,
+  }
+}
+
+function convexHull(points: Array<{ x: number, y: number }>): Array<{ x: number, y: number }> {
+  const unique = [...new Map(points.map(point => [worldPointKey(point), point])).values()]
+    .sort((left, right) => left.x - right.x || left.y - right.y)
+  if (unique.length <= 2) {
+    return unique
+  }
+  const cross = (origin: { x: number, y: number }, left: { x: number, y: number }, right: { x: number, y: number }): number =>
+    (left.x - origin.x) * (right.y - origin.y) - (left.y - origin.y) * (right.x - origin.x)
+  const lower: Array<{ x: number, y: number }> = []
+  const upper: Array<{ x: number, y: number }> = []
+  for (const point of unique) {
+    while (lower.length >= 2 && cross(lower.at(-2)!, lower.at(-1)!, point) <= 0) {
+      lower.pop()
+    }
+    lower.push(point)
+  }
+  for (const point of [...unique].reverse()) {
+    while (upper.length >= 2 && cross(upper.at(-2)!, upper.at(-1)!, point) <= 0) {
+      upper.pop()
+    }
+    upper.push(point)
+  }
+  return [...lower.slice(0, -1), ...upper.slice(0, -1)]
+}
+
+function worldPointKey(point: { x: number, y: number }): string {
+  return `${point.x.toFixed(6)},${point.y.toFixed(6)}`
+}
+
+function wallSegmentKey(segment: { from: { x: number, y: number }, to: { x: number, y: number } }): string {
+  const fromKey = worldPointKey(segment.from)
+  const toKey = worldPointKey(segment.to)
+  return fromKey < toKey ? `${fromKey}>${toKey}` : `${toKey}>${fromKey}`
+}
+
 export class Webgl2dMazeView {
   private readonly renderer: THREE.WebGLRenderer
   private readonly scene = new THREE.Scene()
@@ -71,6 +634,7 @@ export class Webgl2dMazeView {
   private readonly mazeGroup = new THREE.Group()
   private readonly container: HTMLElement
   private readonly quadGeometry = new THREE.PlaneGeometry(1, 1)
+  private readonly triangleGeometry = createTriangleGeometry()
   private readonly discGeometry = new THREE.CircleGeometry(1, 24)
   private readonly ringGeometry = new THREE.RingGeometry(0.86, 1, 32)
   private readonly cellMaterial = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide })
@@ -91,6 +655,7 @@ export class Webgl2dMazeView {
   private readonly hintRingMaterial = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide })
   private readonly startMaterial = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide })
   private readonly endMaterial = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide })
+  private readonly triangleWallMesh = new THREE.Mesh(new THREE.BufferGeometry(), this.wallMaterial)
 
   private cellMesh: THREE.InstancedMesh | null = null
   private gridMesh: THREE.Mesh | null = null
@@ -111,6 +676,7 @@ export class Webgl2dMazeView {
   private lastWallKey = ''
   private lastCellKey = ''
   private lastOverlayKey = ''
+  private cellGridType = ''
   private visible = false
 
   constructor(container: HTMLElement) {
@@ -124,7 +690,8 @@ export class Webgl2dMazeView {
     this.camera.position.set(0, 0, 1)
     this.camera.lookAt(0, 0, 0)
     this.scene.add(this.mazeGroup)
-    this.mazeGroup.add(this.startMesh, this.endMesh)
+    this.triangleWallMesh.frustumCulled = false
+    this.mazeGroup.add(this.triangleWallMesh, this.startMesh, this.endMesh)
     this.resize()
   }
 
@@ -162,10 +729,9 @@ export class Webgl2dMazeView {
   }
 
   sync(state: Webgl2dViewState): void {
-    const { cols, rows } = state.runtime.grid
-    this.ensureCellMesh(state.runtime.grid.cells.length)
-    this.ensureWallMesh(rows * (cols + 1) + cols * (rows + 1))
-    this.syncCamera(state, cols, rows)
+    this.ensureCellMesh(state.runtime.grid.cells.length, state.runtime.grid.type)
+    this.ensureWallMesh(state.runtime.grid.cells.length * 4)
+    this.syncCamera(state)
     this.syncCellsIfNeeded(state)
     this.syncGrid(state)
     this.syncWallsIfNeeded(state)
@@ -174,11 +740,12 @@ export class Webgl2dMazeView {
     this.renderFrame()
   }
 
-  private syncCamera(state: Webgl2dViewState, cols: number, rows: number): void {
+  private syncCamera(state: Webgl2dViewState): void {
+    const bounds = getGridBounds(state.runtime)
     const worldWidth = state.viewportWidth / state.zoom
     const worldHeight = state.viewportHeight / state.zoom
-    const mazePixelWidth = cols * FIXED_CELL_SIZE
-    const mazePixelHeight = rows * FIXED_CELL_SIZE
+    const mazePixelWidth = bounds.width * FIXED_CELL_SIZE
+    const mazePixelHeight = bounds.height * FIXED_CELL_SIZE
     const offsetX = (state.viewportWidth - mazePixelWidth) / 2
     const offsetY = (state.viewportHeight - mazePixelHeight) / 2
     const worldWidthCells = worldWidth / FIXED_CELL_SIZE
@@ -196,18 +763,20 @@ export class Webgl2dMazeView {
     this.camera.updateProjectionMatrix()
   }
 
-  private ensureCellMesh(capacity: number): void {
-    if (this.cellMesh && this.cellMesh.instanceMatrix.count >= capacity) {
+  private ensureCellMesh(capacity: number, gridType: string): void {
+    if (this.cellMesh && this.cellMesh.instanceMatrix.count >= capacity && this.cellGridType === gridType) {
       return
     }
     if (this.cellMesh) {
       this.mazeGroup.remove(this.cellMesh)
       this.cellMesh.dispose()
     }
-    this.cellMesh = new THREE.InstancedMesh(this.quadGeometry, this.cellMaterial, capacity)
+    const geometry = gridType === 'triangle' ? this.triangleGeometry : this.quadGeometry
+    this.cellMesh = new THREE.InstancedMesh(geometry, this.cellMaterial, capacity)
     this.cellMesh.frustumCulled = false
     this.mazeGroup.add(this.cellMesh)
     this.lastCellKey = ''
+    this.cellGridType = gridType
   }
 
   private ensureWallMesh(capacity: number): void {
@@ -231,9 +800,9 @@ export class Webgl2dMazeView {
         this.gridMesh.geometry.dispose()
       }
 
-      const positions = new Float32Array(countSquareGridLines(state.runtime) * 18)
+      const positions = new Float32Array(countGridLines(state.runtime) * 18)
       let offset = 0
-      visitSquareGridLines(state.runtime, (fromX, fromY, toX, toY) => {
+      visitReferenceGridLines(state.runtime, (fromX, fromY, toX, toY) => {
         const startY = -fromY
         const endY = -toY
         const dx = toX - fromX
@@ -289,8 +858,14 @@ export class Webgl2dMazeView {
     const color = new THREE.Color()
     let index = 0
     for (const cell of state.runtime.grid.cells) {
-      matrix.makeScale(1, 1, 1)
-      matrix.setPosition(cell.col + 0.5, -cell.row - 0.5, CELL_Z)
+      const center = getCellCenter(cell)
+      if ('orientation' in cell && cell.orientation === 'down') {
+        matrix.makeRotationZ(Math.PI)
+      }
+      else {
+        matrix.identity()
+      }
+      matrix.setPosition(center.x, -center.y, CELL_Z)
       mesh.setMatrixAt(index, matrix)
       mesh.setColorAt(index, color.set(state.getCellColor(cell.col, cell.row)))
       index += 1
@@ -303,13 +878,13 @@ export class Webgl2dMazeView {
   }
 
   private syncWallsIfNeeded(state: Webgl2dViewState): void {
+    this.wallMaterial.color.set(state.wallColor)
     const runtimeState = state.runtime.getState()
     const wallKey = [
       runtimeState.phase,
       runtimeState.index,
       runtimeState.done,
       state.wallThickness,
-      state.wallColor,
       state.wallRevision,
       state.wallsVisible,
       state.runtime.grid.rows,
@@ -324,49 +899,60 @@ export class Webgl2dMazeView {
     const mesh = this.wallMesh!
     if (!state.wallsVisible) {
       mesh.count = 0
+      this.triangleWallMesh.visible = false
       this.lastWallKey = wallKey
       return
     }
     const matrix = new THREE.Matrix4()
     const thickness = state.wallThickness
     let index = 0
-    const addWall = (x: number, y: number, width: number, height: number): void => {
-      matrix.makeScale(width, height, 1)
-      matrix.setPosition(x, y, WALL_Z)
+    const addWall = (fromX: number, fromY: number, toX: number, toY: number): void => {
+      const dx = toX - fromX
+      const dy = -(toY - fromY)
+      const length = Math.hypot(dx, dy)
+      matrix.makeRotationZ(Math.atan2(dy, dx))
+      matrix.scale(new THREE.Vector3(length + thickness, thickness, 1))
+      matrix.setPosition((fromX + toX) / 2, -(fromY + toY) / 2, WALL_Z)
       mesh.setMatrixAt(index, matrix)
       index += 1
     }
 
-    for (const cell of state.runtime.grid.cells) {
-      const x = cell.col
-      const y = -cell.row
-      if (!cell.edges.top?.opened)
-        addWall(x + 0.5, y, 1 + thickness, thickness)
-      if (!cell.edges.left?.opened)
-        addWall(x, y - 0.5, thickness, 1 + thickness)
-      if (!cell.edges.bottom)
-        addWall(x + 0.5, y - 1, 1 + thickness, thickness)
-      if (!cell.edges.right)
-        addWall(x + 1, y - 0.5, thickness, 1 + thickness)
+    if (state.runtime.grid.type === 'triangle') {
+      mesh.count = 0
+    }
+    else {
+      visitClosedWalls(state.runtime, segment =>
+        addWall(segment.from.x, segment.from.y, segment.to.x, segment.to.y))
+      mesh.count = index
     }
 
-    mesh.count = index
-    this.wallMaterial.color.set(state.wallColor)
+    this.triangleWallMesh.geometry.dispose()
+    this.triangleWallMesh.geometry = new THREE.BufferGeometry()
+    this.triangleWallMesh.geometry.setAttribute('position', new THREE.BufferAttribute(
+      state.runtime.grid.type === 'triangle'
+        ? buildTriangleWallPositions(state.runtime, thickness)
+        : new Float32Array(),
+      3,
+    ))
+    this.triangleWallMesh.visible = state.runtime.grid.type === 'triangle'
     mesh.instanceMatrix.needsUpdate = true
   }
 
   private syncMarkers(state: Webgl2dViewState): void {
+    const markerScale = 0.25 * getOverlayScale(state.runtime)
     this.startMesh.visible = state.start !== null
     if (state.start) {
-      this.startMesh.position.set(state.start.x + 0.5, -state.start.y - 0.5, START_END_POINT_Z)
-      this.startMesh.scale.setScalar(0.25)
+      const center = getPointCenter(state.runtime, state.start)
+      this.startMesh.position.set(center.x, -center.y, START_END_POINT_Z)
+      this.startMesh.scale.setScalar(markerScale)
       this.startMaterial.color.set(state.startColor)
     }
 
     this.endMesh.visible = state.end !== null
     if (state.end) {
-      this.endMesh.position.set(state.end.x + 0.5, -state.end.y - 0.5, START_END_POINT_Z)
-      this.endMesh.scale.setScalar(0.25)
+      const center = getPointCenter(state.runtime, state.end)
+      this.endMesh.position.set(center.x, -center.y, START_END_POINT_Z)
+      this.endMesh.scale.setScalar(markerScale)
       this.endMaterial.color.set(state.endColor)
     }
   }
@@ -385,16 +971,18 @@ export class Webgl2dMazeView {
     if (lineMesh) {
       let index = 0
       for (const segment of state.segments) {
-        const dx = segment.to.x - segment.from.x
-        const dy = segment.to.y - segment.from.y
-        const centerX = (segment.from.x + segment.to.x) / 2 + 0.5
-        const centerY = -((segment.from.y + segment.to.y) / 2 + 0.5)
-        if (dy === 0) {
-          matrix.makeScale(Math.abs(dx) + segment.width, segment.width, 1)
-        }
-        else {
-          matrix.makeScale(segment.width, Math.abs(dy) + segment.width, 1)
-        }
+        const from = getPointCenter(state.runtime, segment.from)
+        const to = getPointCenter(state.runtime, segment.to)
+        const dx = to.x - from.x
+        const dy = -(to.y - from.y)
+        const centerX = (from.x + to.x) / 2
+        const centerY = -(from.y + to.y) / 2
+        matrix.makeRotationZ(Math.atan2(dy, dx))
+        matrix.scale(new THREE.Vector3(
+          getOverlaySegmentRenderLength(Math.hypot(dx, dy), segment.width, segment.cap),
+          segment.width,
+          1,
+        ))
         matrix.setPosition(centerX, centerY, LINE_Z)
         lineMesh.setMatrixAt(index, matrix)
         lineMesh.setColorAt(index, color.set(segment.color))
@@ -411,8 +999,9 @@ export class Webgl2dMazeView {
     if (dotMesh) {
       let index = 0
       for (const dot of state.dots) {
+        const center = getPointCenter(state.runtime, dot.point)
         matrix.makeScale(dot.radius, dot.radius, 1)
-        matrix.setPosition(dot.point.x + 0.5, -dot.point.y - 0.5, DOT_Z)
+        matrix.setPosition(center.x, -center.y, DOT_Z)
         dotMesh.setMatrixAt(index, matrix)
         dotMesh.setColorAt(index, color.set(dot.color))
         index += 1
@@ -428,8 +1017,9 @@ export class Webgl2dMazeView {
     if (ringMesh) {
       let index = 0
       for (const ring of state.rings) {
+        const center = getPointCenter(state.runtime, ring.point)
         matrix.makeScale(ring.radius, ring.radius, 1)
-        matrix.setPosition(ring.point.x + 0.5, -ring.point.y - 0.5, RING_Z)
+        matrix.setPosition(center.x, -center.y, RING_Z)
         ringMesh.setMatrixAt(index, matrix)
         ringMesh.setColorAt(index, color.set(ring.color))
         index += 1
@@ -443,8 +1033,8 @@ export class Webgl2dMazeView {
 
     this.syncHintSegments(state.hintSegments, this.hintLineMesh, HINT_FILL_Z)
     this.syncHintSegments(state.hintBorderSegments, this.hintBorderMesh, HINT_BORDER_Z)
-    this.syncHintDots(state.hintDots, this.hintDotMesh, HINT_FILL_Z)
-    this.syncHintRings(state.hintRings, this.hintRingMesh)
+    this.syncHintDots(state.runtime, state.hintDots, this.hintDotMesh, HINT_FILL_Z)
+    this.syncHintRings(state.runtime, state.hintRings, this.hintRingMesh)
   }
 
   private syncHintSegments(segments: Webgl2dOverlaySegment[], mesh: THREE.InstancedMesh | null, z: number): void {
@@ -457,15 +1047,11 @@ export class Webgl2dMazeView {
     let index = 0
     for (const segment of segments) {
       const dx = segment.to.x - segment.from.x
-      const dy = segment.to.y - segment.from.y
-      const centerX = (segment.from.x + segment.to.x) / 2 + 0.5
-      const centerY = -((segment.from.y + segment.to.y) / 2 + 0.5)
-      if (dy === 0) {
-        matrix.makeScale(Math.abs(dx) + segment.width, segment.width, 1)
-      }
-      else {
-        matrix.makeScale(segment.width, Math.abs(dy) + segment.width, 1)
-      }
+      const dy = -(segment.to.y - segment.from.y)
+      const centerX = (segment.from.x + segment.to.x) / 2
+      const centerY = -(segment.from.y + segment.to.y) / 2
+      matrix.makeRotationZ(Math.atan2(dy, dx))
+      matrix.scale(new THREE.Vector3(Math.hypot(dx, dy) + segment.width, segment.width, 1))
       matrix.setPosition(centerX, centerY, z)
       mesh.setMatrixAt(index, matrix)
       mesh.setColorAt(index, color.set(segment.color))
@@ -478,7 +1064,7 @@ export class Webgl2dMazeView {
     }
   }
 
-  private syncHintDots(dots: Webgl2dOverlayDot[], mesh: THREE.InstancedMesh | null, z: number): void {
+  private syncHintDots(runtime: Maze, dots: Webgl2dOverlayDot[], mesh: THREE.InstancedMesh | null, z: number): void {
     if (!mesh) {
       return
     }
@@ -487,8 +1073,9 @@ export class Webgl2dMazeView {
     const color = new THREE.Color()
     let index = 0
     for (const dot of dots) {
+      const center = getPointCenter(runtime, dot.point)
       matrix.makeScale(dot.radius, dot.radius, 1)
-      matrix.setPosition(dot.point.x + 0.5, -dot.point.y - 0.5, z)
+      matrix.setPosition(center.x, -center.y, z)
       mesh.setMatrixAt(index, matrix)
       mesh.setColorAt(index, color.set(dot.color))
       index += 1
@@ -500,7 +1087,7 @@ export class Webgl2dMazeView {
     }
   }
 
-  private syncHintRings(rings: Webgl2dOverlayRing[], mesh: THREE.InstancedMesh | null): void {
+  private syncHintRings(runtime: Maze, rings: Webgl2dOverlayRing[], mesh: THREE.InstancedMesh | null): void {
     if (!mesh) {
       return
     }
@@ -509,8 +1096,9 @@ export class Webgl2dMazeView {
     const color = new THREE.Color()
     let index = 0
     for (const ring of rings) {
+      const center = getPointCenter(runtime, ring.point)
       matrix.makeScale(ring.radius, ring.radius, 1)
-      matrix.setPosition(ring.point.x + 0.5, -ring.point.y - 0.5, RING_Z)
+      matrix.setPosition(center.x, -center.y, RING_Z)
       mesh.setMatrixAt(index, matrix)
       mesh.setColorAt(index, color.set(ring.color))
       index += 1

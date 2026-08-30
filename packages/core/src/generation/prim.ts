@@ -1,11 +1,11 @@
-import type { CellId, MazeAlgorithm, MazeContext, MazeEdge, MazeGenerationStep, MazePoint, SquareCell } from '../types'
+import type { CellId, GridCell, MazeAlgorithm, MazeContext, MazeEdge, MazeGenerationStep, MazePoint } from '../types'
 import { PriorityQueue } from '../utils'
 import { buildCarveStep, resolveStartCell } from './shared'
 
 interface WeightedFrontierEdge {
   edge: MazeEdge
-  from: SquareCell
-  to: SquareCell
+  from: GridCell
+  to: GridCell
   weight: number
 }
 
@@ -15,12 +15,12 @@ interface WeightedFrontierEdge {
  * carved next. Unlike a uniform random frontier pick (see `traversal`), the
  * weights are fixed at discovery time.
  */
-class PrimSquareAlgorithm implements MazeAlgorithm<SquareCell, MazeGenerationStep> {
+class PrimAlgorithm implements MazeAlgorithm<GridCell, MazeGenerationStep> {
   name = 'prim'
 
   constructor(private readonly start?: MazePoint) {}
 
-  * generate(context: MazeContext<SquareCell>): IterableIterator<MazeGenerationStep> {
+  * generate(context: MazeContext<GridCell>): IterableIterator<MazeGenerationStep> {
     const first = resolveStartCell(context, this.start)
     if (!first) {
       return
@@ -29,9 +29,9 @@ class PrimSquareAlgorithm implements MazeAlgorithm<SquareCell, MazeGenerationSte
     const visited = new Set<CellId>([first.id])
     const frontier = new PriorityQueue<WeightedFrontierEdge>((a, b) => a.weight < b.weight)
 
-    const pushFrontierEdges = (cell: SquareCell): void => {
+    const pushFrontierEdges = (cell: GridCell): void => {
       for (const edge of context.grid.getEdges(cell)) {
-        const other = edge.getOther(cell) as SquareCell | null
+        const other = edge.getOther(cell) as GridCell | null
         if (!other || visited.has(other.id)) {
           continue
         }
@@ -54,6 +54,6 @@ class PrimSquareAlgorithm implements MazeAlgorithm<SquareCell, MazeGenerationSte
   }
 }
 
-export function createPrimAlgorithm(start?: MazePoint): MazeAlgorithm<SquareCell, MazeGenerationStep> {
-  return new PrimSquareAlgorithm(start)
+export function createPrimAlgorithm(start?: MazePoint): MazeAlgorithm<GridCell, MazeGenerationStep> {
+  return new PrimAlgorithm(start)
 }

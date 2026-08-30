@@ -26,6 +26,7 @@ import {
   solveStartButton,
   solvingSelect,
 } from '../dom'
+import { distanceToSegment, getGridBounds, getSharedBoundary, hitTestCell } from '../grid-geometry'
 import { key } from '../point'
 import { render } from '../renderer'
 import { FIXED_CELL_SIZE } from '../types'
@@ -357,14 +358,38 @@ function getEditTarget(event: PointerEvent): MazeEditTarget | null {
     return null
   }
 
-  const cellX = Math.floor(point.x)
-  const cellY = Math.floor(point.y)
-  if (!isExistingCell(cellX, cellY)) {
+  const runtime = app.mazeRuntime
+  if (!runtime) {
     return null
   }
+  const hitCell = hitTestCell(runtime, point)
+  if (!hitCell) {
+    return null
+  }
+  const cellX = hitCell.col
+  const cellY = hitCell.row
 
   if (app.pointPicker || app.editTool === 'start' || app.editTool === 'end') {
     return { type: 'cell', x: cellX, y: cellY }
+  }
+
+  if (runtime.grid.type === 'triangle') {
+    const candidates = hitCell.getEdges().flatMap((edge) => {
+      const otherId = edge.getOther(hitCell)?.id
+      const other = otherId ? runtime.grid.getCell(otherId) : undefined
+      const boundary = other ? getSharedBoundary(hitCell, other) : null
+      return other && boundary
+        ? [{ boundary, distance: distanceToSegment(point, boundary), other }]
+        : []
+    }).sort((a, b) => a.distance - b.distance)
+    const candidate = candidates[0]
+    return candidate
+      ? {
+          from: { x: cellX, y: cellY },
+          to: { x: candidate.other.col, y: candidate.other.row },
+          type: 'edge',
+        }
+      : null
   }
 
   const localX = point.x - cellX
@@ -391,8 +416,12 @@ function getEditTarget(event: PointerEvent): MazeEditTarget | null {
 
 function getMazePointFromEvent(event: PointerEvent): { x: number, y: number } | null {
   const rect = canvasWrap.getBoundingClientRect()
-  const mazePixelWidth = app.maze.cols * FIXED_CELL_SIZE
-  const mazePixelHeight = app.maze.rows * FIXED_CELL_SIZE
+  if (!app.mazeRuntime) {
+    return null
+  }
+  const bounds = getGridBounds(app.mazeRuntime)
+  const mazePixelWidth = bounds.width * FIXED_CELL_SIZE
+  const mazePixelHeight = bounds.height * FIXED_CELL_SIZE
   const offsetX = (rect.width - mazePixelWidth) / 2
   const offsetY = (rect.height - mazePixelHeight) / 2
   const worldX = (event.clientX - rect.left - app.panX) / app.zoom - offsetX

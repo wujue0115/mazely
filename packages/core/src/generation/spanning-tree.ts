@@ -1,4 +1,4 @@
-import type { CellId, MazeAlgorithm, MazeContext, MazeEdge, MazeGenerationStep, MazeGrid, SquareCell } from '../types'
+import type { CellId, GridCell, MazeAlgorithm, MazeContext, MazeEdge, MazeGenerationStep, MazeGrid } from '../types'
 import { buildCarveStep } from './shared'
 
 class UnionFind {
@@ -38,33 +38,33 @@ class UnionFind {
   }
 }
 
-class SpanningTreeGenerationAlgorithm implements MazeAlgorithm<SquareCell, MazeGenerationStep> {
+class SpanningTreeGenerationAlgorithm implements MazeAlgorithm<GridCell, MazeGenerationStep> {
   readonly name: string
 
-  constructor(private readonly algorithm: MazeAlgorithm<SquareCell, MazeGenerationStep>) {
+  constructor(private readonly algorithm: MazeAlgorithm<GridCell, MazeGenerationStep>) {
     this.name = algorithm.name
   }
 
-  * generate(context: MazeContext<SquareCell>): IterableIterator<MazeGenerationStep> {
+  * generate(context: MazeContext<GridCell>): IterableIterator<MazeGenerationStep> {
     yield* this.algorithm.generate(context)
     yield* repairSpanningTree(context)
   }
 }
 
 export function withSpanningTreeGuarantee(
-  algorithm: MazeAlgorithm<SquareCell, MazeGenerationStep>,
-): MazeAlgorithm<SquareCell, MazeGenerationStep> {
+  algorithm: MazeAlgorithm<GridCell, MazeGenerationStep>,
+): MazeAlgorithm<GridCell, MazeGenerationStep> {
   return new SpanningTreeGenerationAlgorithm(algorithm)
 }
 
-export function assertGridConnected(grid: MazeGrid<SquareCell>): void {
+export function assertGridConnected(grid: MazeGrid<GridCell>): void {
   const first = grid.cells[0]
   if (!first) {
     throw new TypeError('Cannot generate a maze without cells.')
   }
 
   const visited = new Set<CellId>([first.id])
-  const queue: SquareCell[] = [first]
+  const queue: GridCell[] = [first]
   for (let index = 0; index < queue.length; index += 1) {
     for (const neighbor of grid.getNeighbors(queue[index])) {
       if (visited.has(neighbor.id)) {
@@ -82,7 +82,7 @@ export function assertGridConnected(grid: MazeGrid<SquareCell>): void {
   }
 }
 
-function* repairSpanningTree(context: MazeContext<SquareCell>): IterableIterator<MazeGenerationStep> {
+function* repairSpanningTree(context: MazeContext<GridCell>): IterableIterator<MazeGenerationStep> {
   const cellIndexById = new Map(
     context.grid.cells.map((cell, index) => [cell.id, index]),
   )

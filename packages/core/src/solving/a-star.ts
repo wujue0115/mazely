@@ -1,25 +1,24 @@
-import type { CellId, MazeAlgorithm, MazeContext, MazePoint, MazeSolvingStep, SquareCell } from '../types'
+import type { CellId, GridCell, MazeAlgorithm, MazeContext, MazePoint, MazeSolvingStep } from '../types'
 import { PriorityQueue } from '../utils'
-import { buildProcessStep, buildVisitStartStep, getOpenNeighbors, getSolveStartAndEndCells } from './shared'
+import { buildProcessStep, buildVisitStartStep, estimateCellDistance, getOpenNeighbors, getSolveStartAndEndCells } from './shared'
 
 interface OpenNode {
-  cell: SquareCell
+  cell: GridCell
   g: number
   f: number
 }
 
-class SolveAStarAlgorithm implements MazeAlgorithm<SquareCell, MazeSolvingStep> {
+class SolveAStarAlgorithm implements MazeAlgorithm<GridCell, MazeSolvingStep> {
   name = 'solve-a-star'
 
   constructor(private readonly start: MazePoint, private readonly end: MazePoint) {}
 
-  * generate(context: MazeContext<SquareCell>): IterableIterator<MazeSolvingStep> {
+  * generate(context: MazeContext<GridCell>): IterableIterator<MazeSolvingStep> {
     const { startCell, endCell } = getSolveStartAndEndCells(context, this.start, this.end)
     if (!startCell || !endCell)
       return
 
-    const heuristic = (cell: SquareCell) =>
-      Math.abs(cell.col - endCell.col) + Math.abs(cell.row - endCell.row)
+    const heuristic = (cell: GridCell) => estimateCellDistance(cell, endCell)
 
     const gScore = new Map<CellId, number>([[startCell.id, 0]])
     const parentById = new Map<CellId, CellId>()
@@ -68,6 +67,6 @@ class SolveAStarAlgorithm implements MazeAlgorithm<SquareCell, MazeSolvingStep> 
 export function createSolveAStarAlgorithm(
   start: MazePoint,
   end: MazePoint,
-): MazeAlgorithm<SquareCell, MazeSolvingStep> {
+): MazeAlgorithm<GridCell, MazeSolvingStep> {
   return new SolveAStarAlgorithm(start, end)
 }

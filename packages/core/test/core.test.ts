@@ -4,13 +4,16 @@ import {
   areCellsDirectlyLinked,
   cellIdToPoint,
   getReachableCellIds,
+  GridCell,
   isMazeGenerationAlgorithm,
   isMazeSolvingAlgorithm,
   MAZE_GENERATION_ALGORITHMS,
   MAZE_SOLVING_ALGORITHMS,
   Mazely,
   serializeGrid,
+  SquareCell,
   traverseGrid,
+  TriangleCell,
 } from '../src'
 
 function openedEdgeCount(grid: Mazely['grid']): number {
@@ -775,5 +778,213 @@ describe('@mazely/core', () => {
       reached.add(String(step.payload!.to))
     }
     expect(reached.size).toBe(16)
+  })
+
+  describe('triangle grids', () => {
+    it('builds alternating three-sided cells with reciprocal edges', () => {
+      const maze = new Mazely({ grid: { layout: 'triangle', size: 4, type: 'triangle' } })
+
+      expect(maze.grid.type).toBe('triangle')
+      expect(maze.grid.rows).toBe(4)
+      expect(maze.grid.cols).toBe(7)
+      expect(maze.grid.cells).toHaveLength(16)
+      expect(Array.from({ length: 4 }, (_, row) =>
+        maze.grid.cells.filter(cell => cell.row === row).length)).toEqual([1, 3, 5, 7])
+      expect(maze.grid.getCell('0:1')).toBeUndefined()
+      for (const cell of maze.grid.cells) {
+        expect(cell).toBeInstanceOf(GridCell)
+        expect(cell).toBeInstanceOf(TriangleCell)
+        expect(cell).not.toBeInstanceOf(SquareCell)
+        expect(cell.getEdges().length).toBeLessThanOrEqual(3)
+        for (const edge of cell.getEdges()) {
+          const other = edge.getOther(cell)
+          expect(other).not.toBeNull()
+          expect(other!.getEdges()).toContain(edge)
+        }
+      }
+
+      const up = maze.grid.getCell('0:0') as TriangleCell
+      const down = maze.grid.getCell('1:1') as TriangleCell
+      expect(up.orientation).toBe('up')
+      expect(up.edges.bottom?.getOther(up)?.id).toBe('1:1')
+      expect(down.orientation).toBe('down')
+      expect(down.edges.top?.getOther(down)?.id).toBe('0:0')
+    })
+
+    it('generates deterministic spanning trees with topology-compatible algorithms', () => {
+      const algorithms = [
+        'aldous-broder',
+        'binary-tree',
+        'dfs',
+        'eller',
+        'growing-tree',
+        'hunt-and-kill',
+        'kruskal',
+        'prim',
+        'recursive-division',
+        'sidewinder',
+        'traversal',
+        'wilson',
+      ] as const
+
+      for (const algorithm of algorithms) {
+        const first = new Mazely({
+          grid: { layout: 'triangle', size: 6, type: 'triangle' },
+          seed: 'triangle',
+        })
+        const second = new Mazely({
+          grid: { layout: 'triangle', size: 6, type: 'triangle' },
+          seed: 'triangle',
+        })
+        first.generate(algorithm, { start: { x: 0, y: 0 } }).finish()
+        second.generate(algorithm, { start: { x: 0, y: 0 } }).finish()
+
+        expect(openedEdgeCount(first.grid)).toBe(first.grid.cells.length - 1)
+        expect(getReachableCellIds(first.grid, '0:0').size).toBe(first.grid.cells.length)
+        expect(serializeGrid(first.grid)).toEqual(serializeGrid(second.grid))
+      }
+    })
+
+    it('solves triangle mazes with every solving algorithm', () => {
+      for (const algorithm of MAZE_SOLVING_ALGORITHMS) {
+        const maze = new Mazely({
+          grid: { layout: 'triangle', size: 6, type: 'triangle' },
+          seed: 42,
+        })
+        maze.generate('dfs', { start: { x: 0, y: 0 } }).finish()
+        const player = algorithm === 'flood'
+          ? maze.solve(algorithm, { start: { x: 0, y: 0 } })
+          : maze.solve(algorithm, { end: { x: 10, y: 5 }, start: { x: 0, y: 0 } })
+        player.finish()
+
+        const result = maze.getSolveResult()!
+        expect(result.solved).toBe(true)
+        if (algorithm !== 'flood') {
+          expect(result.path[0]).toEqual({ x: 0, y: 0 })
+          expect(result.path.at(-1)).toEqual({ x: 10, y: 5 })
+        }
+      }
+    })
+
+    it('keeps the triangle A-star heuristic admissible', () => {
+      const solve = (algorithm: 'a-star' | 'bfs') => {
+        const maze = new Mazely({ grid: { layout: 'triangle', size: 5, type: 'triangle' } })
+        maze.openAllEdges()
+        maze.solve(algorithm, { end: { x: 8, y: 4 }, start: { x: 0, y: 0 } }).finish()
+        return maze.getSolveResult()!.path
+      }
+
+      expect(solve('a-star').length).toBe(solve('bfs').length)
+    })
+
+    it('edits only real triangle adjacencies and protects serialized topology', () => {
+      const triangle = new Mazely({ grid: { layout: 'triangle', size: 4, type: 'triangle' } })
+      triangle.setEdgeOpenedBetween({ x: 0, y: 0 }, { x: 1, y: 1 }, true)
+      expect(openedEdgeCount(triangle.grid)).toBe(1)
+      expect(() => triangle.setEdgeOpenedBetween({ x: 0, y: 0 }, { x: 0, y: 1 }, true))
+        .toThrowError(/No edge exists/)
+
+      const square = new Mazely({ grid: { cols: 7, rows: 4, type: 'square' } })
+      expect(() => applySerializedGrid(square.grid, serializeGrid(triangle.grid)))
+        .toThrowError(/triangle grid.*square/)
+
+      const rectangle = new Mazely({
+        grid: { layout: 'rectangle', cols: 7, rows: 4, type: 'triangle' },
+      })
+      expect(() => applySerializedGrid(rectangle.grid, serializeGrid(triangle.grid)))
+        .toThrowError(/triangle layout.*rectangle layout/)
+    })
+
+    it('supports rectangular triangle layouts with rows and columns', () => {
+      const maze = new Mazely({
+        grid: { cols: 5, layout: 'rectangle', rows: 4, type: 'triangle' },
+        seed: 'triangle-rectangle',
+      })
+
+      expect(maze.grid.rows).toBe(4)
+      expect(maze.grid.cols).toBe(5)
+      expect(maze.grid.cells).toHaveLength(20)
+      expect((maze.grid.getCell('0:0') as TriangleCell).offsetX).toBe(0)
+      expect((maze.grid.getCell('1:0') as TriangleCell).orientation).toBe('down')
+      maze.generate('prim').finish()
+      expect(openedEdgeCount(maze.grid)).toBe(19)
+      expect(getReachableCellIds(maze.grid, '0:0').size).toBe(20)
+    })
+
+    it('runs Binary Tree on a masked rectangular triangle layout without repairs', () => {
+      const mask = [
+        [true, true, true, true],
+        [true, true, false, true],
+        [true, true, true, true],
+      ]
+      const maze = new Mazely({
+        grid: { cols: 4, layout: 'rectangle', mask, rows: 3, type: 'triangle' },
+        seed: 'triangle-binary-tree-mask',
+      })
+      const player = maze.generate('binary-tree')
+      player.finish()
+
+      expect(player.steps).toHaveLength(maze.grid.cells.length - 1)
+      expect(player.steps.every(step => step.type === 'carve')).toBe(true)
+      expect(openedEdgeCount(maze.grid)).toBe(maze.grid.cells.length - 1)
+      expect(getReachableCellIds(maze.grid, '0:0').size).toBe(maze.grid.cells.length)
+    })
+
+    it('runs Eller on a masked rectangular triangle layout', () => {
+      const mask = [
+        [true, true, true, true],
+        [true, true, false, true],
+        [true, true, true, true],
+      ]
+      const maze = new Mazely({
+        grid: { cols: 4, layout: 'rectangle', mask, rows: 3, type: 'triangle' },
+        seed: 'triangle-eller-mask',
+      })
+      const player = maze.generate('eller')
+      player.finish()
+
+      expect(player.steps).toHaveLength(maze.grid.cells.length - 1)
+      expect(player.steps.every(step => step.type === 'carve')).toBe(true)
+      expect(openedEdgeCount(maze.grid)).toBe(maze.grid.cells.length - 1)
+      expect(getReachableCellIds(maze.grid, '0:0').size).toBe(maze.grid.cells.length)
+    })
+
+    it('runs Sidewinder on a masked rectangular triangle layout without repairs', () => {
+      const mask = [
+        [true, true, true, true],
+        [true, true, true, true],
+        [true, true, true, false],
+      ]
+      const maze = new Mazely({
+        grid: { cols: 4, layout: 'rectangle', mask, rows: 3, type: 'triangle' },
+        seed: 'triangle-sidewinder-mask',
+      })
+      const player = maze.generate('sidewinder')
+      player.finish()
+
+      expect(player.steps).toHaveLength(maze.grid.cells.length - 1)
+      expect(player.steps.every(step => step.type === 'carve')).toBe(true)
+      expect(openedEdgeCount(maze.grid)).toBe(maze.grid.cells.length - 1)
+      expect(getReachableCellIds(maze.grid, '0:0').size).toBe(maze.grid.cells.length)
+    })
+
+    it('recursively divides a masked rectangular triangle layout without repairs', () => {
+      const mask = [
+        [true, true, true, true],
+        [true, true, false, true],
+        [true, true, true, true],
+      ]
+      const maze = new Mazely({
+        grid: { cols: 4, layout: 'rectangle', mask, rows: 3, type: 'triangle' },
+        seed: 'triangle-recursive-division-mask',
+      })
+      const player = maze.generate('recursive-division')
+
+      expect(openedEdgeCount(maze.grid)).toBe(maze.grid.edges.length)
+      player.finish()
+      expect(player.steps.every(step => step.type === 'close')).toBe(true)
+      expect(openedEdgeCount(maze.grid)).toBe(maze.grid.cells.length - 1)
+      expect(getReachableCellIds(maze.grid, '0:0').size).toBe(maze.grid.cells.length)
+    })
   })
 })

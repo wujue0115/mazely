@@ -7,7 +7,9 @@ import {
   shouldShowFloodVisualization,
 } from './lib/algorithms'
 import { app, initAppState } from './lib/app-state'
+import { confirmMazeReplacement, initConfirmationDialog } from './lib/controllers/confirmation-dialog'
 import { initFloodThemeEditor } from './lib/controllers/flood-theme-editor'
+import { shouldRenderGenerationPreview } from './lib/controllers/generation'
 import { initImageExport } from './lib/controllers/image-export'
 import {
   beginPointSelection,
@@ -50,11 +52,14 @@ import {
   invalidateGenerationPreview,
   setActiveTab,
   setGeneratePointMode,
+  setGridType,
   setSolvePointMode,
+  setTriangleLayout,
   syncGridDimensionInputs,
   syncShapePanel,
 } from './lib/controllers/workbench'
 import {
+  getPathSet,
   getSolveFrontierHeads,
   getSolveFrontierTrails,
   getSolveTrailPoints,
@@ -69,6 +74,7 @@ import {
   generatePointsAutoInput,
   generateStartButton,
   generationSelect,
+  gridTypeSelect,
   lockGridRatioInput,
   mazeHeightInput,
   mazeWidthInput,
@@ -109,6 +115,7 @@ import {
   tabSolve,
   themesPanel,
   topNav,
+  triangleLayoutSelect,
   useViewportRatioInput,
   view2dButton,
   view3dButton,
@@ -120,9 +127,17 @@ import {
   workbenchPanel,
 } from './lib/dom'
 import { buildExportFilename, downloadBlob } from './lib/export-image'
-import { buildMazeSvg } from './lib/export-svg'
+import { getOverlayScale } from './lib/grid-geometry'
+import { shouldConfirmMazeReplacement } from './lib/maze-replacement'
 import { key, parsePointKey } from './lib/point'
-import { ensureThreeView, fitMazeInView, render, resetView } from './lib/renderer'
+import {
+  ensureThreeView,
+  fitMazeInView,
+  getWebgl2dCellColor,
+  getWebgl2dGenerationOverlays,
+  render,
+  resetView,
+} from './lib/renderer'
 import { parseRange, resizeHighResCanvas } from './lib/utils'
 import '@fontsource/inter/400.css'
 import '@fontsource/inter/500.css'
@@ -158,6 +173,36 @@ tabEdit.addEventListener('click', () => {
 })
 
 generationSelect.addEventListener('change', invalidateGenerationPreview)
+gridTypeSelect.addEventListener('change', async () => {
+  const gridType = gridTypeSelect.value === 'triangle' ? 'triangle' : 'square'
+  if (gridType === app.gridType) {
+    return
+  }
+  const confirmed = await confirmGridReplacement({
+    message: `Changing to a ${gridType === 'triangle' ? 'Triangle' : 'Square'} grid will discard the current maze.`,
+    title: 'Change grid topology?',
+  })
+  if (!confirmed) {
+    gridTypeSelect.value = app.gridType
+    return
+  }
+  setGridType(gridType)
+})
+triangleLayoutSelect.addEventListener('change', async () => {
+  const layout = triangleLayoutSelect.value === 'rectangle' ? 'rectangle' : 'triangle'
+  if (layout === app.triangleLayout) {
+    return
+  }
+  const confirmed = await confirmGridReplacement({
+    message: 'Changing the Triangle layout will discard the current maze.',
+    title: 'Change Triangle layout?',
+  })
+  if (!confirmed) {
+    triangleLayoutSelect.value = app.triangleLayout
+    return
+  }
+  setTriangleLayout(layout)
+})
 solvingSelect.addEventListener('change', () => setSolvePointMode(solvePointsAutoInput.checked))
 generatePointsAutoInput.addEventListener('change', () => setGeneratePointMode(generatePointsAutoInput.checked))
 solvePointsAutoInput.addEventListener('change', () => setSolvePointMode(solvePointsAutoInput.checked))
@@ -214,10 +259,20 @@ speedRange.addEventListener('input', () => {
   syncLoopSpeed()
   syncUi()
 })
+let appearanceRenderFrame = 0
+function scheduleAppearanceRender(): void {
+  if (appearanceRenderFrame !== 0) {
+    return
+  }
+  appearanceRenderFrame = window.requestAnimationFrame(() => {
+    appearanceRenderFrame = 0
+    render()
+  })
+}
 wallRange.addEventListener('input', () => {
   app.wallThickness = parseRange(wallRange.value, app.wallThickness)
   syncUi()
-  render()
+  scheduleAppearanceRender()
 })
 function setView3d(enabled: boolean): void {
   if (app.view3d === enabled) {
@@ -249,7 +304,7 @@ wallHeightRange.addEventListener('input', () => {
   app.wallHeightPx = parseRange(wallHeightRange.value, app.wallHeightPx)
   wallHeightLabel.textContent = `${app.wallHeightPx} px`
   if (app.view3d) {
-    render()
+    scheduleAppearanceRender()
   }
 })
 styleWallInput.addEventListener('input', () => updateStyleTheme('wall', styleWallInput.value))
@@ -270,16 +325,24 @@ styleResetButton.addEventListener('click', resetStyleTheme)
 
 app.shapeEditor = initShapeEditor({
   getDefaultCols: () => 60,
+  getGridTopology: () => app.gridType === 'triangle'
+    ? { layout: app.triangleLayout, type: 'triangle' }
+    : { type: 'square' },
   onApply: applyShape,
   showToast,
 })
+initConfirmationDialog()
 initFloodThemeEditor()
 initMazeEditor()
 initMazeFileActions()
 initImageExport({ exportSvg, showToast })
 
-function exportSvg(): void {
-  const activePreview = app.activeTab === 'generate' ? app.generationPreview : null
+async function exportSvg(): Promise<void> {
+  const { buildMazeSvg } = await import('./lib/export-svg')
+  const generationPreview = app.activeTab === 'generate' ? app.generationPreview : null
+  const activePreview = generationPreview && shouldRenderGenerationPreview(generationPreview)
+    ? generationPreview
+    : null
   const maze = activePreview?.view ?? app.maze
   const runtime = activePreview?.runtime ?? app.mazeRuntime
   if (!runtime) {
@@ -306,8 +369,17 @@ function exportSvg(): void {
     visibleEnd: app.visibleElements.end,
     visibleStart: app.visibleElements.start,
   })
+  const exportPathSet = activePreview ? new Set<string>() : getPathSet()
 
   const svg = buildMazeSvg({
+    cellColor: (x, y) => getWebgl2dCellColor(
+      runtime,
+      activePreview,
+      exportPathSet,
+      floodActive,
+      x,
+      y,
+    ),
     flood: floodActive
       ? {
           depthByKey: app.floodDepthByKey,
@@ -315,6 +387,9 @@ function exportSvg(): void {
         }
       : undefined,
     maze,
+    overlays: activePreview
+      ? getWebgl2dGenerationOverlays(activePreview, getOverlayScale(activePreview.runtime))
+      : undefined,
     pointMarkers,
     runtime,
     solve: app.activeTab === 'solve' && app.stepState.algorithm !== 'flood'
@@ -329,6 +404,7 @@ function exportSvg(): void {
       : undefined,
     theme: app.styleTheme,
     visibleElements: app.visibleElements,
+    wallThickness: app.wallThickness,
   })
   downloadBlob(
     buildExportFilename(maze.cols, maze.rows, 'svg'),
@@ -364,8 +440,15 @@ function getExportSolveFrontierTrails() {
   return getSolveFrontierTrails(heads)
 }
 
-shapeUploadButton.addEventListener('click', () => shapeFileInput.click())
-shapeEditButton.addEventListener('click', () => {
+shapeUploadButton.addEventListener('click', async () => {
+  if (await prepareImageShapeLayout()) {
+    shapeFileInput.click()
+  }
+})
+shapeEditButton.addEventListener('click', async () => {
+  if (!(await prepareImageShapeLayout())) {
+    return
+  }
   if (!app.shapeEditor?.reopen()) {
     shapeFileInput.click()
   }
@@ -375,6 +458,33 @@ shapeColorsInput.addEventListener('change', () => {
   app.showShapeColors = shapeColorsInput.checked
   render()
 })
+
+interface GridReplacementDialogOptions {
+  title: string
+  message: string
+}
+
+async function confirmGridReplacement(options: GridReplacementDialogOptions): Promise<boolean> {
+  return !shouldConfirmMazeReplacement(app) || confirmMazeReplacement(options)
+}
+
+async function prepareImageShapeLayout(): Promise<boolean> {
+  if (app.gridType !== 'triangle' || app.triangleLayout === 'rectangle') {
+    return true
+  }
+
+  const confirmed = await confirmGridReplacement({
+    message: 'Image-shaped Triangle mazes require the rectangular layout. Continuing will discard the current maze.',
+    title: 'Use rectangular Triangle layout?',
+  })
+  if (!confirmed) {
+    return false
+  }
+
+  triangleLayoutSelect.value = 'rectangle'
+  setTriangleLayout('rectangle')
+  return true
+}
 
 railWorkbenchButton.addEventListener('click', () => togglePanel('workbench'))
 railThemesButton.addEventListener('click', () => togglePanel('themes'))

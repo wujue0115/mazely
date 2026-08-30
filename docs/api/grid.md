@@ -1,5 +1,5 @@
 ---
-description: Reference Mazely grid, cell, edge, graph traversal, neighbor, connectivity, and square-grid APIs.
+description: Reference Mazely grid, cell, edge, graph traversal, neighbor, connectivity, and built-in topology APIs.
 ---
 
 # Grid & Graph
@@ -12,6 +12,7 @@ low-level factory is available for custom runtimes.
 
 ```ts
 interface MazeGrid<Cell extends MazeCell = MazeCell> {
+  readonly type: 'square' | 'triangle'
   readonly rows: number
   readonly cols: number
   readonly cells: Cell[]
@@ -34,7 +35,7 @@ function createSquareGrid(
   rows: number,
   cols: number,
   mask?: SquareGridMask,
-): MazeGrid<SquareCell>
+): SquareGrid
 ```
 
 ```ts
@@ -55,10 +56,43 @@ const grid = createSquareGrid(3, 3, [
 
 Edges connected to excluded cells are not created.
 
+## `createTriangleGrid()`
+
+Creates an alternating triangular tiling. Each cell has left and right sides
+plus a horizontal base, and therefore at most three neighbors.
+
+```ts
+function createTriangleGrid(size: number, mask?: TriangleGridMask): TriangleGrid
+function createTriangleGrid(rows: number, cols: number, mask?: TriangleGridMask): TriangleGrid
+```
+
+```ts
+import { createTriangleGrid } from 'mazely'
+
+const grid = createTriangleGrid(10)
+const cell = grid.getCell('0:0')
+
+cell?.orientation // 'up'
+```
+
+The argument is the number of smallest triangles along every outer side. A
+size-10 grid contains 100 cells in a triangular boundary. Row `r` contains
+`2r + 1` cells. Logical coordinates and IDs retain the same `row:col`
+representation as square grids.
+
+Pass rows and columns to create a rectangular outer boundary instead:
+
+```ts
+const rectangular = createTriangleGrid(10, 20)
+```
+
+`TriangleGrid.layout` is `triangle` for the size overload and `rectangle`
+for the rows-and-columns overload.
+
 ## Cell IDs and Coordinates
 
-`SquareCell` exposes `row`, `col`, directional edge references, metadata, and
-base cell methods.
+`GridCell` provides the logical `row`, `col`, directional edge references,
+metadata, and base cell methods shared by `SquareCell` and `TriangleCell`.
 
 ```ts
 const cell = maze.grid.getCell('2:4')
