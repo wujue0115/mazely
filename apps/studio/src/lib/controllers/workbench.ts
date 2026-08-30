@@ -25,6 +25,7 @@ import {
   tabSolve,
   triangleLayoutField,
   useViewportRatioInput,
+  viewportRatioToggle,
 } from '../dom'
 import {
   getViewportRatioRows,
@@ -359,7 +360,8 @@ export function syncGridDimensionInputs(changedBy: 'width' | 'height' | 'none' =
     mazeHeightInput.disabled = true
     mazeHeightField.classList.add('is-hidden')
     dimensionGrid.classList.add('is-ratio')
-    mazeWidthLabel.textContent = 'SIZE'
+    viewportRatioToggle.classList.add('is-hidden')
+    mazeWidthLabel.textContent = 'SIZE (SIDE)'
     if (size == null) {
       return false
     }
@@ -374,6 +376,7 @@ export function syncGridDimensionInputs(changedBy: 'width' | 'height' | 'none' =
     ? TRIANGLE_RECTANGLE_VISUAL_COLS_MAX
     : GRID_DIMENSION_MAX
   mazeWidthInput.max = String(widthMax)
+  viewportRatioToggle.classList.remove('is-hidden')
   const shapeLocked = app.shape !== null
   mazeWidthInput.disabled = shapeLocked
   useViewportRatioInput.disabled = shapeLocked

@@ -251,15 +251,15 @@
           <section id="triangle-layout-field" class="field-group is-hidden">
             <label class="micro-label" for="triangle-layout">Grid Layout</label>
             <select id="triangle-layout">
-              <option value="triangle" selected>Triangle · Side size</option>
-              <option value="rectangle">Rectangle · Rows × columns</option>
+              <option value="triangle" selected>triangle</option>
+              <option value="rectangle">rectangle</option>
             </select>
           </section>
 
           <section class="field-group">
             <div class="field-head">
               <span class="micro-label">Grid Geometry</span>
-              <label class="micro-check" for="use-viewport-ratio">
+              <label id="viewport-ratio-toggle" class="micro-check" for="use-viewport-ratio">
                 <input id="use-viewport-ratio" type="checkbox" />
                 <span>Viewport ratio</span>
               </label>
@@ -329,8 +329,8 @@
             <div class="shape-foot">
               <p id="shape-status" class="shape-status">Full rectangle — upload an image to shape the maze.</p>
               <label class="micro-check shape-colors-toggle is-hidden" for="shape-colors-visible">
-                <span>Show colors</span>
                 <input id="shape-colors-visible" type="checkbox" checked />
+                <span>Show colors</span>
               </label>
             </div>
             <input id="shape-file-input" type="file" accept="image/*" class="sr-only" tabindex="-1" />
