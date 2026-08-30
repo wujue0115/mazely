@@ -125,12 +125,10 @@ export function syncUi(): void {
     wallThickness: app.wallThickness,
     widthInput: mazeWidthInput,
   })
-  if (app.gridType === 'triangle') {
+  if (app.gridType === 'triangle' && app.triangleLayout === 'triangle') {
     useViewportRatioInput.disabled = true
-    if (app.triangleLayout === 'triangle') {
-      mazeHeightInput.disabled = true
-      lockGridRatioInput.disabled = true
-    }
+    mazeHeightInput.disabled = true
+    lockGridRatioInput.disabled = true
   }
 }
 

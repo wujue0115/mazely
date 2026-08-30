@@ -26,6 +26,7 @@ import {
   triangleLayoutField,
   useViewportRatioInput,
 } from '../dom'
+import { getViewportRatioRows } from '../grid-geometry'
 import { key } from '../point'
 import { fitMazeInView, render } from '../renderer'
 import { getRandomMaskPoint } from '../shape-mask'
@@ -391,7 +392,11 @@ export function syncGridDimensionInputs(changedBy: 'width' | 'height' | 'none' =
   app.mazeWidth = resolvedWidth
   if (app.useViewportRatio) {
     const ratio = getViewportHeightWidthRatio()
-    app.mazeHeight = clamp(Math.round(app.mazeWidth * ratio), 1, GRID_DIMENSION_MAX)
+    app.mazeHeight = clamp(
+      getViewportRatioRows(app.mazeWidth, ratio, app.gridType),
+      1,
+      GRID_DIMENSION_MAX,
+    )
   }
   else if (app.lockGridRatio) {
     const ratio = app.lockedGridRatio > 0 ? app.lockedGridRatio : 1

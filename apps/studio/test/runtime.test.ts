@@ -1,7 +1,7 @@
 import type { Maze } from 'mazely'
 import { createMaze } from 'mazely'
 import { describe, expect, it } from 'vitest'
-import { getCellCenter, hitTestCell } from '../src/lib/grid-geometry'
+import { getCellCenter, getViewportRatioRows, hitTestCell } from '../src/lib/grid-geometry'
 import {
   countGridLines,
   hasOpenCellEdge,
@@ -9,6 +9,10 @@ import {
 } from '../src/lib/runtime'
 
 describe('square grid reference lines', () => {
+  it('fits square rows to the viewport aspect ratio', () => {
+    expect(getViewportRatioRows(100, 0.5, 'square')).toBe(50)
+  })
+
   it('visits each full-grid cell boundary exactly once', () => {
     const runtime = createMaze({ grid: { cols: 2, rows: 2, type: 'square' } })
     const lines = collectLines(runtime)
@@ -53,6 +57,10 @@ describe('square grid reference lines', () => {
 })
 
 describe('triangle grid reference lines', () => {
+  it('fits rectangular triangle rows using triangular world dimensions', () => {
+    expect(getViewportRatioRows(100, 0.5, 'triangle')).toBe(29)
+  })
+
   it('visits each triangular boundary exactly once', () => {
     const runtime = createMaze({ grid: { layout: 'triangle', size: 4, type: 'triangle' } })
     const lines = collectLines(runtime)

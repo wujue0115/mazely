@@ -1,4 +1,4 @@
-import type { GridCell, Maze, MazeEdge, MazePoint, TriangleGrid } from 'mazely'
+import type { GridCell, Maze, MazeEdge, MazeGridType, MazePoint, TriangleGrid } from 'mazely'
 import { TriangleCell } from 'mazely'
 
 export interface WorldPoint {
@@ -28,6 +28,16 @@ export function getGridBounds(runtime: Maze): GridBounds {
   return runtime.grid.type === 'triangle'
     ? { height: runtime.grid.rows * TRIANGLE_HEIGHT, width: (runtime.grid.cols + 1) / 2 }
     : { height: runtime.grid.rows, width: runtime.grid.cols }
+}
+
+export function getViewportRatioRows(
+  cols: number,
+  viewportHeightWidthRatio: number,
+  gridType: MazeGridType,
+): number {
+  const worldWidth = gridType === 'triangle' ? (cols + 1) / 2 : cols
+  const cellHeight = gridType === 'triangle' ? TRIANGLE_HEIGHT : 1
+  return Math.round((worldWidth * viewportHeightWidthRatio) / cellHeight)
 }
 
 export function getCellCenter(cell: GridCell): WorldPoint {

@@ -40,6 +40,8 @@ published `mazely` and `@mazely/core` packages.
   size limit, including their derived logical column counts above 500.
 - Preserved image shapes and their cell colors when every grid cell is kept in
   saved `.maze` files.
+- Enabled viewport-ratio sizing for rectangular Triangle layouts using their
+  triangular cell dimensions.
 - Kept passage widths consistent when rendering thick triangular walls,
   including 60-degree and 120-degree junctions and terminal wall cuts.
 - Matched Triangle 3D wall junctions and terminal cuts to the 2D geometry.
