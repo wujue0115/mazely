@@ -26,7 +26,12 @@ import {
   triangleLayoutField,
   useViewportRatioInput,
 } from '../dom'
-import { getViewportRatioRows } from '../grid-geometry'
+import {
+  getViewportRatioRows,
+  TRIANGLE_RECTANGLE_VISUAL_COLS_MAX,
+  triangleRectangleCellColsToVisualCols,
+  triangleRectangleVisualColsToCellCols,
+} from '../grid-geometry'
 import { key } from '../point'
 import { fitMazeInView, render } from '../renderer'
 import { getRandomMaskPoint } from '../shape-mask'
@@ -222,8 +227,10 @@ export function applyShape(nextShape: AppliedShape): void {
   clearGenerationPreviewState()
 
   app.shape = nextShape
-  app.mazeWidth = app.gridType === 'triangle' && app.triangleLayout === 'triangle'
-    ? (nextShape.size ?? nextShape.rows)
+  app.mazeWidth = app.gridType === 'triangle'
+    ? app.triangleLayout === 'triangle'
+      ? (nextShape.size ?? nextShape.rows)
+      : triangleRectangleCellColsToVisualCols(nextShape.cols)
     : nextShape.cols
   app.mazeHeight = nextShape.rows
   app.hasValidGridDimensions = true
@@ -298,6 +305,9 @@ export function setGridType(gridType: MazeGridType): void {
   stopSolveAnimation()
   clearGenerationPreviewState()
   app.gridType = gridType
+  if (gridType === 'triangle' && app.triangleLayout === 'rectangle') {
+    app.mazeWidth = clamp(app.mazeWidth, 1, TRIANGLE_RECTANGLE_VISUAL_COLS_MAX)
+  }
   app.shape = null
   app.useViewportRatio = false
   app.lockGridRatio = false
@@ -327,6 +337,9 @@ export function setTriangleLayout(layout: TriangleGridLayout): void {
   stopSolveAnimation()
   clearGenerationPreviewState()
   app.triangleLayout = layout
+  if (layout === 'rectangle') {
+    app.mazeWidth = clamp(app.mazeWidth, 1, TRIANGLE_RECTANGLE_VISUAL_COLS_MAX)
+  }
   app.shape = null
   rebuildMazeForShapeChange()
   showToast(`${layout === 'triangle' ? 'Triangular' : 'Rectangular'} layout selected.`)
@@ -340,6 +353,7 @@ export function syncGridDimensionInputs(changedBy: 'width' | 'height' | 'none' =
     useViewportRatioInput.checked = false
     lockGridRatioInput.checked = false
     mazeWidthInput.disabled = app.shape !== null
+    mazeWidthInput.max = String(GRID_DIMENSION_MAX)
     useViewportRatioInput.disabled = true
     lockGridRatioInput.disabled = true
     mazeHeightInput.disabled = true
@@ -356,6 +370,10 @@ export function syncGridDimensionInputs(changedBy: 'width' | 'height' | 'none' =
     return true
   }
 
+  const widthMax = app.gridType === 'triangle' && app.triangleLayout === 'rectangle'
+    ? TRIANGLE_RECTANGLE_VISUAL_COLS_MAX
+    : GRID_DIMENSION_MAX
+  mazeWidthInput.max = String(widthMax)
   const shapeLocked = app.shape !== null
   mazeWidthInput.disabled = shapeLocked
   useViewportRatioInput.disabled = shapeLocked
@@ -371,7 +389,8 @@ export function syncGridDimensionInputs(changedBy: 'width' | 'height' | 'none' =
     return true
   }
 
-  const nextWidth = parseGridDimensionOptional(mazeWidthInput.value)
+  const parsedWidth = parseGridDimensionOptional(mazeWidthInput.value)
+  const nextWidth = parsedWidth == null ? null : clamp(parsedWidth, 1, widthMax)
   const nextHeight = parseGridDimensionOptional(mazeHeightInput.value)
   const missingDimension = nextWidth == null || (!app.useViewportRatio && nextHeight == null)
 
@@ -393,7 +412,13 @@ export function syncGridDimensionInputs(changedBy: 'width' | 'height' | 'none' =
   if (app.useViewportRatio) {
     const ratio = getViewportHeightWidthRatio()
     app.mazeHeight = clamp(
-      getViewportRatioRows(app.mazeWidth, ratio, app.gridType),
+      getViewportRatioRows(
+        app.gridType === 'triangle'
+          ? triangleRectangleVisualColsToCellCols(app.mazeWidth)
+          : app.mazeWidth,
+        ratio,
+        app.gridType,
+      ),
       1,
       GRID_DIMENSION_MAX,
     )
@@ -402,7 +427,7 @@ export function syncGridDimensionInputs(changedBy: 'width' | 'height' | 'none' =
     const ratio = app.lockedGridRatio > 0 ? app.lockedGridRatio : 1
     if (changedBy === 'height') {
       app.mazeHeight = resolvedHeight
-      app.mazeWidth = clamp(Math.round(app.mazeHeight * ratio), 1, GRID_DIMENSION_MAX)
+      app.mazeWidth = clamp(Math.round(app.mazeHeight * ratio), 1, widthMax)
     }
     else {
       app.mazeWidth = resolvedWidth
@@ -436,7 +461,7 @@ export function applyGridDimensionChange(changedBy: 'width' | 'height' | 'none' 
   }
 
   const wasValid = app.hasValidGridDimensions
-  const previousWidth = app.gridType === 'triangle' && app.triangleLayout === 'triangle'
+  const previousWidth = app.gridType === 'triangle'
     ? (app.maze.cols + 1) / 2
     : (app.maze.cols || app.mazeWidth)
   const previousHeight = app.gridType === 'triangle'

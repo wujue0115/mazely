@@ -110,6 +110,12 @@ describe('shape-mask', () => {
     expect(countMaskCells(cellMask)).toBe(9)
   })
 
+  it('uses visual width for rectangular triangle image grids', () => {
+    const topology = { layout: 'rectangle', type: 'triangle' } as const
+
+    expect(getShapeGridDimensions(200, 100, 4, topology)).toEqual({ cols: 7, rows: 2 })
+  })
+
   it('hit-tests the actual polygons of rectangular triangle cells', () => {
     const bitmap = { height: 100, width: 150 }
     const topology = { layout: 'rectangle', type: 'triangle' } as const

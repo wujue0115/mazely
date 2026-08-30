@@ -17,6 +17,7 @@ import {
   wallRange,
 } from '../dom'
 import { DEFAULT_CUSTOM_FLOOD_THEME } from '../flood'
+import { triangleRectangleCellColsToVisualCols } from '../grid-geometry'
 import {
   createMazeFilename,
   decodeMazeFile,
@@ -141,7 +142,9 @@ async function loadMazeFile(file: File): Promise<void> {
     if (loaded.runtime.grid.type === 'triangle') {
       const grid = loaded.runtime.grid as TriangleGrid
       app.triangleLayout = grid.layout
-      app.mazeWidth = grid.layout === 'triangle' ? grid.size! : grid.cols
+      app.mazeWidth = grid.layout === 'triangle'
+        ? grid.size!
+        : triangleRectangleCellColsToVisualCols(grid.cols)
       app.mazeHeight = grid.layout === 'triangle' ? grid.size! : grid.rows
     }
     else {

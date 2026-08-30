@@ -1,5 +1,6 @@
 import type { MazePoint } from '../maze-types'
 import type { CellColors, CellMask, PixelMask, ShapeGridTopology } from '../shape-mask'
+import { TRIANGLE_RECTANGLE_VISUAL_COLS_MAX } from '../grid-geometry'
 import {
   buildAutoPixelMask,
   buildCellColors,
@@ -275,7 +276,7 @@ export function initShapeEditor(options: ShapeEditorOptions): ShapeEditorApi {
       colsInput.value = String(size)
       return
     }
-    size = clamp(parsed, 4, GRID_DIMENSION_MAX)
+    size = clamp(parsed, 4, getSizeMax(topology))
     colsInput.value = String(size)
     refreshDerivedState()
     queueRender()
@@ -481,7 +482,10 @@ export function initShapeEditor(options: ShapeEditorOptions): ShapeEditorApi {
     sourceCanvas = working
     sourceImageData = workingCtx.getImageData(0, 0, width, height)
     sourceHasAlpha = hasAlphaPixels(sourceImageData)
-    size = clamp(options.getDefaultCols(), 4, GRID_DIMENSION_MAX)
+    topology = options.getGridTopology()
+    const sizeMax = getSizeMax(topology)
+    size = clamp(options.getDefaultCols(), 4, sizeMax)
+    colsInput.max = String(sizeMax)
     colsInput.value = String(size)
 
     clearHistory()
@@ -508,6 +512,7 @@ export function initShapeEditor(options: ShapeEditorOptions): ShapeEditorApi {
       return
     }
     topology = options.getGridTopology()
+    colsInput.max = String(getSizeMax(topology))
     const dimensions = getShapeGridDimensions(pixelMask.width, pixelMask.height, size, topology)
     cols = dimensions.cols
     rows = clamp(dimensions.rows, 1, GRID_DIMENSION_MAX)
@@ -517,6 +522,12 @@ export function initShapeEditor(options: ShapeEditorOptions): ShapeEditorApi {
     cellCount = regions.cellCount
     overlayDirty = true
     syncFooter()
+  }
+
+  function getSizeMax(nextTopology: ShapeGridTopology): number {
+    return nextTopology.type === 'triangle' && nextTopology.layout === 'rectangle'
+      ? TRIANGLE_RECTANGLE_VISUAL_COLS_MAX
+      : GRID_DIMENSION_MAX
   }
 
   function syncFooter(): void {

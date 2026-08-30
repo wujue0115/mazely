@@ -144,9 +144,9 @@ export function getShapeGridDimensions(
     return { cols: size * 2 - 1, rows: size }
   }
   if (topology.type === 'triangle') {
-    const worldWidth = (size + 1) / 2
+    const worldWidth = size
     const rows = Math.max(1, Math.round((worldWidth * imageHeight) / (imageWidth * TRIANGLE_HEIGHT)))
-    return { cols: size, rows }
+    return { cols: size * 2 - 1, rows }
   }
   return {
     cols: size,

@@ -151,9 +151,7 @@ export function render(): void {
     return
   }
 
-  const { cols: colCount, rows: rowCount } = activeRuntime.grid
-
-  if (rowCount === 0 || colCount === 0) {
+  if (activeRuntime.grid.cells.length === 0) {
     syncUi()
     return
   }
@@ -161,7 +159,7 @@ export function render(): void {
   const cellSize = FIXED_CELL_SIZE
   const cellScreenSize = cellSize * app.zoom
   const lowDetail = cellScreenSize < LOW_DETAIL_CELL_SCREEN_SIZE
-    || (rowCount * colCount >= LOW_DETAIL_CELL_COUNT && cellScreenSize < 8)
+    || (activeRuntime.grid.cells.length >= LOW_DETAIL_CELL_COUNT && cellScreenSize < 8)
 
   const pathSet = previewingGeneration ? EMPTY_KEY_SET : getPathSet()
 

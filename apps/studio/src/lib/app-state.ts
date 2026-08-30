@@ -23,6 +23,7 @@ import {
   wallRange,
 } from './dom'
 import { DEFAULT_CUSTOM_FLOOD_THEME, DEFAULT_FLOOD_THEME } from './flood'
+import { triangleRectangleVisualColsToCellCols } from './grid-geometry'
 import { key } from './point'
 import { DEFAULT_STYLE_THEME, DEFAULT_STYLE_VISIBILITY } from './types'
 import { parseGridDimension, parseRange } from './utils'
@@ -160,7 +161,13 @@ export function createSolidMazeState(
     grid: gridType === 'triangle'
       ? triangleLayout === 'triangle'
         ? { layout: 'triangle', mask: shape?.cellMask ?? undefined, size: width, type: 'triangle' }
-        : { cols: width, layout: 'rectangle', mask: shape?.cellMask ?? undefined, rows: height, type: 'triangle' }
+        : {
+            cols: triangleRectangleVisualColsToCellCols(width),
+            layout: 'rectangle',
+            mask: shape?.cellMask ?? undefined,
+            rows: height,
+            type: 'triangle',
+          }
       : { cols: width, mask: shape?.cellMask ?? undefined, rows: height, type: 'square' },
   })
   const start = shape?.start ?? { x: 0, y: 0 }

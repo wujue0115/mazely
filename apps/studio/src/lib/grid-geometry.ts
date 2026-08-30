@@ -19,6 +19,18 @@ export interface GridSegment {
 export const TRIANGLE_HEIGHT = Math.sqrt(3) / 2
 /** Linear scale matching the area of an equilateral triangle to a square cell. */
 export const TRIANGLE_OVERLAY_SCALE = Math.sqrt(TRIANGLE_HEIGHT / 2)
+/** Maximum editable visual width for a rectangular triangle grid. */
+export const TRIANGLE_RECTANGLE_VISUAL_COLS_MAX = 250
+
+/** Converts the displayed width of a rectangular triangle grid to its cell columns. */
+export function triangleRectangleVisualColsToCellCols(visualCols: number): number {
+  return visualCols * 2 - 1
+}
+
+/** Converts rectangular triangle cell columns to the displayed visual width. */
+export function triangleRectangleCellColsToVisualCols(cellCols: number): number {
+  return (cellCols + 1) / 2
+}
 
 export function getOverlayScale(runtime: Maze): number {
   return runtime.grid.type === 'triangle' ? TRIANGLE_OVERLAY_SCALE : 1

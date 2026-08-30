@@ -14,6 +14,7 @@ import {
 } from '../app-state'
 import { bumpGenerationCacheVersion, bumpSolveCacheVersion } from '../derived'
 import { generationSelect, solvingSelect, speedRange } from '../dom'
+import { triangleRectangleVisualColsToCellCols } from '../grid-geometry'
 import { key, parsePointKey } from '../point'
 import { render } from '../renderer'
 import { applySolveStepToState, rebuildSolveVisualState } from '../solver-state'
@@ -131,7 +132,13 @@ function createCurrentMaze(): GenerationPreview {
     grid: app.gridType === 'triangle'
       ? app.triangleLayout === 'triangle'
         ? { layout: 'triangle', mask: app.shape?.cellMask, size: app.mazeWidth, type: 'triangle' }
-        : { cols: app.mazeWidth, layout: 'rectangle', mask: app.shape?.cellMask, rows: app.mazeHeight, type: 'triangle' }
+        : {
+            cols: triangleRectangleVisualColsToCellCols(app.mazeWidth),
+            layout: 'rectangle',
+            mask: app.shape?.cellMask,
+            rows: app.mazeHeight,
+            type: 'triangle',
+          }
       : { cols: app.mazeWidth, mask: app.shape?.cellMask, rows: app.mazeHeight, type: 'square' },
   })
   const start = app.generatePointMode === 'manual'
