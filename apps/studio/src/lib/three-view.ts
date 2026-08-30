@@ -17,7 +17,7 @@ import {
   getMazeScaledWheelZoomStep,
   getViewportPixelRatio,
 } from './utils'
-import { buildTriangleWallPositions } from './webgl-2d-view'
+import { buildTriangleWallPositionChunks } from './webgl-2d-view'
 
 /** Grid-adjacent line segment drawn flat on the floor (2D trail/path lines). */
 export interface ThreeOverlaySegment {
@@ -42,6 +42,7 @@ export interface ThreeViewSyncState {
   wallHeight: number
   /** Wall thickness in world units. */
   wallThickness: number
+  wallRevision: number
   wallsVisible: boolean
   wallColor: string
   getCellColor: (x: number, y: number) => string
@@ -159,8 +160,42 @@ export function buildTriangleWallGeometry(
   thickness: number,
   height: number,
 ): THREE.BufferGeometry {
-  const footprint = buildTriangleWallPositions(runtime, thickness)
+  const chunks = buildTriangleWallPositionChunks(runtime, thickness)
+    .filter(chunk => chunk.length > 0)
+    .map(chunk => getExtrudedTriangleWallChunk(chunk, height))
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.BufferAttribute(
+    concatFloat32Arrays(chunks.map(chunk => chunk.positions)),
+    3,
+  ))
+  geometry.setAttribute('normal', new THREE.BufferAttribute(
+    concatFloat32Arrays(chunks.map(chunk => chunk.normals)),
+    3,
+  ))
+  return geometry
+}
+
+interface ExtrudedTriangleWallChunk {
+  normals: Float32Array
+  positions: Float32Array
+}
+
+const extrudedTriangleWallChunks = new WeakMap<Float32Array, {
+  height: number
+  result: ExtrudedTriangleWallChunk
+}>()
+
+function getExtrudedTriangleWallChunk(
+  footprint: Float32Array,
+  height: number,
+): ExtrudedTriangleWallChunk {
+  const cached = extrudedTriangleWallChunks.get(footprint)
+  if (cached?.height === height) {
+    return cached.result
+  }
+
   const positions: number[] = []
+  const normals: number[] = []
   const edges = new Map<string, {
     count: number
     from: { x: number, z: number }
@@ -171,6 +206,22 @@ export function buildTriangleWallGeometry(
     b: { point: { x: number, z: number }, y: number },
     c: { point: { x: number, z: number }, y: number },
   ): void => {
+    const ab = {
+      x: b.point.x - a.point.x,
+      y: b.y - a.y,
+      z: b.point.z - a.point.z,
+    }
+    const ac = {
+      x: c.point.x - a.point.x,
+      y: c.y - a.y,
+      z: c.point.z - a.point.z,
+    }
+    const normal = {
+      x: ab.y * ac.z - ab.z * ac.y,
+      y: ab.z * ac.x - ab.x * ac.z,
+      z: ab.x * ac.y - ab.y * ac.x,
+    }
+    const normalLength = Math.hypot(normal.x, normal.y, normal.z) || 1
     positions.push(
       a.point.x,
       a.y,
@@ -182,6 +233,9 @@ export function buildTriangleWallGeometry(
       c.y,
       c.point.z,
     )
+    for (let index = 0; index < 3; index += 1) {
+      normals.push(normal.x / normalLength, normal.y / normalLength, normal.z / normalLength)
+    }
   }
 
   for (let offset = 0; offset < footprint.length; offset += 9) {
@@ -235,10 +289,22 @@ export function buildTriangleWallGeometry(
     )
   }
 
-  const geometry = new THREE.BufferGeometry()
-  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
-  geometry.computeVertexNormals()
-  return geometry
+  const result = {
+    normals: new Float32Array(normals),
+    positions: new Float32Array(positions),
+  }
+  extrudedTriangleWallChunks.set(footprint, { height, result })
+  return result
+}
+
+function concatFloat32Arrays(chunks: Float32Array[]): Float32Array {
+  const output = new Float32Array(chunks.reduce((total, chunk) => total + chunk.length, 0))
+  let offset = 0
+  for (const chunk of chunks) {
+    output.set(chunk, offset)
+    offset += chunk.length
+  }
+  return output
 }
 
 /**
@@ -282,6 +348,8 @@ export class ThreeMazeView {
   private gridMesh: THREE.Mesh | null = null
   private gridRuntime: Maze | null = null
   private gridWidth = 0
+  private wallRuntime: Maze | null = null
+  private lastWallKey = ''
   private overlayLineMesh: THREE.InstancedMesh | null = null
   private overlayDotMesh: THREE.InstancedMesh | null = null
   private readonly startMesh: THREE.Mesh
@@ -559,12 +627,30 @@ export class ThreeMazeView {
     if (!state.wallsVisible) {
       mesh.count = 0
       this.triangleWallMesh.visible = false
+      this.lastWallKey = ''
       return
     }
 
-    const matrix = new THREE.Matrix4()
     const height = Math.max(state.wallHeight, MIN_WALL_HEIGHT)
     const thickness = state.wallThickness
+    const runtimeState = state.runtime.getState()
+    const wallKey = [
+      runtimeState.phase,
+      runtimeState.index,
+      runtimeState.done,
+      thickness,
+      height,
+      state.wallRevision,
+      state.runtime.grid.rows,
+      state.runtime.grid.cols,
+    ].join('|')
+    if (this.wallRuntime === state.runtime && this.lastWallKey === wallKey) {
+      return
+    }
+    this.wallRuntime = state.runtime
+    this.lastWallKey = wallKey
+
+    const matrix = new THREE.Matrix4()
     let index = 0
 
     if (state.runtime.grid.type === 'triangle') {

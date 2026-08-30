@@ -4,6 +4,7 @@ import * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
 import { getCellBoundarySegments, getSharedBoundary } from '../src/lib/grid-geometry'
 import {
+  buildTriangleWallPositions,
   buildTriangleWallStripPositions,
   get60DegreeMiterPoint,
   get60DegreeOppositeWallSegment,
@@ -74,6 +75,63 @@ describe('webGL 2D wall rendering', () => {
     expect(Math.max(...xs)).toBeGreaterThan(1)
     expect(Math.max(...ys)).toBeGreaterThan(0)
     expect(Math.min(...ys)).toBeLessThan(-Math.sqrt(3) / 2)
+  })
+
+  it('updates Triangle wall color without rebuilding its geometry', () => {
+    const runtime = createMaze({ grid: { layout: 'triangle', size: 2, type: 'triangle' } })
+    const view = Object.create(Webgl2dMazeView.prototype) as Webgl2dMazeView
+    Reflect.set(view, 'wallMesh', new THREE.InstancedMesh(
+      new THREE.PlaneGeometry(1, 1),
+      new THREE.MeshBasicMaterial(),
+      12,
+    ))
+    const triangleWallMesh = createTriangleWallMesh()
+    const wallMaterial = new THREE.MeshBasicMaterial()
+    Reflect.set(view, 'triangleWallMesh', triangleWallMesh)
+    Reflect.set(view, 'wallMaterial', wallMaterial)
+    Reflect.set(view, 'wallRuntime', null)
+    Reflect.set(view, 'lastWallKey', '')
+
+    syncWalls(view, wallState(runtime))
+    const geometry = triangleWallMesh.geometry
+    syncWalls(view, { ...wallState(runtime), wallColor: '#123456' })
+
+    expect(triangleWallMesh.geometry).toBe(geometry)
+    expect(wallMaterial.color.getHexString()).toBe('123456')
+  })
+
+  it('rebuilds cached Triangle wall geometry after thickness changes', () => {
+    const runtime = createMaze({ grid: { layout: 'triangle', size: 2, type: 'triangle' } })
+    const view = Object.create(Webgl2dMazeView.prototype) as Webgl2dMazeView
+    Reflect.set(view, 'wallMesh', new THREE.InstancedMesh(
+      new THREE.PlaneGeometry(1, 1),
+      new THREE.MeshBasicMaterial(),
+      12,
+    ))
+    const triangleWallMesh = createTriangleWallMesh()
+    Reflect.set(view, 'triangleWallMesh', triangleWallMesh)
+    Reflect.set(view, 'wallMaterial', new THREE.MeshBasicMaterial())
+    Reflect.set(view, 'wallRuntime', null)
+    Reflect.set(view, 'lastWallKey', '')
+
+    syncWalls(view, wallState(runtime))
+    const geometry = triangleWallMesh.geometry
+    syncWalls(view, { ...wallState(runtime), wallThickness: 0.2 })
+
+    expect(triangleWallMesh.geometry).not.toBe(geometry)
+  })
+
+  it('updates cached Triangle wall and junction chunks when an edge changes', () => {
+    const runtime = createMaze({ grid: { layout: 'triangle', size: 3, type: 'triangle' } })
+    const closed = buildTriangleWallPositions(runtime, 0.1)
+
+    runtime.grid.edges[0].open()
+    const opened = buildTriangleWallPositions(runtime, 0.1)
+    runtime.grid.edges[0].close()
+    const restored = buildTriangleWallPositions(runtime, 0.1)
+
+    expect(opened.length).toBeLessThan(closed.length)
+    expect(restored).toEqual(closed)
   })
 
   it('cuts an isolated wall endpoint to the opposing triangle edges', () => {

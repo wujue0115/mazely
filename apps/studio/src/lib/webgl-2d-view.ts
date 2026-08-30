@@ -1,4 +1,4 @@
-import type { Maze } from 'mazely'
+import type { Maze, MazeEdge } from 'mazely'
 import type { MazePoint } from './maze-types'
 import * as THREE from 'three'
 import {
@@ -159,173 +159,279 @@ function clipPolygon(
   return clipped
 }
 
+const triangleWallBuildCaches = new WeakMap<Maze, TriangleWallBuildCache>()
+
 export function buildTriangleWallPositions(runtime: Maze, thickness: number): Float32Array {
-  const positions: number[] = []
-  const closedWallKeys = new Set<string>()
-  const wallCounts = new Map<string, number>()
-  const gridJunctions = new Map<string, Map<string, {
-    direction: { x: number, y: number }
-    opened: boolean
-    oppositeKey: string
-  }>>()
-  const addGridEdge = (
-    endpoint: { x: number, y: number },
-    opposite: { x: number, y: number },
-    wallKey: string,
-    direction: { x: number, y: number },
-    opened: boolean,
-  ): void => {
-    const key = worldPointKey(endpoint)
-    const edges = gridJunctions.get(key) ?? new Map()
-    const existing = edges.get(wallKey)
-    edges.set(wallKey, {
-      direction,
-      opened: existing?.opened === true || opened,
-      oppositeKey: worldPointKey(opposite),
-    })
-    gridJunctions.set(key, edges)
+  return concatFloat32Arrays(buildTriangleWallPositionChunks(runtime, thickness))
+}
+
+export function buildTriangleWallPositionChunks(runtime: Maze, thickness: number): Float32Array[] {
+  let cache = triangleWallBuildCaches.get(runtime)
+  if (!cache || cache.thickness !== thickness) {
+    cache = createTriangleWallBuildCache(runtime, thickness)
+    triangleWallBuildCaches.set(runtime, cache)
   }
-  for (const cell of runtime.grid.cells) {
-    for (const segment of getCellBoundarySegments(cell)) {
-      const wallKey = wallSegmentKey(segment)
-      wallCounts.set(wallKey, (wallCounts.get(wallKey) ?? 0) + 1)
-      if (!segment.opened) {
-        closedWallKeys.add(wallKey)
-      }
-      const dx = segment.to.x - segment.from.x
-      const dy = segment.to.y - segment.from.y
-      const length = Math.hypot(dx, dy)
-      addGridEdge(segment.from, segment.to, wallKey, { x: dx / length, y: dy / length }, segment.opened)
-      addGridEdge(segment.to, segment.from, wallKey, { x: -dx / length, y: -dy / length }, segment.opened)
+
+  const chunks: Float32Array[] = []
+  for (const wall of cache.walls) {
+    if (!isTriangleWallOpen(wall)) {
+      chunks.push(wall.positions)
     }
   }
-  const junctions = new Map<string, {
-    points: Array<{ x: number, y: number }>
-    walls: Map<string, { x: number, y: number }>
-    x: number
-    y: number
-  }>()
-  const addJunctionPoints = (
-    endpoint: { x: number, y: number },
-    wallKey: string,
-    direction: { x: number, y: number },
-    polygon: Array<{ x: number, y: number }>,
-  ): void => {
-    const key = worldPointKey(endpoint)
-    const junction = junctions.get(key) ?? {
-      points: [],
-      walls: new Map<string, { x: number, y: number }>(),
-      x: endpoint.x,
-      y: endpoint.y,
+  for (const junction of cache.junctions.values()) {
+    const signature = getTriangleJunctionSignature(junction, cache)
+    if (junction.signature !== signature) {
+      junction.positions = buildTriangleJunctionPositions(junction, cache)
+      junction.signature = signature
     }
-    junction.walls.set(wallKey, direction)
-    for (const point of polygon) {
-      if (Math.hypot(point.x - endpoint.x, point.y - endpoint.y) <= thickness * 1.01) {
-        junction.points.push(point)
-      }
-    }
-    junctions.set(key, junction)
+    chunks.push(junction.positions)
   }
+  return chunks
+}
+
+interface TriangleWallOwner {
+  polygon: Array<{ x: number, y: number }>
+  segment: { from: { x: number, y: number }, to: { x: number, y: number } }
+}
+
+interface TriangleWallBuildRecord {
+  edge: MazeEdge | null
+  from: { x: number, y: number }
+  key: string
+  owners: TriangleWallOwner[]
+  positions: Float32Array
+  to: { x: number, y: number }
+}
+
+interface TriangleWallJunctionIncident {
+  direction: { x: number, y: number }
+  oppositeKey: string
+  points: Array<{ x: number, y: number }>
+  wall: TriangleWallBuildRecord
+}
+
+interface TriangleWallJunction {
+  incidents: TriangleWallJunctionIncident[]
+  positions: Float32Array
+  signature: string
+  x: number
+  y: number
+}
+
+interface TriangleWallBuildCache {
+  junctions: Map<string, TriangleWallJunction>
+  thickness: number
+  wallByKey: Map<string, TriangleWallBuildRecord>
+  walls: TriangleWallBuildRecord[]
+}
+
+function createTriangleWallBuildCache(runtime: Maze, thickness: number): TriangleWallBuildCache {
+  const wallByKey = new Map<string, TriangleWallBuildRecord>()
   for (const cell of runtime.grid.cells) {
     const polygon = getCellPolygon(cell)
     for (const segment of getCellBoundarySegments(cell)) {
-      if (!segment.opened) {
-        const strip = clipTriangleWallStrip(polygon, segment, thickness)
-        positions.push(...triangulateWallPolygon(strip))
-        const wallKey = wallSegmentKey(segment)
-        const junctionStrip = [...strip]
-        const boundary = wallCounts.get(wallKey) === 1
-        if (boundary) {
-          const outerStrip = clipTriangleWallStrip(reflectPolygonAcrossLine(polygon, segment), segment, thickness)
-          positions.push(...triangulateWallPolygon(outerStrip))
-          junctionStrip.push(...outerStrip)
-        }
-        const dx = segment.to.x - segment.from.x
-        const dy = segment.to.y - segment.from.y
-        const length = Math.hypot(dx, dy)
-        addJunctionPoints(segment.from, wallKey, { x: dx / length, y: dy / length }, junctionStrip)
-        addJunctionPoints(segment.to, wallKey, { x: -dx / length, y: -dy / length }, junctionStrip)
+      const key = wallSegmentKey(segment)
+      const wall = wallByKey.get(key) ?? {
+        edge: segment.edge,
+        from: segment.from,
+        key,
+        owners: [],
+        positions: new Float32Array(),
+        to: segment.to,
       }
+      wall.edge ??= segment.edge
+      wall.owners.push({ polygon, segment })
+      wallByKey.set(key, wall)
     }
   }
-  for (const junction of junctions.values()) {
-    if (junction.walls.size >= 1) {
-      const points = [...junction.points]
-      const directions = [...junction.walls.values()]
-      let pointed60DegreeMiter: { x: number, y: number } | null = null
-      if (directions.length === 2) {
-        const oppositeWallKey = wallSegmentKey(get60DegreeOppositeWallSegment(
-          junction,
-          directions[0],
-          directions[1],
-        ))
-        const miter120 = get120DegreeMiterPoint(directions[0], directions[1], thickness / 2)
-        pointed60DegreeMiter = get60DegreeMiterPoint(
-          directions[0],
-          directions[1],
-          thickness / 2,
-          closedWallKeys.has(oppositeWallKey),
+
+  const junctions = new Map<string, TriangleWallJunction>()
+  const walls = [...wallByKey.values()]
+  for (const wall of walls) {
+    const bodyChunks: Float32Array[] = []
+    const junctionPoints = new Map<string, Array<{ x: number, y: number }>>()
+    for (const owner of wall.owners) {
+      const strip = clipTriangleWallStrip(owner.polygon, owner.segment, thickness)
+      const jointStrip = [...strip]
+      bodyChunks.push(triangulateWallPolygon(strip))
+      if (wall.owners.length === 1) {
+        const outerStrip = clipTriangleWallStrip(
+          reflectPolygonAcrossLine(owner.polygon, owner.segment),
+          owner.segment,
+          thickness,
         )
-        if (miter120) {
-          points.push({ x: junction.x + miter120.x, y: junction.y + miter120.y })
+        bodyChunks.push(triangulateWallPolygon(outerStrip))
+        jointStrip.push(...outerStrip)
+      }
+      for (const endpoint of [wall.from, wall.to]) {
+        const key = worldPointKey(endpoint)
+        const points = junctionPoints.get(key) ?? []
+        for (const point of jointStrip) {
+          if (Math.hypot(point.x - endpoint.x, point.y - endpoint.y) <= thickness * 1.01) {
+            points.push(point)
+          }
         }
+        junctionPoints.set(key, points)
       }
-      const passageInset = getTrianglePassageInset(thickness)
-      const gridEdges = [...(gridJunctions.get(worldPointKey(junction))?.values() ?? [])]
-      for (const edge of gridEdges) {
-        if (edge.opened) {
-          points.push({
-            x: junction.x + edge.direction.x * passageInset,
-            y: junction.y + edge.direction.y * passageInset,
-          })
-        }
-      }
-      let jointPolygon = convexHull(points)
-      for (const edge of gridEdges) {
-        if (edge.opened) {
-          jointPolygon = clipPolygon(jointPolygon, point =>
-            passageInset
-            - (point.x - junction.x) * edge.direction.x
-            - (point.y - junction.y) * edge.direction.y)
-        }
-      }
-      if (pointed60DegreeMiter) {
-        jointPolygon = convexHull([
-          ...jointPolygon,
-          {
-            x: junction.x + pointed60DegreeMiter.x,
-            y: junction.y + pointed60DegreeMiter.y,
-          },
-        ])
-      }
-      if (directions.length === 1) {
-        const wallDirection = directions[0]
-        const continuation = gridEdges.find(edge => edge.opened
-          && edge.direction.x * wallDirection.x + edge.direction.y * wallDirection.y < -0.999)
-        if (continuation) {
-          const outward = { x: -wallDirection.x, y: -wallDirection.y }
-          const normal = { x: -wallDirection.y, y: wallDirection.x }
-          const oppositeWalls = [...(junctions.get(continuation.oppositeKey)?.walls.values() ?? [])]
-          const facingWalls = getFacingOppositeWalls(outward, oppositeWalls)
-          const pointsAt120DegreeJoint = has120DegreeWallJoint(facingWalls)
-          const terminalNormalSign = getParallelTerminalNormalSign(outward, normal, thickness, facingWalls)
-          jointPolygon = convexHull([
-            ...jointPolygon,
-            getTriangleTerminalPoint(
-              junction,
-              outward,
-              normal,
-              thickness,
-              pointsAt120DegreeJoint,
-              terminalNormalSign,
-            ),
-          ])
-        }
-      }
-      positions.push(...triangulateWallPolygon(jointPolygon))
+    }
+    wall.positions = concatFloat32Arrays(bodyChunks)
+
+    const dx = wall.to.x - wall.from.x
+    const dy = wall.to.y - wall.from.y
+    const length = Math.hypot(dx, dy)
+    addTriangleJunctionIncident(junctions, wall.from, {
+      direction: { x: dx / length, y: dy / length },
+      oppositeKey: worldPointKey(wall.to),
+      points: junctionPoints.get(worldPointKey(wall.from)) ?? [],
+      wall,
+    })
+    addTriangleJunctionIncident(junctions, wall.to, {
+      direction: { x: -dx / length, y: -dy / length },
+      oppositeKey: worldPointKey(wall.from),
+      points: junctionPoints.get(worldPointKey(wall.to)) ?? [],
+      wall,
+    })
+  }
+
+  return { junctions, thickness, wallByKey, walls }
+}
+
+function addTriangleJunctionIncident(
+  junctions: Map<string, TriangleWallJunction>,
+  point: { x: number, y: number },
+  incident: TriangleWallJunctionIncident,
+): void {
+  const key = worldPointKey(point)
+  const junction = junctions.get(key) ?? {
+    incidents: [],
+    positions: new Float32Array(),
+    signature: '',
+    x: point.x,
+    y: point.y,
+  }
+  junction.incidents.push(incident)
+  junctions.set(key, junction)
+}
+
+function isTriangleWallOpen(wall: TriangleWallBuildRecord): boolean {
+  return wall.edge?.opened === true
+}
+
+function getTriangleJunctionSignature(
+  junction: TriangleWallJunction,
+  cache: TriangleWallBuildCache,
+): string {
+  const local = junction.incidents.map(incident => isTriangleWallOpen(incident.wall) ? '1' : '0').join('')
+  const opposite = junction.incidents.map((incident) => {
+    const oppositeJunction = cache.junctions.get(incident.oppositeKey)
+    return oppositeJunction?.incidents
+      .map(candidate => isTriangleWallOpen(candidate.wall) ? '1' : '0')
+      .join('') ?? ''
+  }).join('.')
+  return `${local}|${opposite}`
+}
+
+function buildTriangleJunctionPositions(
+  junction: TriangleWallJunction,
+  cache: TriangleWallBuildCache,
+): Float32Array {
+  const closed = junction.incidents.filter(incident => !isTriangleWallOpen(incident.wall))
+  if (closed.length === 0) {
+    return new Float32Array()
+  }
+
+  const points = closed.flatMap(incident => incident.points)
+  const directions = closed.map(incident => incident.direction)
+  let pointed60DegreeMiter: { x: number, y: number } | null = null
+  if (directions.length === 2) {
+    const oppositeWallKey = wallSegmentKey(get60DegreeOppositeWallSegment(
+      junction,
+      directions[0],
+      directions[1],
+    ))
+    const oppositeWall = cache.wallByKey.get(oppositeWallKey)
+    const miter120 = get120DegreeMiterPoint(directions[0], directions[1], cache.thickness / 2)
+    pointed60DegreeMiter = get60DegreeMiterPoint(
+      directions[0],
+      directions[1],
+      cache.thickness / 2,
+      oppositeWall !== undefined && !isTriangleWallOpen(oppositeWall),
+    )
+    if (miter120) {
+      points.push({ x: junction.x + miter120.x, y: junction.y + miter120.y })
     }
   }
-  return new Float32Array(positions)
+
+  const passageInset = getTrianglePassageInset(cache.thickness)
+  for (const incident of junction.incidents) {
+    if (isTriangleWallOpen(incident.wall)) {
+      points.push({
+        x: junction.x + incident.direction.x * passageInset,
+        y: junction.y + incident.direction.y * passageInset,
+      })
+    }
+  }
+  let jointPolygon = convexHull(points)
+  for (const incident of junction.incidents) {
+    if (isTriangleWallOpen(incident.wall)) {
+      jointPolygon = clipPolygon(jointPolygon, point =>
+        passageInset
+        - (point.x - junction.x) * incident.direction.x
+        - (point.y - junction.y) * incident.direction.y)
+    }
+  }
+  if (pointed60DegreeMiter) {
+    jointPolygon = convexHull([
+      ...jointPolygon,
+      {
+        x: junction.x + pointed60DegreeMiter.x,
+        y: junction.y + pointed60DegreeMiter.y,
+      },
+    ])
+  }
+  if (directions.length === 1) {
+    const wallDirection = directions[0]
+    const continuation = junction.incidents.find(incident => isTriangleWallOpen(incident.wall)
+      && incident.direction.x * wallDirection.x + incident.direction.y * wallDirection.y < -0.999)
+    if (continuation) {
+      const outward = { x: -wallDirection.x, y: -wallDirection.y }
+      const normal = { x: -wallDirection.y, y: wallDirection.x }
+      const oppositeJunction = cache.junctions.get(continuation.oppositeKey)
+      const oppositeWalls = oppositeJunction
+        ? oppositeJunction.incidents.filter(incident => !isTriangleWallOpen(incident.wall)).map(incident => incident.direction)
+        : []
+      const facingWalls = getFacingOppositeWalls(outward, oppositeWalls)
+      const pointsAt120DegreeJoint = has120DegreeWallJoint(facingWalls)
+      const terminalNormalSign = getParallelTerminalNormalSign(
+        outward,
+        normal,
+        cache.thickness,
+        facingWalls,
+      )
+      jointPolygon = convexHull([
+        ...jointPolygon,
+        getTriangleTerminalPoint(
+          junction,
+          outward,
+          normal,
+          cache.thickness,
+          pointsAt120DegreeJoint,
+          terminalNormalSign,
+        ),
+      ])
+    }
+  }
+  return triangulateWallPolygon(jointPolygon)
+}
+
+function concatFloat32Arrays(chunks: Float32Array[]): Float32Array {
+  const output = new Float32Array(chunks.reduce((total, chunk) => total + chunk.length, 0))
+  let offset = 0
+  for (const chunk of chunks) {
+    output.set(chunk, offset)
+    offset += chunk.length
+  }
+  return output
 }
 
 export function getTrianglePassageInset(thickness: number): number {
@@ -772,13 +878,13 @@ export class Webgl2dMazeView {
   }
 
   private syncWallsIfNeeded(state: Webgl2dViewState): void {
+    this.wallMaterial.color.set(state.wallColor)
     const runtimeState = state.runtime.getState()
     const wallKey = [
       runtimeState.phase,
       runtimeState.index,
       runtimeState.done,
       state.wallThickness,
-      state.wallColor,
       state.wallRevision,
       state.wallsVisible,
       state.runtime.grid.rows,
@@ -829,7 +935,6 @@ export class Webgl2dMazeView {
       3,
     ))
     this.triangleWallMesh.visible = state.runtime.grid.type === 'triangle'
-    this.wallMaterial.color.set(state.wallColor)
     mesh.instanceMatrix.needsUpdate = true
   }
 

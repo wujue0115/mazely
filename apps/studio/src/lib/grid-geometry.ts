@@ -1,4 +1,4 @@
-import type { GridCell, Maze, MazePoint } from 'mazely'
+import type { GridCell, Maze, MazeEdge, MazePoint } from 'mazely'
 import { TriangleCell } from 'mazely'
 
 export interface WorldPoint {
@@ -71,13 +71,16 @@ export function getCellPolygon(cell: GridCell): WorldPoint[] {
       ]
 }
 
-export function getCellBoundarySegments(cell: GridCell): Array<GridSegment & { opened: boolean }> {
+export function getCellBoundarySegments(
+  cell: GridCell,
+): Array<GridSegment & { edge: MazeEdge | null, opened: boolean }> {
   const polygon = getCellPolygon(cell)
   if (cell instanceof TriangleCell) {
     const edgeOrder = cell.orientation === 'up'
       ? [cell.edges.right, cell.edges.bottom, cell.edges.left]
       : [cell.edges.top, cell.edges.right, cell.edges.left]
     return polygon.map((from, index) => ({
+      edge: edgeOrder[index] ?? null,
       from,
       opened: edgeOrder[index]?.opened ?? false,
       to: polygon[(index + 1) % polygon.length],
@@ -86,6 +89,7 @@ export function getCellBoundarySegments(cell: GridCell): Array<GridSegment & { o
 
   const edgeOrder = [cell.edges.top, cell.edges.right, cell.edges.bottom, cell.edges.left]
   return polygon.map((from, index) => ({
+    edge: edgeOrder[index] ?? null,
     from,
     opened: edgeOrder[index]?.opened ?? false,
     to: polygon[(index + 1) % polygon.length],

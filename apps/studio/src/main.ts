@@ -250,10 +250,20 @@ speedRange.addEventListener('input', () => {
   syncLoopSpeed()
   syncUi()
 })
+let appearanceRenderFrame = 0
+function scheduleAppearanceRender(): void {
+  if (appearanceRenderFrame !== 0) {
+    return
+  }
+  appearanceRenderFrame = window.requestAnimationFrame(() => {
+    appearanceRenderFrame = 0
+    render()
+  })
+}
 wallRange.addEventListener('input', () => {
   app.wallThickness = parseRange(wallRange.value, app.wallThickness)
   syncUi()
-  render()
+  scheduleAppearanceRender()
 })
 function setView3d(enabled: boolean): void {
   if (app.view3d === enabled) {
@@ -285,7 +295,7 @@ wallHeightRange.addEventListener('input', () => {
   app.wallHeightPx = parseRange(wallHeightRange.value, app.wallHeightPx)
   wallHeightLabel.textContent = `${app.wallHeightPx} px`
   if (app.view3d) {
-    render()
+    scheduleAppearanceRender()
   }
 })
 styleWallInput.addEventListener('input', () => updateStyleTheme('wall', styleWallInput.value))

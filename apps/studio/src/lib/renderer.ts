@@ -461,7 +461,6 @@ function getWebgl2dCellKey(activeRuntime: Maze, previewing: boolean): string {
     app.customFloodTheme.curve.y2,
     app.showShapeColors,
     app.shape ? 'shape' : 'rect',
-    app.styleTheme.wall,
     app.styleTheme.cell,
     app.styleTheme.unlinkedCell,
     app.styleTheme.visit,
@@ -853,6 +852,7 @@ function renderThreeView(
     startColor: app.styleTheme.start,
     wallColor: app.styleTheme.wall,
     wallHeight: app.wallHeightPx / FIXED_CELL_SIZE,
+    wallRevision: app.mazeEditVersion,
     wallsVisible: app.visibleElements.wall,
     wallThickness: clamp(app.wallThickness / FIXED_CELL_SIZE, 0.04, 0.4),
   })

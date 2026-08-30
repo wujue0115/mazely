@@ -32,6 +32,9 @@ published `mazely` and `@mazely/core` packages.
 
 ### Fixed
 
+- Improved large Triangle animation performance by caching wall topology,
+  junction geometry, and 3D extrusion chunks while preserving live appearance
+  updates.
 - Allowed `.maze` files to reload triangular outer layouts up to the Studio
   size limit, including their derived logical column counts above 500.
 - Kept passage widths consistent when rendering thick triangular walls,
