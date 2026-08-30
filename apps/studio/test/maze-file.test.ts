@@ -258,6 +258,62 @@ describe('.maze v1 codec', () => {
     expect(openedEdgeIds(loaded.runtime)).toEqual(openedEdgeIds(runtime))
   })
 
+  it.each([
+    {
+      cols: 2,
+      createRuntime: () => createMaze({ grid: { cols: 2, rows: 2, type: 'square' } }),
+      label: 'Square',
+      rows: 2,
+    },
+    {
+      cols: 3,
+      createRuntime: () => createMaze({
+        grid: { cols: 3, layout: 'rectangle', rows: 2, type: 'triangle' },
+      }),
+      label: 'Triangle',
+      rows: 2,
+    },
+  ])('round-trips a full-cell $label image shape', async ({ cols, createRuntime, rows }) => {
+    const runtime = createRuntime()
+    const cellMask = Array.from({ length: rows }, () => Array.from({ length: cols }, () => true))
+    const cellColors = Array.from(
+      { length: rows },
+      (_, row) => Array.from({ length: cols }, (_, col) => `#${row}${col}2233`),
+    )
+    const end = { x: cols - 1, y: rows - 1 }
+    const encoded = await encodeMazeFile({
+      appearance,
+      pointPreferences: { ...pointPreferences, solveManualEnd: end },
+      maze: {
+        algorithm: 'dfs',
+        cols,
+        end,
+        rows,
+        start: { x: 0, y: 0 },
+      },
+      runtime,
+      shape: {
+        cellColors,
+        cellMask,
+        cols,
+        end,
+        rows,
+        start: { x: 0, y: 0 },
+      },
+      solve: {
+        algorithm: 'dfs',
+        head: null,
+        path: [],
+        status: 'running',
+        visited: {},
+      },
+    })
+
+    const loaded = await decodeMazeFile(encoded)
+
+    expect(loaded.shape).toMatchObject({ cellColors, cellMask, cols, rows })
+  })
+
   it('round-trips a solved masked maze, solve state, and cell colors', async () => {
     const mask = [
       [true, true, true],

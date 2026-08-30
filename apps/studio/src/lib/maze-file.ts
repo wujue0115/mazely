@@ -96,6 +96,7 @@ export interface LoadedMazeFile {
 interface MazeFileMeta {
   generationAlgorithm: MazeGenerationAlgorithm
   hasCustomStartAndEndPoints?: boolean
+  hasShape?: boolean
   pointPreferences?: MazeFilePointPreferences
 }
 
@@ -129,6 +130,7 @@ export async function encodeMazeFile(options: MazeFileSaveOptions): Promise<Uint
       generationAlgorithm: options.maze.algorithm,
       hasCustomStartAndEndPoints: options.pointPreferences.generateMode === 'manual'
         || options.pointPreferences.solveMode === 'manual',
+      hasShape: options.shape !== null,
       pointPreferences: options.pointPreferences,
     } satisfies MazeFileMeta)),
     encodeChunk(CHUNK_TOPOLOGY, topology),
@@ -202,10 +204,11 @@ export async function decodeMazeFile(file: ArrayBuffer | Uint8Array): Promise<Lo
   const appearance = appearanceChunk ? decodeAppearance(appearanceChunk) : null
   const colorsChunk = chunks.get(CHUNK_CELL_COLORS)
   const cellColors = colorsChunk ? decodeCellColors(colorsChunk, topology) : null
-  const shape = topology.mask
+  const hasShape = meta.hasShape ?? (topology.mask !== null || colorsChunk !== undefined)
+  const shape = hasShape
     ? {
-        cellColors: cellColors ?? topology.mask.map(row => row.map(() => null)),
-        cellMask: topology.mask,
+        cellColors: cellColors ?? createFullCellMask(topology).map(row => row.map(() => null)),
+        cellMask: topology.mask ?? createFullCellMask(topology),
         cols: topology.cols,
         end: state.end,
         rows: topology.rows,
@@ -761,11 +764,21 @@ function decodeMeta(bytes: Uint8Array): MazeFileMeta {
   const value = decodeJson(bytes) as Partial<MazeFileMeta>
   const validPointPreferences = isPointPreferences(value.pointPreferences)
   if (!isMazeGenerationAlgorithm(value.generationAlgorithm)
+    || (value.hasShape !== undefined && typeof value.hasShape !== 'boolean')
     || (value.pointPreferences !== undefined && !validPointPreferences)
     || (typeof value.hasCustomStartAndEndPoints !== 'boolean' && !validPointPreferences)) {
     throw new MazeFileError('The META chunk is invalid.')
   }
   return value as MazeFileMeta
+}
+
+function createFullCellMask(topology: DecodedTopology): boolean[][] {
+  return Array.from({ length: topology.rows }, (_, row) => {
+    const cols = topology.type === 'triangle' && topology.layout === 'triangle'
+      ? row * 2 + 1
+      : topology.cols
+    return Array.from({ length: cols }, () => true)
+  })
 }
 
 function resolvePointPreferences(meta: MazeFileMeta, state: DecodedState): MazeFilePointPreferences {
