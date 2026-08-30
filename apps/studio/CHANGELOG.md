@@ -42,6 +42,8 @@ published `mazely` and `@mazely/core` packages.
   saved `.maze` files.
 - Enabled viewport-ratio sizing for rectangular Triangle layouts using their
   triangular cell dimensions.
+- Displayed Hunt-and-Kill row scan lines for rectangular and triangular
+  Triangle layouts in both 2D and 3D views.
 - Kept passage widths consistent when rendering thick triangular walls,
   including 60-degree and 120-degree junctions and terminal wall cuts.
 - Matched Triangle 3D wall junctions and terminal cuts to the 2D geometry.

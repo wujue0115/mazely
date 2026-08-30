@@ -1,6 +1,7 @@
-import type { Maze, MazeGenerationStep, StepPlayer } from 'mazely'
+import type { Maze, MazeGenerationStep, StepPlayer, TriangleGrid } from 'mazely'
 import type { MazeGenerationAlgorithm, MazePoint, MazeViewState } from '../maze-types'
 import { cellIdToPoint } from 'mazely'
+import { TRIANGLE_HEIGHT } from '../grid-geometry'
 import { key } from '../point'
 
 /**
@@ -170,7 +171,15 @@ export function getHuntScanSegment(
     return null
   }
   if (preview.runtime.grid.type === 'triangle') {
-    return null
+    const grid = preview.runtime.grid as TriangleGrid
+    const row = preview.huntScanRow
+    const centerY = (row + 0.5) * TRIANGLE_HEIGHT
+    const left = grid.layout === 'triangle' ? (grid.size! - row - 1) / 2 : 0
+    const right = grid.layout === 'triangle' ? left + row + 1 : (grid.cols + 1) / 2
+    return {
+      from: { x: left - 0.5, y: centerY - 0.5 },
+      to: { x: right - 0.5, y: centerY - 0.5 },
+    }
   }
   return {
     from: { x: -0.5, y: preview.huntScanRow },

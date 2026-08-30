@@ -8,6 +8,7 @@ import {
   rebuildGenerationPreview,
   shouldRenderGenerationPreview,
 } from '../src/lib/controllers/generation'
+import { getPointCenter, TRIANGLE_HEIGHT } from '../src/lib/grid-geometry'
 
 describe('generation preview rewind', () => {
   it('restores visual and maze state after stepping backward', () => {
@@ -78,6 +79,68 @@ describe('hunt-and-kill generation preview', () => {
     advanceUntil(() => preview.huntScanRow === null && preview.currentHeadKey !== null, preview)
 
     expect(getHuntScanSegment(preview)).toBeNull()
+  })
+
+  it('shows a scan line across a rectangular Triangle row', () => {
+    const runtime = createMaze({
+      grid: { cols: 8, layout: 'rectangle', rows: 8, type: 'triangle' },
+      seed: 'triangle-rectangle-hunt-scan',
+    })
+    const preview = createGenerationPreview({
+      algorithm: 'hunt-and-kill',
+      player: runtime.generate('hunt-and-kill'),
+      runtime,
+      view: {
+        algorithm: 'hunt-and-kill',
+        cols: 8,
+        end: { x: 7, y: 7 },
+        rows: 8,
+        start: { x: 0, y: 0 },
+      },
+    })
+
+    advanceUntil(() => preview.huntScanRow !== null, preview)
+    const row = preview.huntScanRow!
+    const segment = getHuntScanSegment(preview)!
+    const from = getPointCenter(runtime, segment.from)
+    const to = getPointCenter(runtime, segment.to)
+
+    expect(from.x).toBeCloseTo(0)
+    expect(to.x).toBeCloseTo(4.5)
+    expect(from.y).toBeCloseTo((row + 0.5) * TRIANGLE_HEIGHT)
+    expect(to.y).toBeCloseTo(from.y)
+  })
+
+  it('shows a scan line across the current Triangle outer row', () => {
+    const size = 8
+    const runtime = createMaze({
+      grid: { layout: 'triangle', size, type: 'triangle' },
+      seed: 'triangle-outer-hunt-scan',
+    })
+    const preview = createGenerationPreview({
+      algorithm: 'hunt-and-kill',
+      player: runtime.generate('hunt-and-kill'),
+      runtime,
+      view: {
+        algorithm: 'hunt-and-kill',
+        cols: size * 2 - 1,
+        end: { x: size * 2 - 2, y: size - 1 },
+        rows: size,
+        start: { x: 0, y: 0 },
+      },
+    })
+
+    advanceUntil(() => preview.huntScanRow !== null, preview)
+    const row = preview.huntScanRow!
+    const segment = getHuntScanSegment(preview)!
+    const from = getPointCenter(runtime, segment.from)
+    const to = getPointCenter(runtime, segment.to)
+    const expectedLeft = (size - row - 1) / 2
+
+    expect(from.x).toBeCloseTo(expectedLeft)
+    expect(to.x).toBeCloseTo(expectedLeft + row + 1)
+    expect(from.y).toBeCloseTo((row + 0.5) * TRIANGLE_HEIGHT)
+    expect(to.y).toBeCloseTo(from.y)
   })
 })
 
