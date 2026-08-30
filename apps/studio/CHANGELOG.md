@@ -29,6 +29,7 @@ published `mazely` and `@mazely/core` packages.
 
 - Grid topology and Triangle layout changes now ask for confirmation before
   discarding an existing maze, applied shape, or generation progress.
+- Maze download filenames now include the local save date and time.
 
 ### Fixed
 

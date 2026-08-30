@@ -18,6 +18,7 @@ import {
 } from '../dom'
 import { DEFAULT_CUSTOM_FLOOD_THEME } from '../flood'
 import {
+  createMazeFilename,
   decodeMazeFile,
   encodeMazeFile,
   MazeFileError,
@@ -109,7 +110,7 @@ async function saveMazeFile(): Promise<void> {
         visited: app.stepState.visited,
       },
     })
-    downloadBytes(`mazely-${app.maze.cols}x${app.maze.rows}.maze`, bytes)
+    downloadBytes(createMazeFilename(app.mazeRuntime!), bytes)
     showToast('Maze file saved.')
   }
   catch (error) {

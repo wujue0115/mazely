@@ -3,6 +3,7 @@ import { createMaze } from 'mazely'
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_FLOOD_THEME } from '../src/lib/flood'
 import {
+  createMazeFilename,
   decodeMazeFile,
   encodeMazeFile,
   MazeFileError,
@@ -27,6 +28,27 @@ const pointPreferences = {
 } as const
 
 describe('.maze v1 codec', () => {
+  it.each([
+    {
+      expected: 'mazely-20260830090507-square-12x8.maze',
+      runtime: createMaze({ grid: { cols: 12, rows: 8, type: 'square' } }),
+    },
+    {
+      expected: 'mazely-20260830090507-triangle-12x8.maze',
+      runtime: createMaze({
+        grid: { cols: 12, layout: 'rectangle', rows: 8, type: 'triangle' },
+      }),
+    },
+    {
+      expected: 'mazely-20260830090507-triangle-12.maze',
+      runtime: createMaze({ grid: { layout: 'triangle', size: 12, type: 'triangle' } }),
+    },
+  ])('includes timestamp, topology, and dimensions in $expected', ({ expected, runtime }) => {
+    const date = new Date(2026, 7, 30, 9, 5, 7)
+
+    expect(createMazeFilename(runtime, date)).toBe(expected)
+  })
+
   it('round-trips a generated square maze with bit-packed links', async () => {
     const runtime = createMaze({ grid: { cols: 3, rows: 2, type: 'square' } })
     runtime.setEdgeOpenedBetween({ x: 0, y: 0 }, { x: 1, y: 0 }, true)

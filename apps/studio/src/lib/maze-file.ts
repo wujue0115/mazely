@@ -93,6 +93,17 @@ export interface LoadedMazeFile {
   }
 }
 
+export function createMazeFilename(runtime: Maze, date = new Date()): string {
+  const pad = (value: number): string => String(value).padStart(2, '0')
+  const timestamp = `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}`
+    + `${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`
+  const grid = runtime.grid
+  const dimensions = grid.type === 'triangle' && (grid as TriangleGrid).layout === 'triangle'
+    ? String((grid as TriangleGrid).size!)
+    : `${grid.cols}x${grid.rows}`
+  return `mazely-${timestamp}-${grid.type}-${dimensions}.maze`
+}
+
 interface MazeFileMeta {
   generationAlgorithm: MazeGenerationAlgorithm
   hasCustomStartAndEndPoints?: boolean
