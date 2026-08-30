@@ -72,6 +72,18 @@ describe('triangle grid reference lines', () => {
     expect(hitTestCell(runtime, getCellCenter(bottomCell))?.id).toBe(bottomCell.id)
   })
 
+  it('hit-tests a masked row when its first triangle cell is excluded', () => {
+    const mask = Array.from({ length: 10 }, (_, row) =>
+      Array.from({ length: row * 2 + 1 }, () => true))
+    mask[1][0] = false
+    const runtime = createMaze({
+      grid: { layout: 'triangle', mask, size: 10, type: 'triangle' },
+    })
+    const cell = runtime.grid.getCell('1:2')!
+
+    expect(hitTestCell(runtime, getCellCenter(cell))?.id).toBe(cell.id)
+  })
+
   it('supports a rectangular rows-by-columns triangle grid', () => {
     const runtime = createMaze({
       grid: { cols: 3, layout: 'rectangle', rows: 4, type: 'triangle' },

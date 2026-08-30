@@ -1,4 +1,4 @@
-import type { GridCell, Maze, MazeEdge, MazePoint } from 'mazely'
+import type { GridCell, Maze, MazeEdge, MazePoint, TriangleGrid } from 'mazely'
 import { TriangleCell } from 'mazely'
 
 export interface WorldPoint {
@@ -126,13 +126,13 @@ export function hitTestCell(runtime: Maze, point: WorldPoint): GridCell | null {
   if (runtime.grid.type === 'square') {
     return runtime.grid.getCell(`${Math.floor(point.y)}:${Math.floor(point.x)}`) ?? null
   }
+  const grid = runtime.grid as TriangleGrid
   const approximateRow = Math.floor(point.y / TRIANGLE_HEIGHT)
   for (let row = approximateRow - 1; row <= approximateRow + 1; row += 1) {
-    const firstCell = runtime.grid.getCell(`${row}:0`)
-    const offsetX = firstCell instanceof TriangleCell ? firstCell.offsetX : 0
+    const offsetX = grid.layout === 'triangle' ? (grid.size! - row - 1) / 2 : 0
     const approximateCol = Math.floor((point.x - offsetX) * 2)
     for (let col = approximateCol - 2; col <= approximateCol + 1; col += 1) {
-      const cell = runtime.grid.getCell(`${row}:${col}`)
+      const cell = grid.getCell(`${row}:${col}`)
       if (cell && pointInPolygon(point, getCellPolygon(cell))) {
         return cell
       }
