@@ -9,6 +9,7 @@ import {
 import { app, initAppState } from './lib/app-state'
 import { confirmMazeReplacement, initConfirmationDialog } from './lib/controllers/confirmation-dialog'
 import { initFloodThemeEditor } from './lib/controllers/flood-theme-editor'
+import { shouldRenderGenerationPreview } from './lib/controllers/generation'
 import { initImageExport } from './lib/controllers/image-export'
 import {
   beginPointSelection,
@@ -58,6 +59,7 @@ import {
   syncShapePanel,
 } from './lib/controllers/workbench'
 import {
+  getPathSet,
   getSolveFrontierHeads,
   getSolveFrontierTrails,
   getSolveTrailPoints,
@@ -125,10 +127,17 @@ import {
   workbenchPanel,
 } from './lib/dom'
 import { buildExportFilename, downloadBlob } from './lib/export-image'
-import { buildMazeSvg } from './lib/export-svg'
+import { getOverlayScale } from './lib/grid-geometry'
 import { shouldConfirmMazeReplacement } from './lib/maze-replacement'
 import { key, parsePointKey } from './lib/point'
-import { ensureThreeView, fitMazeInView, render, resetView } from './lib/renderer'
+import {
+  ensureThreeView,
+  fitMazeInView,
+  getWebgl2dCellColor,
+  getWebgl2dGenerationOverlays,
+  render,
+  resetView,
+} from './lib/renderer'
 import { parseRange, resizeHighResCanvas } from './lib/utils'
 import '@fontsource/inter/400.css'
 import '@fontsource/inter/500.css'
@@ -328,8 +337,12 @@ initMazeEditor()
 initMazeFileActions()
 initImageExport({ exportSvg, showToast })
 
-function exportSvg(): void {
-  const activePreview = app.activeTab === 'generate' ? app.generationPreview : null
+async function exportSvg(): Promise<void> {
+  const { buildMazeSvg } = await import('./lib/export-svg')
+  const generationPreview = app.activeTab === 'generate' ? app.generationPreview : null
+  const activePreview = generationPreview && shouldRenderGenerationPreview(generationPreview)
+    ? generationPreview
+    : null
   const maze = activePreview?.view ?? app.maze
   const runtime = activePreview?.runtime ?? app.mazeRuntime
   if (!runtime) {
@@ -356,8 +369,17 @@ function exportSvg(): void {
     visibleEnd: app.visibleElements.end,
     visibleStart: app.visibleElements.start,
   })
+  const exportPathSet = activePreview ? new Set<string>() : getPathSet()
 
   const svg = buildMazeSvg({
+    cellColor: (x, y) => getWebgl2dCellColor(
+      runtime,
+      activePreview,
+      exportPathSet,
+      floodActive,
+      x,
+      y,
+    ),
     flood: floodActive
       ? {
           depthByKey: app.floodDepthByKey,
@@ -365,6 +387,9 @@ function exportSvg(): void {
         }
       : undefined,
     maze,
+    overlays: activePreview
+      ? getWebgl2dGenerationOverlays(activePreview, getOverlayScale(activePreview.runtime))
+      : undefined,
     pointMarkers,
     runtime,
     solve: app.activeTab === 'solve' && app.stepState.algorithm !== 'flood'
@@ -379,6 +404,7 @@ function exportSvg(): void {
       : undefined,
     theme: app.styleTheme,
     visibleElements: app.visibleElements,
+    wallThickness: app.wallThickness,
   })
   downloadBlob(
     buildExportFilename(maze.cols, maze.rows, 'svg'),

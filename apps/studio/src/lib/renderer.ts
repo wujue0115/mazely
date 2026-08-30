@@ -225,23 +225,8 @@ function renderWebgl2dView(
     solveStatus: app.stepState.status,
   })
   const showingSolveResult = shouldShowSolveResult(previewing)
-  const openFieldPreview = isOpenFieldGenerationPreview(preview)
-  const getCellColor = (x: number, y: number): string => {
-    if (previewing) {
-      if (openFieldPreview) {
-        return app.visibleElements.cell
-          ? (getShapeCellColor(x, y) ?? app.styleTheme.cell)
-          : HIDDEN_CELL_COLOR
-      }
-      if (!hasOpenCellEdge(activeRuntime, x, y)) {
-        return app.visibleElements.unlinkedCell ? app.styleTheme.unlinkedCell : HIDDEN_CELL_COLOR
-      }
-      return app.visibleElements.visit
-        ? (getShapeCellColor(x, y) ?? app.styleTheme.visit)
-        : HIDDEN_CELL_COLOR
-    }
-    return getCellFill(activeRuntime, x, y, key(x, y), pathSet, floodActive)
-  }
+  const getCellColor = (x: number, y: number): string =>
+    getWebgl2dCellColor(activeRuntime, preview, pathSet, floodActive, x, y)
 
   const segments: Webgl2dOverlaySegment[] = []
   const dots: Webgl2dOverlayDot[] = []
@@ -260,68 +245,9 @@ function renderWebgl2dView(
   }
 
   if (preview) {
-    const huntScanSegment = getHuntScanSegment(preview)
-    if (huntScanSegment && app.visibleElements.head) {
-      segments.push({
-        color: app.styleTheme.head,
-        ...huntScanSegment,
-        width: HUNT_SCAN_WIDTH,
-      })
-    }
-    if (preview.algorithm === 'kruskal') {
-      const kruskalHeads = getGenerationKruskalHeads()
-      if (app.visibleElements.path) {
-        pushPolyline(kruskalHeads, app.styleTheme.path, THREE_TRAIL_WIDTH)
-      }
-      if (app.visibleElements.head) {
-        for (const point of kruskalHeads) {
-          dots.push({ color: app.styleTheme.head, point, radius: THREE_HEAD_RADIUS })
-        }
-      }
-    }
-    else if (isGenerationVisibleMultiHeadMode(preview.algorithm)) {
-      const activeSegmentPoints = getGenerationActiveSegmentPoints()
-      const currentTrailKeys = new Set(activeSegmentPoints.map(point => key(point.x, point.y)))
-      const otherFrontierHeads = preview.currentHeadKey
-        ? getGenerationFrontierHeads().filter((point) => {
-            const pointKey = key(point.x, point.y)
-            return pointKey !== preview.currentHeadKey && !currentTrailKeys.has(pointKey)
-          })
-        : getGenerationFrontierHeads()
-
-      if (app.visibleElements.subPath) {
-        for (const edgeKey of getGenerationFrontierTrailEdges()) {
-          const [left, right] = edgeKey.split('>')
-          if (left && right) {
-            segments.push({
-              color: app.styleTheme.subPath,
-              from: parsePointKey(left),
-              to: parsePointKey(right),
-              width: THREE_TRAIL_WIDTH,
-            })
-          }
-        }
-      }
-      if (app.visibleElements.frontier) {
-        for (const point of otherFrontierHeads) {
-          dots.push({ color: app.styleTheme.frontier, point, radius: THREE_HEAD_RADIUS })
-        }
-      }
-      if (app.visibleElements.path) {
-        pushPolyline(activeSegmentPoints, app.styleTheme.path, THREE_TRAIL_WIDTH)
-      }
-      if (app.visibleElements.head && preview.currentHeadKey) {
-        dots.push({ color: app.styleTheme.head, point: parsePointKey(preview.currentHeadKey), radius: THREE_HEAD_RADIUS })
-      }
-    }
-    else {
-      if (app.visibleElements.path && shouldShowGenerationTrail(preview.algorithm)) {
-        pushPolyline(getGenerationTrailPoints(), app.styleTheme.path, THREE_TRAIL_WIDTH)
-      }
-      if (app.visibleElements.head && preview.currentHeadKey) {
-        dots.push({ color: app.styleTheme.head, point: parsePointKey(preview.currentHeadKey), radius: THREE_HEAD_RADIUS })
-      }
-    }
+    const generationOverlays = getWebgl2dGenerationOverlays(preview)
+    segments.push(...generationOverlays.segments)
+    dots.push(...generationOverlays.dots)
   }
 
   if (app.activeTab === 'solve' && !previewing && !floodActive) {
@@ -925,4 +851,117 @@ function getCellFill(
   }
 
   return app.visibleElements.cell ? app.styleTheme.cell : HIDDEN_CELL_COLOR
+}
+
+export function getWebgl2dCellColor(
+  runtime: Maze,
+  preview: GenerationPreview | null,
+  pathSet: Set<string>,
+  floodActive: boolean,
+  x: number,
+  y: number,
+): string {
+  if (preview) {
+    if (isOpenFieldGenerationPreview(preview)) {
+      return app.visibleElements.cell
+        ? (getShapeCellColor(x, y) ?? app.styleTheme.cell)
+        : HIDDEN_CELL_COLOR
+    }
+    if (!hasOpenCellEdge(runtime, x, y)) {
+      return app.visibleElements.unlinkedCell ? app.styleTheme.unlinkedCell : HIDDEN_CELL_COLOR
+    }
+    return app.visibleElements.visit
+      ? (getShapeCellColor(x, y) ?? app.styleTheme.visit)
+      : HIDDEN_CELL_COLOR
+  }
+  return getCellFill(runtime, x, y, key(x, y), pathSet, floodActive)
+}
+
+export function getWebgl2dGenerationOverlays(
+  preview: GenerationPreview,
+  scale = 1,
+): { dots: Webgl2dOverlayDot[], segments: Webgl2dOverlaySegment[] } {
+  const segments: Webgl2dOverlaySegment[] = []
+  const dots: Webgl2dOverlayDot[] = []
+  const pushPolyline = (points: MazePoint[], color: string, width: number): void => {
+    for (let index = 0; index < points.length - 1; index += 1) {
+      segments.push({ cap: 'butt', color, from: points[index], to: points[index + 1], width })
+    }
+    for (let index = 1; index < points.length - 1; index += 1) {
+      dots.push({ color, point: points[index], radius: width / 2 })
+    }
+  }
+
+  const huntScanSegment = getHuntScanSegment(preview)
+  if (huntScanSegment && app.visibleElements.head) {
+    segments.push({
+      color: app.styleTheme.head,
+      ...huntScanSegment,
+      width: HUNT_SCAN_WIDTH,
+    })
+  }
+  if (preview.algorithm === 'kruskal') {
+    const kruskalHeads = getGenerationKruskalHeads()
+    if (app.visibleElements.path) {
+      pushPolyline(kruskalHeads, app.styleTheme.path, THREE_TRAIL_WIDTH)
+    }
+    if (app.visibleElements.head) {
+      for (const point of kruskalHeads) {
+        dots.push({ color: app.styleTheme.head, point, radius: THREE_HEAD_RADIUS })
+      }
+    }
+  }
+  else if (isGenerationVisibleMultiHeadMode(preview.algorithm)) {
+    const activeSegmentPoints = getGenerationActiveSegmentPoints()
+    const currentTrailKeys = new Set(activeSegmentPoints.map(point => key(point.x, point.y)))
+    const otherFrontierHeads = preview.currentHeadKey
+      ? getGenerationFrontierHeads().filter((point) => {
+          const pointKey = key(point.x, point.y)
+          return pointKey !== preview.currentHeadKey && !currentTrailKeys.has(pointKey)
+        })
+      : getGenerationFrontierHeads()
+
+    if (app.visibleElements.subPath) {
+      for (const edgeKey of getGenerationFrontierTrailEdges()) {
+        const [left, right] = edgeKey.split('>')
+        if (left && right) {
+          segments.push({
+            color: app.styleTheme.subPath,
+            from: parsePointKey(left),
+            to: parsePointKey(right),
+            width: THREE_TRAIL_WIDTH,
+          })
+        }
+      }
+    }
+    if (app.visibleElements.frontier) {
+      for (const point of otherFrontierHeads) {
+        dots.push({ color: app.styleTheme.frontier, point, radius: THREE_HEAD_RADIUS })
+      }
+    }
+    if (app.visibleElements.path) {
+      pushPolyline(activeSegmentPoints, app.styleTheme.path, THREE_TRAIL_WIDTH)
+    }
+    if (app.visibleElements.head && preview.currentHeadKey) {
+      dots.push({ color: app.styleTheme.head, point: parsePointKey(preview.currentHeadKey), radius: THREE_HEAD_RADIUS })
+    }
+  }
+  else {
+    if (app.visibleElements.path && shouldShowGenerationTrail(preview.algorithm)) {
+      pushPolyline(getGenerationTrailPoints(), app.styleTheme.path, THREE_TRAIL_WIDTH)
+    }
+    if (app.visibleElements.head && preview.currentHeadKey) {
+      dots.push({ color: app.styleTheme.head, point: parsePointKey(preview.currentHeadKey), radius: THREE_HEAD_RADIUS })
+    }
+  }
+
+  if (scale !== 1) {
+    for (const segment of segments) {
+      segment.width *= scale
+    }
+    for (const dot of dots) {
+      dot.radius *= scale
+    }
+  }
+  return { dots, segments }
 }

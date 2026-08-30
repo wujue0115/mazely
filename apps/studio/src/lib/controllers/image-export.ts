@@ -31,7 +31,7 @@ import { ensureThreeView, ensureWebgl2dView, render } from '../renderer'
 import { getViewportPixelRatio } from '../utils'
 
 interface ImageExportOptions {
-  exportSvg: () => void
+  exportSvg: () => Promise<void>
   showToast: (message: string) => void
 }
 
@@ -110,8 +110,23 @@ async function exportCurrentView(options: ImageExportOptions): Promise<void> {
 
   const format = getExportFormat()
   if (format === 'svg') {
-    options.exportSvg()
-    closeExportDialog()
+    exporting = true
+    exportDownloadButton.disabled = true
+    let completed = false
+    try {
+      await options.exportSvg()
+      completed = true
+    }
+    catch (error) {
+      options.showToast(error instanceof Error ? error.message : 'SVG export failed.')
+    }
+    finally {
+      exporting = false
+      exportDownloadButton.disabled = false
+      if (completed) {
+        closeExportDialog()
+      }
+    }
     return
   }
 

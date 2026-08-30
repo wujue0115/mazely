@@ -23,6 +23,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Hunt-and-Kill, Kruskal, Prim, Random Traversal, Recursive Division,
   Sidewinder, and Wilson generation.
 
+### Fixed
+
+- Matched Studio SVG exports to the 2D view, including the selected wall
+  thickness, Triangle junction and terminal geometry, grid lines, cell colors,
+  and active generation or solving overlays.
+
 ## [0.3.0] - 2026-08-06
 
 ### Fixed
