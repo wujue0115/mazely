@@ -37,22 +37,19 @@ renderers.
 ## Features
 
 - Twelve maze generation algorithms and five solving algorithms
-- `StepPlayer` API for incremental execution or immediate completion
 - Deterministic generation with string or numeric seeds
-- Square and triangular grids with optional masks for custom maze shapes
-- Transactional maze editing and compact grid serialization
-- No animation loop, DOM, Canvas, WebGL, or renderer dependency
-- Full TypeScript types and ESM output
+- Square and triangular grids with custom masks
+- Step-by-step execution or immediate completion
+- Transactional maze editing with lifecycle events
+- JSON-safe maze serialization
+- Framework-agnostic TypeScript API with ESM support
 
-## Package Scope
+## Built with Mazely
 
-Mazely provides maze state, algorithms, progress steps, events, editing, and
-serialization. It does not draw a maze, schedule animation frames, or provide
-playback UI controls.
-
-[Mazely Studio](https://studio.mazely.dev) is a separate application built on
-top of the packages. Its 2D and 3D rendering, animation timing, interface, and
-export features belong to Studio and are not part of the `mazely` npm API.
+- [Mazely Studio](https://studio.mazely.dev/) - an interactive maze playground
+  for generating, solving, editing, and visualizing mazes.
+- [V-CONF × Mazely](https://v-conf.mazely.dev/) - interactive 3D Vue and Vite
+  logo mazes for V-CONF.
 
 ## Packages
 
