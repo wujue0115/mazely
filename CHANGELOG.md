@@ -28,6 +28,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Matched Studio SVG exports to the 2D view, including the selected wall
   thickness, Triangle junction and terminal geometry, grid lines, cell colors,
   and active generation or solving overlays.
+- Defined the initial `.maze` 1.0 schemas for topology, links, state, style,
+  metadata, and cell colors. Links and paths now use canonical topology cell
+  slots instead of runtime edge-array order or Square-only directions.
 
 ## [0.3.0] - 2026-08-06
 

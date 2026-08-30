@@ -82,7 +82,7 @@ describe('.maze v1 codec', () => {
 
     expect(new TextDecoder().decode(encoded.subarray(0, 4))).toBe('MZLY')
     expect(encoded[4]).toBe(1)
-    expect(encoded[5]).toBe(1)
+    expect(encoded[5]).toBe(0)
     expect(loaded.maze).toEqual({
       algorithm: 'dfs',
       cols: 3,
@@ -97,9 +97,9 @@ describe('.maze v1 codec', () => {
     })
     expect(openedEdgeIds(loaded.runtime)).toEqual(openedEdgeIds(runtime))
 
-    const legacyVersion = encoded.slice()
-    legacyVersion[5] = 0
-    await expect(decodeMazeFile(legacyVersion)).resolves.toMatchObject({ maze: loaded.maze })
+    const futureVersion = encoded.slice()
+    futureVersion[5] = 1
+    await expect(decodeMazeFile(futureVersion)).rejects.toThrow('Unsupported .maze version 1.1')
   })
 
   it('round-trips a solved triangle outer layout and its diagonal path', async () => {
@@ -146,6 +146,82 @@ describe('.maze v1 codec', () => {
     })
     expect(loaded.solve.path).toEqual(path)
     expect(openedEdgeIds(loaded.runtime)).toEqual(openedEdgeIds(runtime))
+  })
+
+  it('preserves triangle links when the runtime edge array order changes', async () => {
+    const runtime = createMaze({
+      grid: { cols: 4, layout: 'rectangle', rows: 3, type: 'triangle' },
+    })
+    runtime.setEdgeOpenedBetween({ x: 0, y: 0 }, { x: 0, y: 1 }, true)
+    runtime.setEdgeOpenedBetween({ x: 2, y: 0 }, { x: 3, y: 0 }, true)
+    runtime.setEdgeOpenedBetween({ x: 1, y: 1 }, { x: 2, y: 1 }, true)
+    runtime.setEdgeOpenedBetween({ x: 3, y: 1 }, { x: 3, y: 2 }, true)
+    const expectedOpenedEdges = [...openedEdgeIds(runtime)].sort()
+
+    runtime.grid.edges.reverse()
+    const encoded = await encodeMazeFile({
+      appearance,
+      pointPreferences: {
+        ...pointPreferences,
+        solveManualEnd: { x: 3, y: 2 },
+      },
+      maze: {
+        algorithm: 'dfs',
+        cols: 4,
+        end: { x: 3, y: 2 },
+        rows: 3,
+        start: { x: 0, y: 0 },
+      },
+      runtime,
+      shape: null,
+      solve: {
+        algorithm: 'dfs',
+        head: null,
+        path: [],
+        status: 'running',
+        visited: {},
+      },
+    })
+    const loaded = await decodeMazeFile(encoded)
+
+    expect(openedEdgeIds(loaded.runtime).sort()).toEqual(expectedOpenedEdges)
+  })
+
+  it('uses canonical links for a triangular outer layout', async () => {
+    const runtime = createMaze({ grid: { layout: 'triangle', size: 4, type: 'triangle' } })
+    runtime.setEdgeOpenedBetween({ x: 0, y: 0 }, { x: 1, y: 1 }, true)
+    runtime.setEdgeOpenedBetween({ x: 1, y: 1 }, { x: 2, y: 1 }, true)
+    runtime.setEdgeOpenedBetween({ x: 2, y: 1 }, { x: 3, y: 2 }, true)
+    runtime.setEdgeOpenedBetween({ x: 3, y: 2 }, { x: 4, y: 2 }, true)
+    const expectedOpenedEdges = [...openedEdgeIds(runtime)].sort()
+
+    runtime.grid.edges.reverse()
+    const encoded = await encodeMazeFile({
+      appearance,
+      pointPreferences: {
+        ...pointPreferences,
+        solveManualEnd: { x: 6, y: 3 },
+      },
+      maze: {
+        algorithm: 'dfs',
+        cols: 7,
+        end: { x: 6, y: 3 },
+        rows: 4,
+        start: { x: 0, y: 0 },
+      },
+      runtime,
+      shape: null,
+      solve: {
+        algorithm: 'dfs',
+        head: null,
+        path: [],
+        status: 'running',
+        visited: {},
+      },
+    })
+    const loaded = await decodeMazeFile(encoded)
+
+    expect(openedEdgeIds(loaded.runtime).sort()).toEqual(expectedOpenedEdges)
   })
 
   it.each([250, 251, 500])('round-trips a triangle outer layout with size %i', async (size) => {

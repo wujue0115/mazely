@@ -1,4 +1,4 @@
-import type { GridCell, Maze, SquareCell, TriangleGrid } from 'mazely'
+import type { GridCell, Maze, MazeEdge, TriangleGrid } from 'mazely'
 import type { AppliedShape } from './controllers/shape-editor'
 import type { CustomFloodTheme, FloodThemeSelection } from './flood'
 import type {
@@ -27,11 +27,20 @@ import { GRID_DIMENSION_MAX } from './utils'
 const MAGIC = new Uint8Array([0x4D, 0x5A, 0x4C, 0x59]) // MZLY
 const HEADER_SIZE = 16
 const VERSION_MAJOR = 1
-const VERSION_MINOR = 1
+const VERSION_MINOR = 0
 const CODEC_NONE = 0
 const CODEC_GZIP = 1
 const TOPOLOGY_SQUARE = 0
 const TOPOLOGY_TRIANGLE = 1
+// Each chunk owns its schema so a future patch can migrate one concern without
+// changing the entire container format.
+const META_SCHEMA_VERSION = 1
+const SQUARE_TOPOLOGY_SCHEMA_VERSION = 1
+const TRIANGLE_TOPOLOGY_SCHEMA_VERSION = 1
+const LINKS_SCHEMA_VERSION = 1
+const STATE_SCHEMA_VERSION = 1
+const STYLE_SCHEMA_VERSION = 1
+const CELL_COLORS_SCHEMA_VERSION = 1
 const TRIANGLE_LAYOUT_TRIANGLE = 0
 const TRIANGLE_LAYOUT_RECTANGLE = 1
 const MAX_UNCOMPRESSED_SIZE = 64 * 1024 * 1024
@@ -120,6 +129,22 @@ interface DecodedTopology {
   type: 'square' | 'triangle'
 }
 
+interface LinkTopology {
+  cols: number
+  layout?: 'triangle' | 'rectangle'
+  rows: number
+  type: 'square' | 'triangle'
+}
+
+interface CanonicalLink {
+  fromSlot: number
+  toSlot: number
+}
+
+interface TopologyLinkCodec {
+  enumerateLinks: (topology: LinkTopology) => CanonicalLink[]
+}
+
 interface DecodedState {
   algorithm: MazeSolvingAlgorithm
   end: MazePoint
@@ -137,7 +162,7 @@ export async function encodeMazeFile(options: MazeFileSaveOptions): Promise<Uint
   const links = encodeLinks(options.runtime)
   const state = encodeState(options)
   const chunks = [
-    encodeChunk(CHUNK_META, encodeJson({
+    encodeChunk(CHUNK_META, encodeVersionedJson(META_SCHEMA_VERSION, {
       generationAlgorithm: options.maze.algorithm,
       hasCustomStartAndEndPoints: options.pointPreferences.generateMode === 'manual'
         || options.pointPreferences.solveMode === 'manual',
@@ -147,7 +172,7 @@ export async function encodeMazeFile(options: MazeFileSaveOptions): Promise<Uint
     encodeChunk(CHUNK_TOPOLOGY, topology),
     encodeChunk(CHUNK_LINKS, links),
     encodeChunk(CHUNK_STATE, state),
-    encodeChunk(CHUNK_STYLE, encodeJson(encodeAppearance(options.appearance))),
+    encodeChunk(CHUNK_STYLE, encodeVersionedJson(STYLE_SCHEMA_VERSION, encodeAppearance(options.appearance))),
   ]
 
   const colors = encodeCellColors(options.shape, options.maze.rows, options.maze.cols)
@@ -178,8 +203,9 @@ export async function decodeMazeFile(file: ArrayBuffer | Uint8Array): Promise<Lo
   }
 
   const major = source[4]
-  if (major !== VERSION_MAJOR) {
-    throw new MazeFileError(`Unsupported .maze version ${major}.${source[5]}.`)
+  const minor = source[5]
+  if (major !== VERSION_MAJOR || minor > VERSION_MINOR) {
+    throw new MazeFileError(`Unsupported .maze version ${major}.${minor}.`)
   }
 
   const codec = source[6]
@@ -266,6 +292,7 @@ function encodeTopology(runtime: Maze): Uint8Array {
   if (runtime.grid.type === 'triangle') {
     const grid = runtime.grid as TriangleGrid
     writer.u8(TOPOLOGY_TRIANGLE)
+    writer.u8(TRIANGLE_TOPOLOGY_SCHEMA_VERSION)
     if (grid.layout === 'triangle') {
       writer.u8(TRIANGLE_LAYOUT_TRIANGLE)
       writer.varint(grid.size!)
@@ -280,6 +307,7 @@ function encodeTopology(runtime: Maze): Uint8Array {
   }
   else {
     writer.u8(TOPOLOGY_SQUARE)
+    writer.u8(SQUARE_TOPOLOGY_SCHEMA_VERSION)
     writer.varint(rows)
     writer.varint(cols)
     expectedActiveCells = rows * cols
@@ -298,6 +326,13 @@ function decodeTopology(bytes: Uint8Array): DecodedTopology {
   const topology = reader.u8()
   if (topology !== TOPOLOGY_SQUARE && topology !== TOPOLOGY_TRIANGLE) {
     throw new MazeFileError(`Unsupported maze topology codec ${topology}.`)
+  }
+  const schemaVersion = reader.u8()
+  const expectedSchemaVersion = topology === TOPOLOGY_TRIANGLE
+    ? TRIANGLE_TOPOLOGY_SCHEMA_VERSION
+    : SQUARE_TOPOLOGY_SCHEMA_VERSION
+  if (schemaVersion !== expectedSchemaVersion) {
+    throw new MazeFileError(`Unsupported topology schema ${schemaVersion} for codec ${topology}.`)
   }
 
   let type: DecodedTopology['type'] = 'square'
@@ -350,85 +385,172 @@ function decodeTopology(bytes: Uint8Array): DecodedTopology {
 }
 
 function encodeLinks(runtime: Maze): Uint8Array {
-  if (runtime.grid.type === 'triangle') {
-    return encodeBitset(runtime.grid.edges.length, index => runtime.grid.edges[index].opened)
-  }
-
-  const { rows, cols } = runtime.grid
-  const rightCount = rows * Math.max(cols - 1, 0)
-  const linkCount = rightCount + Math.max(rows - 1, 0) * cols
+  const topology = getRuntimeLinkTopology(runtime)
+  const canonicalLinks = getCanonicalLinks(topology)
+  const canonicalLinkIndexes = new Map(
+    canonicalLinks.map((link, index) => [canonicalLinkKey(link.fromSlot, link.toSlot), index]),
+  )
   const opened = new Set<number>()
-
   for (const edge of runtime.grid.edges) {
-    if (!edge.opened || !edge.to) {
+    if (!edge.to) {
       continue
     }
-    const from = edge.from as SquareCell
-    const to = edge.to as SquareCell
-    if (from.row === to.row) {
-      opened.add(from.row * (cols - 1) + Math.min(from.col, to.col))
+    const edgeKey = canonicalLinkKey(
+      slotFromCell(edge.from as GridCell, topology.cols),
+      slotFromCell(edge.to as GridCell, topology.cols),
+    )
+    const index = canonicalLinkIndexes.get(edgeKey)
+    if (index === undefined) {
+      throw new MazeFileError(`The ${topology.type} grid contains a non-canonical edge.`)
     }
-    else {
-      opened.add(rightCount + Math.min(from.row, to.row) * cols + from.col)
+    if (edge.opened) {
+      opened.add(index)
     }
   }
-  return encodeBitset(linkCount, index => opened.has(index))
+  return encodeVersionedPayload(
+    LINKS_SCHEMA_VERSION,
+    encodeBitset(canonicalLinks.length, index => opened.has(index)),
+  )
 }
 
-function createRuntime(topology: DecodedTopology, links: Uint8Array): Maze {
-  if (topology.type === 'triangle') {
-    const runtime = createMaze({
-      grid: topology.layout === 'triangle'
-        ? {
-            layout: 'triangle',
-            mask: topology.mask ?? undefined,
-            size: topology.size!,
-            type: 'triangle',
-          }
-        : {
-            cols: topology.cols,
-            layout: 'rectangle',
-            mask: topology.mask ?? undefined,
-            rows: topology.rows,
-            type: 'triangle',
-          },
-    })
-    if (links.length !== bitsetSize(runtime.grid.edges.length)) {
-      throw new MazeFileError('The LINKS chunk has an invalid length.')
-    }
-    runtime.grid.edges.forEach((edge, index) => {
-      if (readBit(links, index)) {
-        edge.open()
+const topologyLinkCodecs: Record<LinkTopology['type'], TopologyLinkCodec> = {
+  square: {
+    enumerateLinks: (topology) => {
+      const links: CanonicalLink[] = []
+      for (let row = 0; row < topology.rows; row += 1) {
+        for (let col = 0; col < topology.cols - 1; col += 1) {
+          links.push(canonicalLink(
+            pointToSlot({ x: col, y: row }, topology.rows, topology.cols),
+            pointToSlot({ x: col + 1, y: row }, topology.rows, topology.cols),
+          ))
+        }
       }
-    })
-    return runtime
-  }
+      for (let row = 0; row < topology.rows - 1; row += 1) {
+        for (let col = 0; col < topology.cols; col += 1) {
+          links.push(canonicalLink(
+            pointToSlot({ x: col, y: row }, topology.rows, topology.cols),
+            pointToSlot({ x: col, y: row + 1 }, topology.rows, topology.cols),
+          ))
+        }
+      }
+      return links
+    },
+  },
+  triangle: {
+    enumerateLinks: (topology) => {
+      const links: CanonicalLink[] = []
+      for (let row = 0; row < topology.rows; row += 1) {
+        const rowCellCount = topology.layout === 'triangle' ? row * 2 + 1 : topology.cols
+        for (let col = 0; col < rowCellCount; col += 1) {
+          const fromSlot = pointToSlot({ x: col, y: row }, topology.rows, topology.cols)
+          if (col + 1 < rowCellCount) {
+            links.push(canonicalLink(
+              fromSlot,
+              pointToSlot({ x: col + 1, y: row }, topology.rows, topology.cols),
+            ))
+          }
+          const hasBottomEdge = (topology.layout === 'triangle' ? col : row + col) % 2 === 0
+          if (hasBottomEdge && row + 1 < topology.rows) {
+            const bottomCol = topology.layout === 'triangle' ? col + 1 : col
+            links.push(canonicalLink(
+              fromSlot,
+              pointToSlot({ x: bottomCol, y: row + 1 }, topology.rows, topology.cols),
+            ))
+          }
+        }
+      }
+      return links
+    },
+  },
+}
 
-  const rightCount = topology.rows * Math.max(topology.cols - 1, 0)
-  const linkCount = rightCount + Math.max(topology.rows - 1, 0) * topology.cols
-  if (links.length !== bitsetSize(linkCount)) {
+function getRuntimeLinkTopology(runtime: Maze): LinkTopology {
+  const { cols, rows, type } = runtime.grid
+  return type === 'triangle'
+    ? { cols, layout: (runtime.grid as TriangleGrid).layout, rows, type }
+    : { cols, rows, type }
+}
+
+function getCanonicalLinks(topology: LinkTopology): CanonicalLink[] {
+  const links = topologyLinkCodecs[topology.type]
+    .enumerateLinks(topology)
+    .map(link => canonicalLink(link.fromSlot, link.toSlot))
+    .sort((left, right) => left.fromSlot - right.fromSlot || left.toSlot - right.toSlot)
+  for (let index = 1; index < links.length; index += 1) {
+    if (links[index - 1].fromSlot === links[index].fromSlot
+      && links[index - 1].toSlot === links[index].toSlot) {
+      throw new MazeFileError(`The ${topology.type} topology codec emitted a duplicate link.`)
+    }
+  }
+  return links
+}
+
+function canonicalLink(fromSlot: number, toSlot: number): CanonicalLink {
+  return fromSlot < toSlot
+    ? { fromSlot, toSlot }
+    : { fromSlot: toSlot, toSlot: fromSlot }
+}
+
+function canonicalLinkKey(fromSlot: number, toSlot: number): string {
+  const link = canonicalLink(fromSlot, toSlot)
+  return `${link.fromSlot}:${link.toSlot}`
+}
+
+function applyCanonicalLinks(runtime: Maze, topology: DecodedTopology, links: Uint8Array): void {
+  const canonicalLinks = getCanonicalLinks(topology)
+  const linkBits = decodeVersionedPayload(links, 'LINKS', LINKS_SCHEMA_VERSION)
+  if (linkBits.length !== bitsetSize(canonicalLinks.length)) {
     throw new MazeFileError('The LINKS chunk has an invalid length.')
   }
 
-  const runtime = createMaze({
-    grid: {
-      cols: topology.cols,
-      mask: topology.mask ?? undefined,
-      rows: topology.rows,
-      type: 'square',
-    },
-  })
-
+  const runtimeEdges = new Map<string, MazeEdge>()
   for (const edge of runtime.grid.edges) {
-    const from = edge.from as SquareCell
-    const to = edge.to as SquareCell
-    const index = from.row === to.row
-      ? from.row * (topology.cols - 1) + Math.min(from.col, to.col)
-      : rightCount + Math.min(from.row, to.row) * topology.cols + from.col
-    if (readBit(links, index)) {
-      edge.open()
+    if (edge.to) {
+      runtimeEdges.set(canonicalLinkKey(
+        slotFromCell(edge.from as GridCell, topology.cols),
+        slotFromCell(edge.to as GridCell, topology.cols),
+      ), edge)
     }
   }
+  canonicalLinks.forEach((link, index) => {
+    if (!readBit(linkBits, index)) {
+      return
+    }
+    const edge = runtimeEdges.get(canonicalLinkKey(link.fromSlot, link.toSlot))
+    if (!edge) {
+      throw new MazeFileError('The LINKS chunk opens an edge excluded by the topology mask.')
+    }
+    edge.open()
+  })
+}
+
+function createRuntime(topology: DecodedTopology, links: Uint8Array): Maze {
+  const runtime = topology.type === 'triangle'
+    ? createMaze({
+        grid: topology.layout === 'triangle'
+          ? {
+              layout: 'triangle',
+              mask: topology.mask ?? undefined,
+              size: topology.size!,
+              type: 'triangle',
+            }
+          : {
+              cols: topology.cols,
+              layout: 'rectangle',
+              mask: topology.mask ?? undefined,
+              rows: topology.rows,
+              type: 'triangle',
+            },
+      })
+    : createMaze({
+        grid: {
+          cols: topology.cols,
+          mask: topology.mask ?? undefined,
+          rows: topology.rows,
+          type: 'square',
+        },
+      })
+  applyCanonicalLinks(runtime, topology, links)
   return runtime
 }
 
@@ -445,6 +567,7 @@ function encodeState(options: MazeFileSaveOptions): Uint8Array {
     options.solve.path.length,
   )
   const writer = new ByteWriter()
+  writer.u8(STATE_SCHEMA_VERSION)
   writer.u8(statusToByte(status))
   writer.u8(enumIndex(MAZE_SOLVING_ALGORITHMS, options.solve.algorithm, 'solving algorithm'))
   writer.varint(pointToSlot(options.maze.start, rows, cols))
@@ -453,16 +576,7 @@ function encodeState(options: MazeFileSaveOptions): Uint8Array {
 
   writer.varint(options.solve.path.length)
   if (options.solve.path.length > 0) {
-    if (options.runtime.grid.type === 'triangle') {
-      options.solve.path.forEach(point => writer.varint(pointToSlot(point, rows, cols)))
-    }
-    else {
-      writer.varint(pointToSlot(options.solve.path[0], rows, cols))
-      writer.bytes(packTwoBitValues(
-        options.solve.path.slice(1).map((point, index) =>
-          directionBetween(options.solve.path[index], point)),
-      ))
-    }
+    options.solve.path.forEach(point => writer.varint(pointToSlot(point, rows, cols)))
   }
 
   const head = options.solve.head
@@ -476,6 +590,7 @@ function encodeState(options: MazeFileSaveOptions): Uint8Array {
 
 function decodeState(bytes: Uint8Array, topology: DecodedTopology, runtime: Maze): DecodedState {
   const reader = new ByteReader(bytes)
+  assertSchemaVersion(reader, 'STATE', STATE_SCHEMA_VERSION)
   const status = byteToStatus(reader.u8())
   const algorithm = enumValue(MAZE_SOLVING_ALGORITHMS, reader.u8(), 'solving algorithm')
   const slots = topology.rows * topology.cols
@@ -503,27 +618,13 @@ function decodeState(bytes: Uint8Array, topology: DecodedTopology, runtime: Maze
     throw new MazeFileError('The saved path is longer than the topology allows.')
   }
   if (pathLength > 0) {
-    if (topology.type === 'triangle') {
-      for (let index = 0; index < pathLength; index += 1) {
-        const point = slotToPoint(reader.varint(), topology)
-        assertActiveCell(runtime, point, 'path')
-        if (index > 0) {
-          assertOpenStep(runtime, path[index - 1], point)
-        }
-        path.push(point)
+    for (let index = 0; index < pathLength; index += 1) {
+      const point = slotToPoint(reader.varint(), topology)
+      assertActiveCell(runtime, point, 'path')
+      if (index > 0) {
+        assertOpenStep(runtime, path[index - 1], point)
       }
-    }
-    else {
-      let current = slotToPoint(reader.varint(), topology)
-      assertActiveCell(runtime, current, 'path')
-      path.push(current)
-      const directions = unpackTwoBitValues(reader.bytes(bitsetSize((pathLength - 1) * 2)), pathLength - 1)
-      for (const direction of directions) {
-        const next = movePoint(current, direction)
-        assertOpenStep(runtime, current, next)
-        path.push(next)
-        current = next
-      }
+      path.push(point)
     }
   }
 
@@ -576,6 +677,7 @@ function encodeCellColors(shape: AppliedShape | null, rows: number, cols: number
   }
 
   const writer = new ByteWriter()
+  writer.u8(CELL_COLORS_SCHEMA_VERSION)
   writer.bytes(encodeBitset(colors.length, index => colors[index] !== null))
   for (const color of colors) {
     if (color) {
@@ -588,6 +690,7 @@ function encodeCellColors(shape: AppliedShape | null, rows: number, cols: number
 function decodeCellColors(bytes: Uint8Array, topology: DecodedTopology): (string | null)[][] {
   const slots = topology.rows * topology.cols
   const reader = new ByteReader(bytes)
+  assertSchemaVersion(reader, 'CELL_COLORS', CELL_COLORS_SCHEMA_VERSION)
   const present = reader.bytes(bitsetSize(slots))
   const colors: (string | null)[][] = []
   for (let row = 0; row < topology.rows; row += 1) {
@@ -641,30 +744,6 @@ function byteToStatus(value: number): MazeFileSolveStatus {
     throw new MazeFileError(`Unknown solve state ${value}.`)
   }
   return status as MazeFileSolveStatus
-}
-
-function directionBetween(from: MazePoint, to: MazePoint): number {
-  const dx = to.x - from.x
-  const dy = to.y - from.y
-  if (dx === 0 && dy === -1)
-    return 0
-  if (dx === 1 && dy === 0)
-    return 1
-  if (dx === 0 && dy === 1)
-    return 2
-  if (dx === -1 && dy === 0)
-    return 3
-  throw new MazeFileError('Path and parent points must be adjacent.')
-}
-
-function movePoint(point: MazePoint, direction: number): MazePoint {
-  if (direction === 0)
-    return { x: point.x, y: point.y - 1 }
-  if (direction === 1)
-    return { x: point.x + 1, y: point.y }
-  if (direction === 2)
-    return { x: point.x, y: point.y + 1 }
-  return { x: point.x - 1, y: point.y }
 }
 
 function assertOpenStep(runtime: Maze, from: MazePoint, to: MazePoint): void {
@@ -724,19 +803,6 @@ function bitsetSize(bitCount: number): number {
   return Math.ceil(bitCount / 8)
 }
 
-function packTwoBitValues(values: number[]): Uint8Array {
-  const bytes = new Uint8Array(bitsetSize(values.length * 2))
-  values.forEach((value, index) => {
-    bytes[index >> 2] |= (value & 3) << ((index & 3) * 2)
-  })
-  return bytes
-}
-
-function unpackTwoBitValues(bytes: Uint8Array, count: number): number[] {
-  return Array.from({ length: count }, (_, index) =>
-    (bytes[index >> 2] >> ((index & 3) * 2)) & 3)
-}
-
 function encodeChunk(type: number, data: Uint8Array): Uint8Array {
   const writer = new ByteWriter()
   writer.u8(type)
@@ -771,8 +837,38 @@ function encodeJson(value: unknown): Uint8Array {
   return new TextEncoder().encode(JSON.stringify(value))
 }
 
+function encodeVersionedJson(schemaVersion: number, value: unknown): Uint8Array {
+  return encodeVersionedPayload(schemaVersion, encodeJson(value))
+}
+
+function encodeVersionedPayload(schemaVersion: number, payload: Uint8Array): Uint8Array {
+  const writer = new ByteWriter()
+  writer.u8(schemaVersion)
+  writer.bytes(payload)
+  return writer.finish()
+}
+
+function decodeVersionedJson(bytes: Uint8Array, chunkName: string, schemaVersion: number): unknown {
+  return decodeJson(decodeVersionedPayload(bytes, chunkName, schemaVersion))
+}
+
+function decodeVersionedPayload(bytes: Uint8Array, chunkName: string, schemaVersion: number): Uint8Array {
+  const reader = new ByteReader(bytes)
+  assertSchemaVersion(reader, chunkName, schemaVersion)
+  const payload = reader.bytes(reader.remaining)
+  reader.done()
+  return payload
+}
+
+function assertSchemaVersion(reader: ByteReader, chunkName: string, schemaVersion: number): void {
+  const version = reader.u8()
+  if (version !== schemaVersion) {
+    throw new MazeFileError(`Unsupported ${chunkName} schema ${version}.`)
+  }
+}
+
 function decodeMeta(bytes: Uint8Array): MazeFileMeta {
-  const value = decodeJson(bytes) as Partial<MazeFileMeta>
+  const value = decodeVersionedJson(bytes, 'META', META_SCHEMA_VERSION) as Partial<MazeFileMeta>
   const validPointPreferences = isPointPreferences(value.pointPreferences)
   if (!isMazeGenerationAlgorithm(value.generationAlgorithm)
     || (value.hasShape !== undefined && typeof value.hasShape !== 'boolean')
@@ -837,7 +933,7 @@ function assertPointPreferences(runtime: Maze, preferences: MazeFilePointPrefere
 }
 
 function decodeAppearance(bytes: Uint8Array): MazeFileAppearance {
-  const value = decodeJson(bytes) as Partial<MazeFileAppearance>
+  const value = decodeVersionedJson(bytes, 'STYLE', STYLE_SCHEMA_VERSION) as Partial<MazeFileAppearance>
   const customFloodTheme = value.customFloodTheme
     ? { ...value.customFloodTheme, loop: value.customFloodTheme.loop ?? false }
     : structuredClone(DEFAULT_CUSTOM_FLOOD_THEME)
