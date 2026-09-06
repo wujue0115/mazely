@@ -1,7 +1,7 @@
 import type { Maze } from 'mazely'
 import { createMaze } from 'mazely'
 import { describe, expect, it } from 'vitest'
-import { getCellCenter, getViewportRatioRows, hitTestCell } from '../src/lib/grid-geometry'
+import { getCellCenter, getOverlayScale, getViewportRatioRows, hitTestCell, TRIANGLE_OVERLAY_SCALE } from '../src/lib/grid-geometry'
 import {
   countGridLines,
   hasOpenCellEdge,
@@ -106,6 +106,11 @@ describe('triangle grid reference lines', () => {
 })
 
 describe('hexagon grid reference lines', () => {
+  it('matches triangular overlay weight', () => {
+    const runtime = createMaze({ grid: { layout: 'hexagon', size: 2, type: 'hexagon' } })
+    expect(getOverlayScale(runtime)).toBe(TRIANGLE_OVERLAY_SCALE)
+  })
+
   it.each(['pointy', 'flat'] as const)('renders and hit-tests %s hex cells', (orientation) => {
     const runtime = createMaze({
       grid: { cols: 3, layout: 'rectangle', orientation, rows: 3, type: 'hexagon' },

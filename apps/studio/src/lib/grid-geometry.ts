@@ -20,7 +20,8 @@ export const TRIANGLE_HEIGHT = Math.sqrt(3) / 2
 /** Linear scale matching the area of an equilateral triangle to a square cell. */
 export const TRIANGLE_OVERLAY_SCALE = Math.sqrt(TRIANGLE_HEIGHT / 2)
 export const HEX_RADIUS = 1 / Math.sqrt(3)
-export const HEX_OVERLAY_SCALE = Math.sqrt(Math.sqrt(3) / 2)
+/** Match triangular overlays so non-square topology paths share one visual weight. */
+export const HEX_OVERLAY_SCALE = TRIANGLE_OVERLAY_SCALE
 /** Maximum editable visual width for a rectangular triangle grid. */
 export const TRIANGLE_RECTANGLE_VISUAL_COLS_MAX = 250
 
