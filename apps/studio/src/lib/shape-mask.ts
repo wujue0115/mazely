@@ -32,6 +32,7 @@ interface PixelPoint {
 const SQUARE_TOPOLOGY: ShapeGridTopology = { type: 'square' }
 const TRIANGLE_HEIGHT = Math.sqrt(3) / 2
 const HEX_RADIUS = 1 / Math.sqrt(3)
+const hexWorldBoundsCache = new WeakMap<ShapeGridTopology, Map<string, HexWorldBounds>>()
 
 const ALPHA_OPAQUE_THRESHOLD = 128
 
@@ -275,6 +276,10 @@ export function buildCellMask(
     const line: boolean[] = []
     const rowCols = getShapeRowCellCount(row, cols, topology)
     for (let col = 0; col < rowCols; col += 1) {
+      if (!isShapeCellCoordinate(col, row, cols, rows, topology)) {
+        line.push(false)
+        continue
+      }
       let kept = 0
       let total = 0
       visitShapeCellPixels(pixelMask, col, row, cols, rows, topology, (pixel) => {
@@ -800,7 +805,20 @@ function getHexWorldPolygon(col: number, row: number, cols: number, rows: number
   }))
 }
 
-function getHexWorldBounds(cols: number, rows: number, topology: Extract<ShapeGridTopology, { type: 'hexagon' }>): { minX: number, minY: number, width: number, height: number } {
+interface HexWorldBounds {
+  minX: number
+  minY: number
+  width: number
+  height: number
+}
+
+function getHexWorldBounds(cols: number, rows: number, topology: Extract<ShapeGridTopology, { type: 'hexagon' }>): HexWorldBounds {
+  const key = `${cols}:${rows}`
+  const cachedBySize = hexWorldBoundsCache.get(topology)
+  const cached = cachedBySize?.get(key)
+  if (cached) {
+    return cached
+  }
   const points: PixelPoint[] = []
   for (let row = 0; row < rows; row += 1) {
     for (let col = 0; col < cols; col += 1) {
@@ -812,7 +830,13 @@ function getHexWorldBounds(cols: number, rows: number, topology: Extract<ShapeGr
   const maxX = Math.max(...points.map(point => point.x))
   const minY = Math.min(...points.map(point => point.y))
   const maxY = Math.max(...points.map(point => point.y))
-  return { height: maxY - minY, minX, minY, width: maxX - minX }
+  const bounds = { height: maxY - minY, minX, minY, width: maxX - minX }
+  const cache = cachedBySize ?? new Map<string, HexWorldBounds>()
+  cache.set(key, bounds)
+  if (!cachedBySize) {
+    hexWorldBoundsCache.set(topology, cache)
+  }
+  return bounds
 }
 
 function getMaskCols(mask: CellMask): number {

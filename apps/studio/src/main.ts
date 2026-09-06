@@ -485,6 +485,20 @@ async function confirmGridReplacement(options: GridReplacementDialogOptions): Pr
 }
 
 async function prepareImageShapeLayout(): Promise<boolean> {
+  if (app.gridType === 'hexagon' && app.hexLayout === 'hexagon') {
+    const confirmed = await confirmGridReplacement({
+      message: 'Image-shaped Hexagon mazes require the rectangular layout. Continuing will discard the current maze.',
+      title: 'Use rectangular Hexagon layout?',
+    })
+    if (!confirmed) {
+      return false
+    }
+
+    hexLayoutSelect.value = 'rectangle'
+    setHexLayout('rectangle')
+    return true
+  }
+
   if (app.gridType !== 'triangle' || app.triangleLayout === 'rectangle') {
     return true
   }

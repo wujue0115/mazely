@@ -44,6 +44,8 @@ describe('shape-mask', () => {
     expect(polygon).toHaveLength(6)
     expect(findShapeCellAtPixel(pixelMask, center.x, center.y, 5, 5, topology)).toEqual({ x: 2, y: 2 })
     expect(findMaskRegions(mask, topology)).toMatchObject({ cellCount: 19, count: 1 })
+    const fullPixels = { data: new Uint8Array(90 * 90).fill(1), height: 90, width: 90 }
+    expect(buildCellMask(fullPixels, 5, 5, topology)[0][0]).toBe(false)
   })
   it('keeps opaque pixels when the image has transparency', () => {
     // 4x4 image: opaque 2x2 block in the top-left, transparent elsewhere.
