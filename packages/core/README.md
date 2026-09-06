@@ -45,8 +45,8 @@ const result = maze.getSolveResult()
 
 ## Grid Topologies
 
-Create either square cells or alternating up/down triangle cells. Triangle
-grids can use a triangular outer boundary:
+Create square, alternating up/down triangle, or regular hexagonal cells.
+Triangle grids can use a triangular outer boundary:
 
 ```ts
 const triangle = new Mazely({
@@ -64,6 +64,23 @@ triangle.generate('prim').finish()
 Use `{ type: 'triangle', layout: 'rectangle', rows, cols }` for a rectangular
 outer boundary made from triangle cells. Both square and triangle grids accept
 connected cell masks.
+
+Hexagonal grids support rectangular and hexagonal outer boundaries, plus
+pointy- or flat-topped orientation:
+
+```ts
+const hex = new Mazely({
+  grid: {
+    type: 'hexagon',
+    layout: 'hexagon',
+    size: 12,
+    orientation: 'pointy',
+  },
+  seed: 'hexagons',
+})
+
+hex.generate('dfs').finish()
+```
 
 Each applied step exposes a `payload` describing the carve/expand direction
 (`from`/`to` cell IDs). Applications may use it as renderer input; the package
@@ -100,9 +117,10 @@ maze.solve('flood', {
 All generation algorithms support connected masks and finish with a spanning
 tree. Generation rejects a disconnected mask before changing the grid.
 
-All built-in generation algorithms support both square and triangle grids.
 Read `MAZE_GENERATION_CAPABILITIES[algorithm].supportedGridTypes` when building
 topology-aware controls so they remain aligned with runtime capabilities.
+The graph-based algorithms support hexagonal grids; topology-specific variants
+are only exposed where their directional rule is defined for that topology.
 
 Runtime registries and guards are exported as
 `MAZE_GENERATION_ALGORITHMS`, `MAZE_SOLVING_ALGORITHMS`,

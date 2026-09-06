@@ -39,7 +39,7 @@ import {
   createWilsonAlgorithm,
   withSpanningTreeGuarantee,
 } from '../generation'
-import { createSquareGrid, createTriangleGrid } from '../grid'
+import { createHexGrid, createSquareGrid, createTriangleGrid } from '../grid'
 import {
   createSolveAStarAlgorithm,
   createSolveBestFirstAlgorithm,
@@ -76,7 +76,18 @@ export class Mazely {
       ? gridOptions.layout === 'triangle'
         ? createTriangleGrid(gridOptions.size, gridOptions.mask)
         : createTriangleGrid(gridOptions.rows, gridOptions.cols, gridOptions.mask)
-      : createSquareGrid(gridOptions.rows, gridOptions.cols, gridOptions.mask)
+      : gridOptions.type === 'hexagon'
+        ? gridOptions.layout === 'hexagon'
+          ? createHexGrid(gridOptions.size, {
+              layout: 'hexagon',
+              mask: gridOptions.mask,
+              orientation: gridOptions.orientation,
+            })
+          : createHexGrid(gridOptions.rows, gridOptions.cols, {
+              mask: gridOptions.mask,
+              orientation: gridOptions.orientation,
+            })
+        : createSquareGrid(gridOptions.rows, gridOptions.cols, gridOptions.mask)
   }
 
   generate(

@@ -284,6 +284,9 @@ export class MazeFileError extends Error {
 }
 
 function encodeTopology(runtime: Maze): Uint8Array {
+  if (runtime.grid.type === 'hexagon') {
+    throw new MazeFileError('Hexagonal mazes cannot be saved until the Studio hex topology codec is available.')
+  }
   const { rows, cols } = runtime.grid
   const active = new Set(runtime.grid.cells.map(cell => slotFromCell(cell, cols)))
   const writer = new ByteWriter()
@@ -466,6 +469,9 @@ const topologyLinkCodecs: Record<LinkTopology['type'], TopologyLinkCodec> = {
 
 function getRuntimeLinkTopology(runtime: Maze): LinkTopology {
   const { cols, rows, type } = runtime.grid
+  if (type === 'hexagon') {
+    throw new MazeFileError('Hexagonal mazes cannot be saved until the Studio hex topology codec is available.')
+  }
   return type === 'triangle'
     ? { cols, layout: (runtime.grid as TriangleGrid).layout, rows, type }
     : { cols, rows, type }

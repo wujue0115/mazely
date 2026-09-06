@@ -1,3 +1,5 @@
+export type { HexGrid, HexGridMask } from './hex-grid'
+export { createHexGrid } from './hex-grid'
 export type { SerializedMaze } from './serialize'
 export { applySerializedGrid, serializeGrid } from './serialize'
 export type { SquareGrid, SquareGridMask } from './square-grid'
