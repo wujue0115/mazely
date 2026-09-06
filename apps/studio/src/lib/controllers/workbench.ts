@@ -310,6 +310,10 @@ export function setGridType(gridType: MazeGridType): void {
   stopSolveAnimation()
   clearGenerationPreviewState()
   app.gridType = gridType
+  if (gridType === 'hexagon' && app.hexLayout === 'hexagon') {
+    app.mazeWidth = 10
+    app.mazeHeight = 10
+  }
   if (gridType === 'triangle' && app.triangleLayout === 'rectangle') {
     app.mazeWidth = clamp(app.mazeWidth, 1, TRIANGLE_RECTANGLE_VISUAL_COLS_MAX)
   }
