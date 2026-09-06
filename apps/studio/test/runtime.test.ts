@@ -1,7 +1,7 @@
 import type { Maze } from 'mazely'
 import { createMaze } from 'mazely'
 import { describe, expect, it } from 'vitest'
-import { getCellCenter, getOverlayScale, getViewportRatioRows, hitTestCell, TRIANGLE_OVERLAY_SCALE } from '../src/lib/grid-geometry'
+import { getCellCenter, getGridBounds, getOverlayScale, getViewportRatioRows, hitTestCell, TRIANGLE_OVERLAY_SCALE } from '../src/lib/grid-geometry'
 import {
   countGridLines,
   hasOpenCellEdge,
@@ -130,6 +130,17 @@ describe('hexagon grid reference lines', () => {
 
     expect(runtime.grid.cells).toHaveLength(19)
     expect(collectLines(runtime)).toHaveLength(runtime.grid.cells.length * 6 - runtime.grid.edges.length)
+  })
+
+  it('calculates bounds for a large outer layout without expanding every polygon', () => {
+    const runtime = createMaze({
+      grid: { layout: 'hexagon', orientation: 'flat', size: 100, type: 'hexagon' },
+    })
+
+    expect(getGridBounds(runtime)).toMatchObject({
+      height: expect.any(Number),
+      width: expect.any(Number),
+    })
   })
 })
 

@@ -819,17 +819,32 @@ function getHexWorldBounds(cols: number, rows: number, topology: Extract<ShapeGr
   if (cached) {
     return cached
   }
-  const points: PixelPoint[] = []
+  // Hexes share a fixed radius and orientation, so their bounds are the
+  // extrema of their centers plus that fixed extent.  Do not collect all six
+  // vertices per cell here: a size-200 outer hex contains ~120k cells, and
+  // spreading those vertices into Math.min/Math.max exceeds the JS argument
+  // limit before the cache can be populated.
+  const xExtent = topology.orientation === 'pointy' ? 0.5 : HEX_RADIUS
+  const yExtent = topology.orientation === 'pointy' ? HEX_RADIUS : 0.5
+  let minX = Number.POSITIVE_INFINITY
+  let maxX = Number.NEGATIVE_INFINITY
+  let minY = Number.POSITIVE_INFINITY
+  let maxY = Number.NEGATIVE_INFINITY
   for (let row = 0; row < rows; row += 1) {
     for (let col = 0; col < cols; col += 1) {
-      if (isShapeCellCoordinate(col, row, cols, rows, topology))
-        points.push(...getHexWorldPolygon(col, row, cols, rows, topology))
+      if (!isShapeCellCoordinate(col, row, cols, rows, topology)) {
+        continue
+      }
+      const axial = hexAxialFromCell(col, row, rows, topology)
+      const center = topology.orientation === 'pointy'
+        ? { x: axial.q + axial.r / 2, y: HEX_RADIUS * 1.5 * axial.r }
+        : { x: HEX_RADIUS * 1.5 * axial.q, y: axial.r + axial.q / 2 }
+      minX = Math.min(minX, center.x - xExtent)
+      maxX = Math.max(maxX, center.x + xExtent)
+      minY = Math.min(minY, center.y - yExtent)
+      maxY = Math.max(maxY, center.y + yExtent)
     }
   }
-  const minX = Math.min(...points.map(point => point.x))
-  const maxX = Math.max(...points.map(point => point.x))
-  const minY = Math.min(...points.map(point => point.y))
-  const maxY = Math.max(...points.map(point => point.y))
   const bounds = { height: maxY - minY, minX, minY, width: maxX - minX }
   const cache = cachedBySize ?? new Map<string, HexWorldBounds>()
   cache.set(key, bounds)

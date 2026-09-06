@@ -47,6 +47,23 @@ describe('shape-mask', () => {
     const fullPixels = { data: new Uint8Array(90 * 90).fill(1), height: 90, width: 90 }
     expect(buildCellMask(fullPixels, 5, 5, topology)[0][0]).toBe(false)
   })
+
+  it('calculates large hexagonal image bounds without expanding every vertex', () => {
+    const topology = { layout: 'hexagon' as const, orientation: 'pointy' as const, type: 'hexagon' as const }
+    const dimensions = getShapeGridDimensions(200, 200, 200, topology)
+
+    expect(dimensions).toEqual({ cols: 399, rows: 399 })
+    expect(
+      () => getShapeCellPolygon(
+        { height: 200, width: 200 },
+        199,
+        199,
+        dimensions.cols,
+        dimensions.rows,
+        topology,
+      ),
+    ).not.toThrow()
+  })
   it('keeps opaque pixels when the image has transparency', () => {
     // 4x4 image: opaque 2x2 block in the top-left, transparent elsewhere.
     const image = makeImage(4, 4, (x, y) => (x < 2 && y < 2 ? [255, 0, 0, 255] : [0, 0, 0, 0]))

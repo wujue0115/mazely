@@ -49,10 +49,27 @@ export function getGridBounds(runtime: Maze): GridBounds {
       ? { height: runtime.grid.rows * TRIANGLE_HEIGHT, width: (runtime.grid.cols + 1) / 2 }
       : { height: runtime.grid.rows, width: runtime.grid.cols }
   }
-  const points = runtime.grid.cells.flatMap(getCellPolygon)
+  let minX = Number.POSITIVE_INFINITY
+  let maxX = Number.NEGATIVE_INFINITY
+  let minY = Number.POSITIVE_INFINITY
+  let maxY = Number.NEGATIVE_INFINITY
+  for (const cell of runtime.grid.cells) {
+    if (!(cell instanceof HexCell)) {
+      continue
+    }
+    // A hex's bounds are its center plus an orientation-specific fixed extent.
+    // Calculating every polygon first creates hundreds of thousands of points
+    // for large outer hex layouts and overflows Math.min/Math.max when spread.
+    const xExtent = cell.orientation === 'pointy' ? 0.5 : HEX_RADIUS
+    const yExtent = cell.orientation === 'pointy' ? HEX_RADIUS : 0.5
+    minX = Math.min(minX, cell.worldX - xExtent)
+    maxX = Math.max(maxX, cell.worldX + xExtent)
+    minY = Math.min(minY, cell.worldY - yExtent)
+    maxY = Math.max(maxY, cell.worldY + yExtent)
+  }
   return {
-    height: Math.max(...points.map(point => point.y)) - Math.min(...points.map(point => point.y)),
-    width: Math.max(...points.map(point => point.x)) - Math.min(...points.map(point => point.x)),
+    height: maxY - minY,
+    width: maxX - minX,
   }
 }
 
