@@ -174,12 +174,16 @@ tabEdit.addEventListener('click', () => {
 
 generationSelect.addEventListener('change', invalidateGenerationPreview)
 gridTypeSelect.addEventListener('change', async () => {
-  const gridType = gridTypeSelect.value === 'triangle' ? 'triangle' : 'square'
+  const gridType = gridTypeSelect.value === 'triangle'
+    ? 'triangle'
+    : gridTypeSelect.value === 'hexagon'
+      ? 'hexagon'
+      : 'square'
   if (gridType === app.gridType) {
     return
   }
   const confirmed = await confirmGridReplacement({
-    message: `Changing to a ${gridType === 'triangle' ? 'Triangle' : 'Square'} grid will discard the current maze.`,
+    message: `Changing to a ${gridType === 'triangle' ? 'Triangle' : gridType === 'hexagon' ? 'Hexagon' : 'Square'} grid will discard the current maze.`,
     title: 'Change grid topology?',
   })
   if (!confirmed) {

@@ -168,7 +168,9 @@ export function createSolidMazeState(
             rows: height,
             type: 'triangle',
           }
-      : { cols: width, mask: shape?.cellMask ?? undefined, rows: height, type: 'square' },
+      : gridType === 'hexagon'
+        ? { cols: width, layout: 'rectangle', mask: shape?.cellMask ?? undefined, rows: height, type: 'hexagon' }
+        : { cols: width, mask: shape?.cellMask ?? undefined, rows: height, type: 'square' },
   })
   const start = shape?.start ?? { x: 0, y: 0 }
   const end = shape?.end ?? { x: runtime.grid.cols - 1, y: runtime.grid.rows - 1 }

@@ -457,7 +457,7 @@ function pushEditPreviewOverlays(out: {
     ...getInsetEdgeFillSegment(segment, wallThickness),
     width: wallThickness,
   })
-  if (app.mazeRuntime?.grid.type === 'triangle') {
+  if (app.mazeRuntime?.grid.type !== 'square') {
     return
   }
   pushEdgeBorderSegments(out.borderSegments, segment, wallThickness)
@@ -483,7 +483,7 @@ function getEdgeOutlineSegment(
   from: MazePoint,
   to: MazePoint,
 ): { from: MazePoint, to: MazePoint } {
-  if (app.mazeRuntime?.grid.type === 'triangle') {
+  if (app.mazeRuntime && app.mazeRuntime.grid.type !== 'square') {
     const fromCell = app.mazeRuntime.grid.getCell(`${from.y}:${from.x}`)
     const toCell = app.mazeRuntime.grid.getCell(`${to.y}:${to.x}`)
     const boundary = fromCell && toCell ? getSharedBoundary(fromCell, toCell) : null
@@ -544,7 +544,7 @@ function getInsetEdgeFillSegment(
   line: { from: MazePoint, to: MazePoint },
   wallThickness: number,
 ): { from: MazePoint, to: MazePoint } {
-  if (app.mazeRuntime?.grid.type === 'triangle') {
+  if (app.mazeRuntime?.grid.type !== 'square') {
     const dx = line.to.x - line.from.x
     const dy = line.to.y - line.from.y
     const length = Math.hypot(dx, dy)

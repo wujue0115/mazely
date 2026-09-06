@@ -327,7 +327,7 @@ export function setGridType(gridType: MazeGridType): void {
   }
 
   rebuildMazeForShapeChange()
-  showToast(`${gridType === 'triangle' ? 'Triangle' : 'Square'} grid selected.`)
+  showToast(`${gridType === 'triangle' ? 'Triangle' : gridType === 'hexagon' ? 'Hexagon' : 'Square'} grid selected.`)
 }
 
 export function setTriangleLayout(layout: TriangleGridLayout): void {
