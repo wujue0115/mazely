@@ -6,8 +6,8 @@ class EllerAlgorithm implements MazeAlgorithm<GridCell, MazeGenerationStep> {
   name = 'eller';
 
   * generate(context: MazeContext<GridCell>): IterableIterator<MazeGenerationStep> {
-    if (context.grid.type === 'triangle') {
-      yield* generateTriangle(context)
+    if (context.grid.type !== 'square') {
+      yield* generateNonSquare(context)
       return
     }
 
@@ -94,7 +94,12 @@ export function createEllerAlgorithm(): MazeAlgorithm<GridCell, MazeGenerationSt
   return new EllerAlgorithm()
 }
 
-function* generateTriangle(
+/**
+ * Triangle and hexagon grids both expose irregular row boundaries.  This
+ * version derives all row transitions from real graph neighbors instead of
+ * assuming that the cell directly below shares the same column.
+ */
+function* generateNonSquare(
   context: MazeContext<GridCell>,
 ): IterableIterator<MazeGenerationStep> {
   const rows = Array.from({ length: context.grid.rows }, () => [] as GridCell[])

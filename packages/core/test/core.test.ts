@@ -50,11 +50,15 @@ describe('@mazely/core', () => {
 
   it.each([
     'aldous-broder',
+    'binary-tree',
     'dfs',
+    'eller',
     'growing-tree',
     'hunt-and-kill',
     'kruskal',
     'prim',
+    'recursive-division',
+    'sidewinder',
     'traversal',
     'wilson',
   ] as const)('generates a spanning hex maze with %s', (algorithm) => {
@@ -70,6 +74,21 @@ describe('@mazely/core', () => {
     expect(openedEdgeCount(maze.grid)).toBe(maze.grid.cells.length - 1)
     expect(getReachableCellIds(maze.grid, maze.grid.cells[0].id).size).toBe(maze.grid.cells.length)
   })
+
+  it.each(['binary-tree', 'eller', 'recursive-division', 'sidewinder'] as const)(
+    'generates a spanning flat hexagonal-boundary maze with %s',
+    (algorithm) => {
+      const maze = new Mazely({
+        grid: { layout: 'hexagon', orientation: 'flat', size: 4, type: 'hexagon' },
+        seed: `flat-hex-${algorithm}`,
+      })
+
+      maze.generate(algorithm).finish()
+
+      expect(openedEdgeCount(maze.grid)).toBe(maze.grid.cells.length - 1)
+      expect(getReachableCellIds(maze.grid, maze.grid.cells[0].id).size).toBe(maze.grid.cells.length)
+    },
+  )
 
   it('solves and serializes a hexagonal-boundary maze', () => {
     const maze = new Mazely({
