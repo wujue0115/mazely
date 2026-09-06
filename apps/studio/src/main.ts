@@ -341,7 +341,9 @@ app.shapeEditor = initShapeEditor({
   getDefaultCols: () => 60,
   getGridTopology: () => app.gridType === 'triangle'
     ? { layout: app.triangleLayout, type: 'triangle' }
-    : { type: 'square' },
+    : app.gridType === 'hexagon'
+      ? { layout: app.hexLayout, orientation: app.hexOrientation, type: 'hexagon' }
+      : { type: 'square' },
   onApply: applyShape,
   showToast,
 })

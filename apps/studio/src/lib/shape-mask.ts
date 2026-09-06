@@ -1,4 +1,4 @@
-import type { TriangleGridLayout } from 'mazely'
+import type { HexGridLayout, HexOrientation, TriangleGridLayout } from 'mazely'
 import type { MazePoint } from './maze-types'
 
 /**
@@ -17,6 +17,7 @@ export type CellMask = boolean[][]
 export type ShapeGridTopology
   = | { type: 'square' }
     | { layout: TriangleGridLayout, type: 'triangle' }
+    | { layout: HexGridLayout, orientation: HexOrientation, type: 'hexagon' }
 
 export interface ShapeGridDimensions {
   cols: number
@@ -30,6 +31,7 @@ interface PixelPoint {
 
 const SQUARE_TOPOLOGY: ShapeGridTopology = { type: 'square' }
 const TRIANGLE_HEIGHT = Math.sqrt(3) / 2
+const HEX_RADIUS = 1 / Math.sqrt(3)
 
 const ALPHA_OPAQUE_THRESHOLD = 128
 
@@ -148,6 +150,11 @@ export function getShapeGridDimensions(
     const rows = Math.max(1, Math.round((worldWidth * imageHeight) / (imageWidth * TRIANGLE_HEIGHT)))
     return { cols: size * 2 - 1, rows }
   }
+  if (topology.type === 'hexagon') {
+    return topology.layout === 'hexagon'
+      ? { cols: size * 2 - 1, rows: size * 2 - 1 }
+      : { cols: size, rows: Math.max(1, Math.round((size * imageHeight) / imageWidth)) }
+  }
   return {
     cols: size,
     rows: Math.max(1, Math.round((size * imageHeight) / imageWidth)),
@@ -177,6 +184,15 @@ export function getShapeCellPolygon(
       { x: right, y: bottom },
       { x: left, y: bottom },
     ]
+  }
+
+  if (topology.type === 'hexagon') {
+    const world = getHexWorldPolygon(col, row, cols, rows, topology)
+    const bounds = getHexWorldBounds(cols, rows, topology)
+    return world.map(point => ({
+      x: ((point.x - bounds.minX) / bounds.width) * pixelMask.width,
+      y: ((point.y - bounds.minY) / bounds.height) * pixelMask.height,
+    }))
   }
 
   const worldWidth = (cols + 1) / 2
@@ -217,6 +233,16 @@ export function findShapeCellAtPixel(
     return isShapeCellCoordinate(col, row, cols, rows, topology) ? { x: col, y: row } : null
   }
 
+  if (topology.type === 'hexagon') {
+    for (let row = 0; row < rows; row += 1) {
+      for (let col = 0; col < cols; col += 1) {
+        const polygon = getShapeCellPolygon(pixelMask, col, row, cols, rows, topology)
+        if (polygon && isPointInPolygon(bitmapX, bitmapY, polygon))
+          return { x: col, y: row }
+      }
+    }
+    return null
+  }
   const approximateRow = Math.floor((bitmapY / pixelMask.height) * rows)
   const worldWidth = (cols + 1) / 2
   const worldX = (bitmapX / pixelMask.width) * worldWidth
@@ -288,7 +314,7 @@ export function findMaskRegions(
   const queue: number[] = []
   for (let row = 0; row < rows; row += 1) {
     for (let col = 0; col < cols; col += 1) {
-      if (!mask[row][col]) {
+      if (!mask[row][col] || !isShapeCellCoordinate(col, row, cols, rows, topology)) {
         continue
       }
       cellCount += 1
@@ -694,6 +720,20 @@ function getShapeCellNeighbors(
     candidates.push({ x: col, y: row - 1 }, { x: col, y: row + 1 })
   }
   else {
+    if (topology.type === 'hexagon') {
+      const axial = hexAxialFromCell(col, row, rows, topology)
+      return [
+        { q: 1, r: 0 },
+        { q: 1, r: -1 },
+        { q: 0, r: -1 },
+        { q: 0, r: 1 },
+        { q: -1, r: 1 },
+        { q: -1, r: 0 },
+      ]
+        .map(offset => hexCellFromAxial(axial.q + offset.q, axial.r + offset.r, rows, topology))
+        .filter((point): point is MazePoint => point !== null)
+        .filter(point => isShapeCellCoordinate(point.x, point.y, cols, rows, topology))
+    }
     const orientationUp = (topology.layout === 'triangle' ? col : row + col) % 2 === 0
     if (topology.layout === 'triangle') {
       candidates.push(orientationUp
@@ -718,10 +758,61 @@ function isShapeCellCoordinate(
   rows: number,
   topology: ShapeGridTopology,
 ): boolean {
-  return row >= 0
-    && row < rows
-    && col >= 0
-    && col < getShapeRowCellCount(row, cols, topology)
+  if (row < 0 || row >= rows || col < 0 || col >= cols) {
+    return false
+  }
+  if (topology.type === 'hexagon' && topology.layout === 'hexagon') {
+    const axial = hexAxialFromCell(col, row, rows, topology)
+    return Math.max(Math.abs(axial.q), Math.abs(axial.r), Math.abs(-axial.q - axial.r)) < (rows + 1) / 2
+  }
+  return col < getShapeRowCellCount(row, cols, topology)
+}
+
+function hexAxialFromCell(col: number, row: number, rows: number, topology: Extract<ShapeGridTopology, { type: 'hexagon' }>): { q: number, r: number } {
+  if (topology.layout === 'hexagon') {
+    const offset = (rows - 1) / 2
+    return { q: col - offset, r: row - offset }
+  }
+  return topology.orientation === 'pointy'
+    ? { q: col - Math.floor((row - (row & 1)) / 2), r: row }
+    : { q: col, r: row - Math.floor((col - (col & 1)) / 2) }
+}
+
+function hexCellFromAxial(q: number, r: number, rows: number, topology: Extract<ShapeGridTopology, { type: 'hexagon' }>): MazePoint | null {
+  if (topology.layout === 'hexagon') {
+    const offset = (rows - 1) / 2
+    return { x: q + offset, y: r + offset }
+  }
+  return topology.orientation === 'pointy'
+    ? { x: q + Math.floor((r - (r & 1)) / 2), y: r }
+    : { x: q, y: r + Math.floor((q - (q & 1)) / 2) }
+}
+
+function getHexWorldPolygon(col: number, row: number, cols: number, rows: number, topology: Extract<ShapeGridTopology, { type: 'hexagon' }>): PixelPoint[] {
+  const axial = hexAxialFromCell(col, row, rows, topology)
+  const center = topology.orientation === 'pointy'
+    ? { x: axial.q + axial.r / 2, y: HEX_RADIUS * 1.5 * axial.r }
+    : { x: HEX_RADIUS * 1.5 * axial.q, y: axial.r + axial.q / 2 }
+  const start = topology.orientation === 'pointy' ? -Math.PI / 2 : 0
+  return Array.from({ length: 6 }, (_, index) => ({
+    x: center.x + HEX_RADIUS * Math.cos(start + index * Math.PI / 3),
+    y: center.y + HEX_RADIUS * Math.sin(start + index * Math.PI / 3),
+  }))
+}
+
+function getHexWorldBounds(cols: number, rows: number, topology: Extract<ShapeGridTopology, { type: 'hexagon' }>): { minX: number, minY: number, width: number, height: number } {
+  const points: PixelPoint[] = []
+  for (let row = 0; row < rows; row += 1) {
+    for (let col = 0; col < cols; col += 1) {
+      if (isShapeCellCoordinate(col, row, cols, rows, topology))
+        points.push(...getHexWorldPolygon(col, row, cols, rows, topology))
+    }
+  }
+  const minX = Math.min(...points.map(point => point.x))
+  const maxX = Math.max(...points.map(point => point.x))
+  const minY = Math.min(...points.map(point => point.y))
+  const maxY = Math.max(...points.map(point => point.y))
+  return { height: maxY - minY, minX, minY, width: maxX - minX }
 }
 
 function getMaskCols(mask: CellMask): number {
