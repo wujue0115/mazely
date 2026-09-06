@@ -39,18 +39,29 @@ export function syncLoopSpeed(): void {
 
 export function createStepper(inputMaze: MazeViewState, runtime: Maze): SolveState {
   const algorithm = getSolvingAlgorithm(solvingSelect.value)
+  const firstCell = runtime.grid.cells[0]
+  const lastCell = runtime.grid.cells.at(-1)!
+  const start = runtime.grid.getCell(`${inputMaze.start.y}:${inputMaze.start.x}`)
+    ? inputMaze.start
+    : { x: firstCell.col, y: firstCell.row }
+  const end = runtime.grid.getCell(`${inputMaze.end.y}:${inputMaze.end.x}`)
+    ? inputMaze.end
+    : { x: lastCell.col, y: lastCell.row }
+  if (start !== inputMaze.start || end !== inputMaze.end) {
+    app.maze = { ...app.maze, end: { ...end }, start: { ...start } }
+  }
   app.solveRuntime = runtime
   app.floodDepthByKey = {}
   app.solvePlayer = algorithm === 'flood'
     ? runtime.solve('flood', {
-        start: { ...inputMaze.start },
+        start: { ...start },
       })
     : runtime.solve(algorithm, {
-        end: { ...inputMaze.end },
-        start: { ...inputMaze.start },
+        end: { ...end },
+        start: { ...start },
       })
   bumpSolveCacheVersion()
-  return createInitialSolveState(algorithm, inputMaze.start, inputMaze.end)
+  return createInitialSolveState(algorithm, start, end)
 }
 
 /**
