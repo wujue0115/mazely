@@ -148,7 +148,8 @@ function createCurrentMaze(): GenerationPreview {
   const start = app.generatePointMode === 'manual'
     ? app.generateManualStart
     : app.maze.start
-  const end = app.shape?.end ?? { x: runtime.grid.cols - 1, y: runtime.grid.rows - 1 }
+  const endCell = runtime.grid.cells.at(-1)!
+  const end = app.shape?.end ?? { x: endCell.col, y: endCell.row }
   const player = runtime.generate(generationAlgorithm, { start })
 
   return createGenerationPreview({

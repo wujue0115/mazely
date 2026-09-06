@@ -158,7 +158,7 @@ export function createSolidMazeState(
   shape: AppliedShape | null,
   gridType: MazeGridType = 'square',
   triangleLayout: TriangleGridLayout = 'triangle',
-  hexLayout: HexGridLayout = 'rectangle',
+  hexLayout: HexGridLayout = 'hexagon',
   hexOrientation: HexOrientation = 'pointy',
 ): { maze: MazeViewState, runtime: Maze } {
   const runtime = createMaze({
@@ -178,8 +178,10 @@ export function createSolidMazeState(
           : { cols: width, layout: 'rectangle', mask: shape?.cellMask ?? undefined, orientation: hexOrientation, rows: height, type: 'hexagon' }
         : { cols: width, mask: shape?.cellMask ?? undefined, rows: height, type: 'square' },
   })
-  const start = shape?.start ?? { x: 0, y: 0 }
-  const end = shape?.end ?? { x: runtime.grid.cols - 1, y: runtime.grid.rows - 1 }
+  const firstCell = runtime.grid.cells[0]
+  const lastCell = runtime.grid.cells.at(-1)!
+  const start = shape?.start ?? { x: firstCell.col, y: firstCell.row }
+  const end = shape?.end ?? { x: lastCell.col, y: lastCell.row }
   return {
     maze: createMazeViewState(runtime.grid.cols, runtime.grid.rows, algorithm, start, end),
     runtime,
@@ -209,7 +211,7 @@ export function initAppState(options: {
     activePointerId: null,
     activeTab: 'generate',
     gridType: 'square',
-    hexLayout: 'rectangle',
+    hexLayout: 'hexagon',
     hexOrientation: 'pointy',
     triangleLayout: 'triangle',
     cachedGenerationFrontierHeads: [],
