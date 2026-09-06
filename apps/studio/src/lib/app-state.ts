@@ -36,6 +36,7 @@ export interface AppState {
   hexOrientation: HexOrientation
   mazeWidth: number
   mazeHeight: number
+  hasCustomGridDimensions: boolean
   hasValidGridDimensions: boolean
   lockGridRatio: boolean
   useViewportRatio: boolean
@@ -243,6 +244,7 @@ export function initAppState(options: {
     generateManualStart: { ...initialMazeState.maze.start },
     generatePointMode: 'auto',
     hasGeneratedMaze: false,
+    hasCustomGridDimensions: false,
     hasValidGridDimensions: true,
     lastPointerX: 0,
     lastPointerY: 0,

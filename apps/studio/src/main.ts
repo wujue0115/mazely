@@ -50,6 +50,7 @@ import {
   applyShape,
   clearShape,
   invalidateGenerationPreview,
+  markGridDimensionsCustomized,
   setActiveTab,
   setGeneratePointMode,
   setGridType,
@@ -224,6 +225,7 @@ generateStartButton.addEventListener('click', () => beginPointSelection('generat
 solveStartButton.addEventListener('click', () => beginPointSelection('solve', 'start'))
 solveEndButton.addEventListener('click', () => beginPointSelection('solve', 'end'))
 mazeWidthInput.addEventListener('input', () => {
+  markGridDimensionsCustomized()
   const changed = applyGridDimensionChange('width')
   if (changed) {
     render()
@@ -233,6 +235,7 @@ mazeHeightInput.addEventListener('input', () => {
   if (app.useViewportRatio) {
     return
   }
+  markGridDimensionsCustomized()
 
   const changed = applyGridDimensionChange('height')
   if (changed) {

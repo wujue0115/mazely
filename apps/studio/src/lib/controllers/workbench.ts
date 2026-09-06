@@ -310,12 +310,7 @@ export function setGridType(gridType: MazeGridType): void {
   stopSolveAnimation()
   clearGenerationPreviewState()
   app.gridType = gridType
-  if (gridType === 'hexagon' && app.hexLayout === 'hexagon') {
-    app.mazeWidth = 10
-    app.mazeHeight = 10
-    mazeWidthInput.value = '10'
-    mazeHeightInput.value = '10'
-  }
+  applyTopologyDefaultDimensions()
   if (gridType === 'triangle' && app.triangleLayout === 'rectangle') {
     app.mazeWidth = clamp(app.mazeWidth, 1, TRIANGLE_RECTANGLE_VISUAL_COLS_MAX)
   }
@@ -350,6 +345,7 @@ export function setTriangleLayout(layout: TriangleGridLayout): void {
   stopSolveAnimation()
   clearGenerationPreviewState()
   app.triangleLayout = layout
+  applyTopologyDefaultDimensions()
   if (layout === 'rectangle') {
     app.mazeWidth = clamp(app.mazeWidth, 1, TRIANGLE_RECTANGLE_VISUAL_COLS_MAX)
   }
@@ -362,8 +358,25 @@ export function setHexLayout(layout: HexGridLayout): void {
   if (app.hexLayout === layout || app.gridType !== 'hexagon')
     return
   app.hexLayout = layout
+  applyTopologyDefaultDimensions()
   app.shape = null
   rebuildMazeForShapeChange()
+}
+
+/** Preserve explicitly entered dimensions when changing topology or layout. */
+export function markGridDimensionsCustomized(): void {
+  app.hasCustomGridDimensions = true
+}
+
+function applyTopologyDefaultDimensions(): void {
+  if (app.hasCustomGridDimensions) {
+    return
+  }
+  const size = app.gridType === 'hexagon' && app.hexLayout === 'hexagon' ? 10 : 20
+  app.mazeWidth = size
+  app.mazeHeight = size
+  mazeWidthInput.value = String(size)
+  mazeHeightInput.value = String(size)
 }
 
 export function setHexOrientation(orientation: HexOrientation): void {
