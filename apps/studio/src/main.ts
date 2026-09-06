@@ -53,6 +53,8 @@ import {
   setActiveTab,
   setGeneratePointMode,
   setGridType,
+  setHexLayout,
+  setHexOrientation,
   setSolvePointMode,
   setTriangleLayout,
   syncGridDimensionInputs,
@@ -75,6 +77,8 @@ import {
   generateStartButton,
   generationSelect,
   gridTypeSelect,
+  hexLayoutSelect,
+  hexOrientationSelect,
   lockGridRatioInput,
   mazeHeightInput,
   mazeWidthInput,
@@ -207,6 +211,12 @@ triangleLayoutSelect.addEventListener('change', async () => {
   }
   setTriangleLayout(layout)
 })
+hexLayoutSelect.addEventListener('change', () => setHexLayout(
+  hexLayoutSelect.value === 'hexagon' ? 'hexagon' : 'rectangle',
+))
+hexOrientationSelect.addEventListener('change', () => setHexOrientation(
+  hexOrientationSelect.value === 'flat' ? 'flat' : 'pointy',
+))
 solvingSelect.addEventListener('change', () => setSolvePointMode(solvePointsAutoInput.checked))
 generatePointsAutoInput.addEventListener('change', () => setGeneratePointMode(generatePointsAutoInput.checked))
 solvePointsAutoInput.addEventListener('change', () => setSolvePointMode(solvePointsAutoInput.checked))

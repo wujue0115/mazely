@@ -1,4 +1,4 @@
-import type { MazeGridType, TriangleGridLayout } from 'mazely'
+import type { HexGridLayout, HexOrientation, MazeGridType, TriangleGridLayout } from 'mazely'
 import type { PanelTab } from '../types'
 import type { AppliedShape } from './shape-editor'
 import { MAZE_GENERATION_CAPABILITIES, pointToCellId } from 'mazely'
@@ -8,6 +8,8 @@ import {
   canvasWrap,
   dimensionGrid,
   generationSelect,
+  hexLayoutField,
+  hexOrientationField,
   lockGridRatioInput,
   mazeHeightField,
   mazeHeightInput,
@@ -263,6 +265,8 @@ function rebuildMazeForShapeChange(): void {
     app.shape,
     app.gridType,
     app.triangleLayout,
+    app.hexLayout,
+    app.hexOrientation,
   )
   app.maze = solidMazeState.maze
   app.mazeRuntime = solidMazeState.runtime
@@ -315,6 +319,8 @@ export function setGridType(gridType: MazeGridType): void {
   useViewportRatioInput.checked = false
   lockGridRatioInput.checked = false
   triangleLayoutField.classList.toggle('is-hidden', gridType !== 'triangle')
+  hexLayoutField.classList.toggle('is-hidden', gridType !== 'hexagon')
+  hexOrientationField.classList.toggle('is-hidden', gridType !== 'hexagon')
 
   const selected = getGenerationAlgorithm(generationSelect.value)
   if (!(MAZE_GENERATION_CAPABILITIES[selected].supportedGridTypes as readonly string[]).includes(gridType)) {
@@ -346,8 +352,24 @@ export function setTriangleLayout(layout: TriangleGridLayout): void {
   showToast(`${layout === 'triangle' ? 'Triangular' : 'Rectangular'} layout selected.`)
 }
 
+export function setHexLayout(layout: HexGridLayout): void {
+  if (app.hexLayout === layout || app.gridType !== 'hexagon')
+    return
+  app.hexLayout = layout
+  app.shape = null
+  rebuildMazeForShapeChange()
+}
+
+export function setHexOrientation(orientation: HexOrientation): void {
+  if (app.hexOrientation === orientation || app.gridType !== 'hexagon')
+    return
+  app.hexOrientation = orientation
+  rebuildMazeForShapeChange()
+}
+
 export function syncGridDimensionInputs(changedBy: 'width' | 'height' | 'none' = 'none'): boolean {
-  if (app.gridType === 'triangle' && app.triangleLayout === 'triangle') {
+  if ((app.gridType === 'triangle' && app.triangleLayout === 'triangle')
+    || (app.gridType === 'hexagon' && app.hexLayout === 'hexagon')) {
     const size = app.shape?.size ?? (app.shape ? app.shape.rows : parseGridDimensionOptional(mazeWidthInput.value))
     app.useViewportRatio = false
     app.lockGridRatio = false
@@ -497,6 +519,8 @@ export function applyGridDimensionChange(changedBy: 'width' | 'height' | 'none' 
     app.shape,
     app.gridType,
     app.triangleLayout,
+    app.hexLayout,
+    app.hexOrientation,
   )
   app.maze = solidMazeState.maze
   app.mazeRuntime = solidMazeState.runtime

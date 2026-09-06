@@ -140,7 +140,9 @@ function createCurrentMaze(): GenerationPreview {
             type: 'triangle',
           }
       : app.gridType === 'hexagon'
-        ? { cols: app.mazeWidth, layout: 'rectangle', mask: app.shape?.cellMask, rows: app.mazeHeight, type: 'hexagon' }
+        ? app.hexLayout === 'hexagon'
+          ? { layout: 'hexagon', mask: app.shape?.cellMask, orientation: app.hexOrientation, size: app.mazeWidth, type: 'hexagon' }
+          : { cols: app.mazeWidth, layout: 'rectangle', mask: app.shape?.cellMask, orientation: app.hexOrientation, rows: app.mazeHeight, type: 'hexagon' }
         : { cols: app.mazeWidth, mask: app.shape?.cellMask, rows: app.mazeHeight, type: 'square' },
   })
   const start = app.generatePointMode === 'manual'

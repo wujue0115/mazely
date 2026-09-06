@@ -1,4 +1,4 @@
-import type { Maze, MazeGridType, MazeSolvingStep, StepPlayer, TriangleGridLayout } from 'mazely'
+import type { HexGridLayout, HexOrientation, Maze, MazeGridType, MazeSolvingStep, StepPlayer, TriangleGridLayout } from 'mazely'
 import type { GenerationPreview } from './controllers/generation'
 import type { AppliedShape, ShapeEditorApi } from './controllers/shape-editor'
 import type { CustomFloodTheme, FloodThemeSelection } from './flood'
@@ -32,6 +32,8 @@ export interface AppState {
   activeTab: PanelTab
   gridType: MazeGridType
   triangleLayout: TriangleGridLayout
+  hexLayout: HexGridLayout
+  hexOrientation: HexOrientation
   mazeWidth: number
   mazeHeight: number
   hasValidGridDimensions: boolean
@@ -156,6 +158,8 @@ export function createSolidMazeState(
   shape: AppliedShape | null,
   gridType: MazeGridType = 'square',
   triangleLayout: TriangleGridLayout = 'triangle',
+  hexLayout: HexGridLayout = 'rectangle',
+  hexOrientation: HexOrientation = 'pointy',
 ): { maze: MazeViewState, runtime: Maze } {
   const runtime = createMaze({
     grid: gridType === 'triangle'
@@ -169,7 +173,9 @@ export function createSolidMazeState(
             type: 'triangle',
           }
       : gridType === 'hexagon'
-        ? { cols: width, layout: 'rectangle', mask: shape?.cellMask ?? undefined, rows: height, type: 'hexagon' }
+        ? hexLayout === 'hexagon'
+          ? { layout: 'hexagon', mask: shape?.cellMask ?? undefined, orientation: hexOrientation, size: width, type: 'hexagon' }
+          : { cols: width, layout: 'rectangle', mask: shape?.cellMask ?? undefined, orientation: hexOrientation, rows: height, type: 'hexagon' }
         : { cols: width, mask: shape?.cellMask ?? undefined, rows: height, type: 'square' },
   })
   const start = shape?.start ?? { x: 0, y: 0 }
@@ -203,6 +209,8 @@ export function initAppState(options: {
     activePointerId: null,
     activeTab: 'generate',
     gridType: 'square',
+    hexLayout: 'rectangle',
+    hexOrientation: 'pointy',
     triangleLayout: 'triangle',
     cachedGenerationFrontierHeads: [],
     cachedGenerationFrontierTrailEdges: new Set<string>(),
