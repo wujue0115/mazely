@@ -145,9 +145,13 @@ function createCurrentMaze(): GenerationPreview {
           : { cols: app.mazeWidth, layout: 'rectangle', mask: app.shape?.cellMask, orientation: app.hexOrientation, rows: app.mazeHeight, type: 'hexagon' }
         : { cols: app.mazeWidth, mask: app.shape?.cellMask, rows: app.mazeHeight, type: 'square' },
   })
-  const start = app.generatePointMode === 'manual'
+  const requestedStart = app.generatePointMode === 'manual'
     ? app.generateManualStart
     : app.maze.start
+  const firstCell = runtime.grid.cells[0]
+  const start = runtime.grid.getCell(`${requestedStart.y}:${requestedStart.x}`)
+    ? requestedStart
+    : { x: firstCell.col, y: firstCell.row }
   const endCell = runtime.grid.cells.at(-1)!
   const end = app.shape?.end ?? { x: endCell.col, y: endCell.row }
   const player = runtime.generate(generationAlgorithm, { start })
