@@ -139,6 +139,30 @@ describe('buildMazeSvg', () => {
     expect(svg).toContain('r="3.29"')
   })
 
+  it('exports hexagonal cells and polygon wall fills', () => {
+    const runtime = createMaze({
+      grid: { layout: 'hexagon', orientation: 'pointy', size: 2, type: 'hexagon' },
+    })
+    const first = runtime.grid.cells[0]
+    const last = runtime.grid.cells.at(-1)!
+    const svg = buildMazeSvg({
+      maze: {
+        algorithm: 'dfs',
+        cols: runtime.grid.cols,
+        end: { x: last.col, y: last.row },
+        rows: runtime.grid.rows,
+        start: { x: first.col, y: first.row },
+      },
+      runtime,
+      theme: DEFAULT_STYLE_THEME,
+      visibleElements: DEFAULT_STYLE_VISIBILITY,
+    })
+
+    expect(svg.match(/<polygon /g)).toHaveLength(runtime.grid.cells.length)
+    expect(svg).toContain(`<path d="M `)
+    expect(svg).toContain(`fill="${DEFAULT_STYLE_THEME.wall}"`)
+  })
+
   it('exports the current wall thickness and grid appearance', () => {
     const runtime = createMaze({ grid: { cols: 1, rows: 1, type: 'square' } })
     const svg = buildMazeSvg({
