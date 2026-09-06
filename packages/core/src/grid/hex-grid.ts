@@ -38,6 +38,8 @@ const OPPOSITE_DIRECTION: Record<HexDirection, HexDirection> = {
   w: 'e',
 }
 
+const HEX_RADIUS = 1 / Math.sqrt(3)
+
 class HexGridImpl implements HexGrid {
   readonly type = 'hexagon' as const
   readonly rows: number
@@ -69,6 +71,7 @@ class HexGridImpl implements HexGrid {
         const cell = new HexCell({
           col,
           id: pointToCellId({ x: col, y: row }),
+          orientation: this.orientation,
           q: axial.q,
           r: axial.r,
           row,
@@ -95,6 +98,8 @@ class HexGridImpl implements HexGrid {
         this.edges.push(edge)
       }
     }
+
+    this.assignWorldPositions()
   }
 
   getCell(id: CellId): HexCell | undefined {
@@ -122,6 +127,30 @@ class HexGridImpl implements HexGrid {
   private isInLayout(q: number, r: number): boolean {
     return this.layout === 'rectangle'
       || Math.max(Math.abs(q), Math.abs(r), Math.abs(-q - r)) < this.size!
+  }
+
+  private assignWorldPositions(): void {
+    const centers = this.cells.map((cell) => {
+      const center = this.orientation === 'pointy'
+        ? {
+            x: Math.sqrt(3) * HEX_RADIUS * (cell.q + cell.r / 2),
+            y: HEX_RADIUS * 1.5 * cell.r,
+          }
+        : {
+            x: HEX_RADIUS * 1.5 * cell.q,
+            y: Math.sqrt(3) * HEX_RADIUS * (cell.r + cell.q / 2),
+          }
+      return { cell, ...center }
+    })
+    const extent = this.orientation === 'pointy'
+      ? { x: Math.sqrt(3) * HEX_RADIUS / 2, y: HEX_RADIUS }
+      : { x: HEX_RADIUS, y: Math.sqrt(3) * HEX_RADIUS / 2 }
+    const minX = Math.min(...centers.map(center => center.x - extent.x))
+    const minY = Math.min(...centers.map(center => center.y - extent.y))
+    for (const center of centers) {
+      center.cell.worldX = center.x - minX
+      center.cell.worldY = center.y - minY
+    }
   }
 }
 

@@ -1,5 +1,5 @@
 import type { GridCell, Maze, MazeEdge, MazeGridType, MazePoint, TriangleGrid } from 'mazely'
-import { TriangleCell } from 'mazely'
+import { HexCell, TriangleCell } from 'mazely'
 
 export interface WorldPoint {
   x: number
@@ -19,6 +19,8 @@ export interface GridSegment {
 export const TRIANGLE_HEIGHT = Math.sqrt(3) / 2
 /** Linear scale matching the area of an equilateral triangle to a square cell. */
 export const TRIANGLE_OVERLAY_SCALE = Math.sqrt(TRIANGLE_HEIGHT / 2)
+export const HEX_RADIUS = 1 / Math.sqrt(3)
+export const HEX_OVERLAY_SCALE = Math.sqrt(Math.sqrt(3) / 2)
 /** Maximum editable visual width for a rectangular triangle grid. */
 export const TRIANGLE_RECTANGLE_VISUAL_COLS_MAX = 250
 
@@ -33,13 +35,24 @@ export function triangleRectangleCellColsToVisualCols(cellCols: number): number 
 }
 
 export function getOverlayScale(runtime: Maze): number {
-  return runtime.grid.type === 'triangle' ? TRIANGLE_OVERLAY_SCALE : 1
+  return runtime.grid.type === 'triangle'
+    ? TRIANGLE_OVERLAY_SCALE
+    : runtime.grid.type === 'hexagon'
+      ? HEX_OVERLAY_SCALE
+      : 1
 }
 
 export function getGridBounds(runtime: Maze): GridBounds {
-  return runtime.grid.type === 'triangle'
-    ? { height: runtime.grid.rows * TRIANGLE_HEIGHT, width: (runtime.grid.cols + 1) / 2 }
-    : { height: runtime.grid.rows, width: runtime.grid.cols }
+  if (runtime.grid.type !== 'hexagon') {
+    return runtime.grid.type === 'triangle'
+      ? { height: runtime.grid.rows * TRIANGLE_HEIGHT, width: (runtime.grid.cols + 1) / 2 }
+      : { height: runtime.grid.rows, width: runtime.grid.cols }
+  }
+  const points = runtime.grid.cells.flatMap(getCellPolygon)
+  return {
+    height: Math.max(...points.map(point => point.y)) - Math.min(...points.map(point => point.y)),
+    width: Math.max(...points.map(point => point.x)) - Math.min(...points.map(point => point.x)),
+  }
 }
 
 export function getViewportRatioRows(
@@ -53,6 +66,9 @@ export function getViewportRatioRows(
 }
 
 export function getCellCenter(cell: GridCell): WorldPoint {
+  if (cell instanceof HexCell) {
+    return { x: cell.worldX, y: cell.worldY }
+  }
   if (cell instanceof TriangleCell) {
     return {
       x: cell.offsetX + cell.col / 2 + 0.5,
@@ -69,6 +85,16 @@ export function getPointCenter(runtime: Maze, point: MazePoint): WorldPoint {
 }
 
 export function getCellPolygon(cell: GridCell): WorldPoint[] {
+  if (cell instanceof HexCell) {
+    const startAngle = cell.orientation === 'pointy' ? -Math.PI / 2 : 0
+    return Array.from({ length: 6 }, (_, index) => {
+      const angle = startAngle + index * Math.PI / 3
+      return {
+        x: cell.worldX + HEX_RADIUS * Math.cos(angle),
+        y: cell.worldY + HEX_RADIUS * Math.sin(angle),
+      }
+    })
+  }
   if (!(cell instanceof TriangleCell)) {
     return [
       { x: cell.col, y: cell.row },
@@ -101,6 +127,18 @@ export function getCellBoundarySegments(
     const edgeOrder = cell.orientation === 'up'
       ? [cell.edges.right, cell.edges.bottom, cell.edges.left]
       : [cell.edges.top, cell.edges.right, cell.edges.left]
+    return polygon.map((from, index) => ({
+      edge: edgeOrder[index] ?? null,
+      from,
+      opened: edgeOrder[index]?.opened ?? false,
+      to: polygon[(index + 1) % polygon.length],
+    }))
+  }
+
+  if (cell instanceof HexCell) {
+    const edgeOrder = isPointyHex(cell)
+      ? [cell.hexEdges.ne, cell.hexEdges.e, cell.hexEdges.se, cell.hexEdges.sw, cell.hexEdges.w, cell.hexEdges.nw]
+      : [cell.hexEdges.e, cell.hexEdges.se, cell.hexEdges.sw, cell.hexEdges.w, cell.hexEdges.nw, cell.hexEdges.ne]
     return polygon.map((from, index) => ({
       edge: edgeOrder[index] ?? null,
       from,
@@ -148,6 +186,9 @@ export function hitTestCell(runtime: Maze, point: WorldPoint): GridCell | null {
   if (runtime.grid.type === 'square') {
     return runtime.grid.getCell(`${Math.floor(point.y)}:${Math.floor(point.x)}`) ?? null
   }
+  if (runtime.grid.type === 'hexagon') {
+    return runtime.grid.cells.find(cell => pointInPolygon(point, getCellPolygon(cell))) ?? null
+  }
   const grid = runtime.grid as TriangleGrid
   const approximateRow = Math.floor(point.y / TRIANGLE_HEIGHT)
   for (let row = approximateRow - 1; row <= approximateRow + 1; row += 1) {
@@ -161,6 +202,10 @@ export function hitTestCell(runtime: Maze, point: WorldPoint): GridCell | null {
     }
   }
   return null
+}
+
+function isPointyHex(cell: HexCell): boolean {
+  return cell.orientation === 'pointy'
 }
 
 export function getSharedBoundary(left: GridCell, right: GridCell): GridSegment | null {

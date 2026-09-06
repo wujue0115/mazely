@@ -150,8 +150,13 @@ export type HexDirection = 'e' | 'ne' | 'nw' | 'w' | 'sw' | 'se'
 
 /** A cell in an axial-coordinate hexagonal tiling. */
 export class HexCell extends GridCell {
+  readonly orientation: HexOrientation
   readonly q: number
   readonly r: number
+  /** Normalized world-space center assigned by the owning HexGrid. */
+  worldX = 0
+  /** Normalized world-space center assigned by the owning HexGrid. */
+  worldY = 0
   readonly hexEdges: Record<HexDirection, MazeEdge | null> = {
     e: null,
     ne: null,
@@ -161,8 +166,16 @@ export class HexCell extends GridCell {
     w: null,
   }
 
-  constructor(options: { id: CellId, row: number, col: number, q: number, r: number }) {
+  constructor(options: {
+    id: CellId
+    row: number
+    col: number
+    q: number
+    r: number
+    orientation: HexOrientation
+  }) {
     super(options)
+    this.orientation = options.orientation
     this.q = options.q
     this.r = options.r
   }

@@ -105,6 +105,29 @@ describe('triangle grid reference lines', () => {
   })
 })
 
+describe('hexagon grid reference lines', () => {
+  it.each(['pointy', 'flat'] as const)('renders and hit-tests %s hex cells', (orientation) => {
+    const runtime = createMaze({
+      grid: { cols: 3, layout: 'rectangle', orientation, rows: 3, type: 'hexagon' },
+    })
+    const center = runtime.grid.getCell('1:1')!
+    const lines = collectLines(runtime)
+
+    expect(hitTestCell(runtime, getCellCenter(center))?.id).toBe(center.id)
+    expect(lines).toHaveLength(runtime.grid.cells.length * 6 - runtime.grid.edges.length)
+    expect(new Set(lines).size).toBe(lines.length)
+  })
+
+  it('renders the complete boundary of a hexagonal outer layout', () => {
+    const runtime = createMaze({
+      grid: { layout: 'hexagon', size: 3, type: 'hexagon' },
+    })
+
+    expect(runtime.grid.cells).toHaveLength(19)
+    expect(collectLines(runtime)).toHaveLength(runtime.grid.cells.length * 6 - runtime.grid.edges.length)
+  })
+})
+
 function collectLines(runtime: Maze): string[] {
   const lines: string[] = []
   visitReferenceGridLines(runtime, (fromX, fromY, toX, toY) => {
