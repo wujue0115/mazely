@@ -306,7 +306,10 @@ export function initShapeEditor(options: ShapeEditorOptions): ShapeEditorApi {
       cols,
       end: startAndEndPoints.end,
       rows,
-      ...(topology.type === 'triangle' && topology.layout === 'triangle' ? { size: rows } : {}),
+      ...((topology.type === 'triangle' && topology.layout === 'triangle')
+        || (topology.type === 'hexagon' && topology.layout === 'hexagon')
+        ? { size: (rows + 1) / 2 }
+        : {}),
       start: startAndEndPoints.start,
     })
     close()
@@ -533,10 +536,11 @@ export function initShapeEditor(options: ShapeEditorOptions): ShapeEditorApi {
   function syncFooter(): void {
     statCells.textContent = String(cellCount)
     statRegions.textContent = String(regionCount)
-    const triangleOuter = topology.type === 'triangle' && topology.layout === 'triangle'
-    sizeLabel.textContent = triangleOuter ? 'SIDE SIZE' : 'WIDTH (CELLS)'
-    gridLabel.textContent = triangleOuter
-      ? `Triangle size ${rows} · ${cellCount} kept cells`
+    const outerLayout = (topology.type === 'triangle' && topology.layout === 'triangle')
+      || (topology.type === 'hexagon' && topology.layout === 'hexagon')
+    sizeLabel.textContent = outerLayout ? 'SIDE SIZE' : 'WIDTH (CELLS)'
+    gridLabel.textContent = outerLayout
+      ? `${topology.type === 'hexagon' ? 'Hexagon' : 'Triangle'} size ${topology.type === 'hexagon' ? (rows + 1) / 2 : rows} · ${cellCount} kept cells`
       : `${cols} × ${rows} cells`
     meta.textContent = sourceName
       ? `${sourceName} · ${pixelMask?.width ?? 0}×${pixelMask?.height ?? 0}px`

@@ -141,6 +141,8 @@ describe('hexagon grid reference lines', () => {
       height: expect.any(Number),
       width: expect.any(Number),
     })
+    const center = runtime.grid.getCell('99:99')!
+    expect(hitTestCell(runtime, getCellCenter(center))?.id).toBe(center.id)
   })
 })
 

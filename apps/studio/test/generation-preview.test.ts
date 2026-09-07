@@ -8,7 +8,7 @@ import {
   rebuildGenerationPreview,
   shouldRenderGenerationPreview,
 } from '../src/lib/controllers/generation'
-import { getPointCenter, TRIANGLE_HEIGHT } from '../src/lib/grid-geometry'
+import { getCellCenter, getCellPolygon, getPointCenter, TRIANGLE_HEIGHT } from '../src/lib/grid-geometry'
 
 describe('generation preview rewind', () => {
   it('restores visual and maze state after stepping backward', () => {
@@ -141,6 +141,33 @@ describe('hunt-and-kill generation preview', () => {
     expect(to.x).toBeCloseTo(expectedLeft + row + 1)
     expect(from.y).toBeCloseTo((row + 0.5) * TRIANGLE_HEIGHT)
     expect(to.y).toBeCloseTo(from.y)
+  })
+
+  it('keeps a Hex scan line centered inside the scanned cells', () => {
+    const runtime = createMaze({
+      grid: { layout: 'hexagon', orientation: 'pointy', size: 5, type: 'hexagon' },
+      seed: 'hex-hunt-scan',
+    })
+    const preview = createGenerationPreview({
+      algorithm: 'hunt-and-kill',
+      player: runtime.generate('hunt-and-kill'),
+      runtime,
+      view: { algorithm: 'hunt-and-kill', cols: 9, end: { x: 8, y: 4 }, rows: 9, start: { x: 0, y: 4 } },
+    })
+
+    advanceUntil(() => preview.huntScanRow !== null, preview)
+    const rowCells = runtime.grid.cells.filter(cell => cell.row === preview.huntScanRow)
+      .sort((left, right) => getCellCenter(left).x - getCellCenter(right).x)
+    const segment = getHuntScanSegment(preview)!
+    const from = getPointCenter(runtime, segment.from)
+    const to = getPointCenter(runtime, segment.to)
+    const first = rowCells[0]
+    const last = rowCells.at(-1)!
+
+    expect(from.x).toBeCloseTo(Math.min(...getCellPolygon(first).map(point => point.x)))
+    expect(from.y).toBeCloseTo(getCellCenter(first).y)
+    expect(to.x).toBeCloseTo(Math.max(...getCellPolygon(last).map(point => point.x)))
+    expect(to.y).toBeCloseTo(getCellCenter(last).y)
   })
 })
 

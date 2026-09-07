@@ -205,7 +205,7 @@ export function hitTestCell(runtime: Maze, point: WorldPoint): GridCell | null {
     return runtime.grid.getCell(`${Math.floor(point.y)}:${Math.floor(point.x)}`) ?? null
   }
   if (runtime.grid.type === 'hexagon') {
-    return runtime.grid.cells.find(cell => pointInPolygon(point, getCellPolygon(cell))) ?? null
+    return findHexCellAtPoint(runtime, point)
   }
   const grid = runtime.grid as TriangleGrid
   const approximateRow = Math.floor(point.y / TRIANGLE_HEIGHT)
@@ -220,6 +220,81 @@ export function hitTestCell(runtime: Maze, point: WorldPoint): GridCell | null {
     }
   }
   return null
+}
+
+interface HexHitIndex {
+  cellsByAxial: Map<string, HexCell>
+  offsetX: number
+  offsetY: number
+}
+
+const hexHitIndexes = new WeakMap<Maze, HexHitIndex>()
+
+function findHexCellAtPoint(runtime: Maze, point: WorldPoint): HexCell | null {
+  const index = getHexHitIndex(runtime)
+  if (!index) {
+    return null
+  }
+  const reference = index.cellsByAxial.values().next().value as HexCell
+  const rawX = point.x - index.offsetX
+  const rawY = point.y - index.offsetY
+  const fractional = reference.orientation === 'pointy'
+    ? { q: rawX - rawY / (HEX_RADIUS * 3), r: rawY / (HEX_RADIUS * 1.5) }
+    : { q: rawX / (HEX_RADIUS * 1.5), r: rawY - rawX / (HEX_RADIUS * 3) }
+  const rounded = roundHexAxial(fractional.q, fractional.r)
+  const candidates = [rounded, ...getHexNeighborOffsets().map(offset => ({ q: rounded.q + offset.q, r: rounded.r + offset.r }))]
+  for (const candidate of candidates) {
+    const cell = index.cellsByAxial.get(`${candidate.q}:${candidate.r}`)
+    if (cell && pointInPolygon(point, getCellPolygon(cell))) {
+      return cell
+    }
+  }
+  return null
+}
+
+function getHexNeighborOffsets(): Array<{ q: number, r: number }> {
+  return [
+    { q: 1, r: 0 },
+    { q: 1, r: -1 },
+    { q: 0, r: -1 },
+    { q: -1, r: 0 },
+    { q: -1, r: 1 },
+    { q: 0, r: 1 },
+  ]
+}
+
+function getHexHitIndex(runtime: Maze): HexHitIndex | null {
+  const cached = hexHitIndexes.get(runtime)
+  if (cached)
+    return cached
+  const cells = runtime.grid.cells.filter((cell): cell is HexCell => cell instanceof HexCell)
+  const first = cells[0]
+  if (!first)
+    return null
+  const raw = first.orientation === 'pointy'
+    ? { x: first.q + first.r / 2, y: HEX_RADIUS * 1.5 * first.r }
+    : { x: HEX_RADIUS * 1.5 * first.q, y: first.r + first.q / 2 }
+  const index = {
+    cellsByAxial: new Map(cells.map(cell => [`${cell.q}:${cell.r}`, cell])),
+    offsetX: first.worldX - raw.x,
+    offsetY: first.worldY - raw.y,
+  }
+  hexHitIndexes.set(runtime, index)
+  return index
+}
+
+function roundHexAxial(q: number, r: number): { q: number, r: number } {
+  let roundedQ = Math.round(q)
+  let roundedR = Math.round(r)
+  const roundedS = Math.round(-q - r)
+  const qError = Math.abs(roundedQ - q)
+  const rError = Math.abs(roundedR - r)
+  const sError = Math.abs(roundedS + q + r)
+  if (qError > rError && qError > sError)
+    roundedQ = -roundedR - roundedS
+  else if (rError > sError)
+    roundedR = -roundedQ - roundedS
+  return { q: roundedQ, r: roundedR }
 }
 
 function isPointyHex(cell: HexCell): boolean {

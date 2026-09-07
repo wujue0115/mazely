@@ -43,6 +43,10 @@ describe('.maze v1 codec', () => {
       expected: 'mazely-20260830090507-triangle-12.maze',
       runtime: createMaze({ grid: { layout: 'triangle', size: 12, type: 'triangle' } }),
     },
+    {
+      expected: 'mazely-20260830090507-hexagon-7x7.maze',
+      runtime: createMaze({ grid: { layout: 'hexagon', orientation: 'flat', size: 4, type: 'hexagon' } }),
+    },
   ])('includes timestamp, topology, and dimensions in $expected', ({ expected, runtime }) => {
     const date = new Date(2026, 7, 30, 9, 5, 7)
 
@@ -146,6 +150,28 @@ describe('.maze v1 codec', () => {
     })
     expect(loaded.solve.path).toEqual(path)
     expect(openedEdgeIds(loaded.runtime)).toEqual(openedEdgeIds(runtime))
+  })
+
+  it('round-trips a flat hexagonal outer layout and its links', async () => {
+    const runtime = createMaze({ grid: { layout: 'hexagon', orientation: 'flat', size: 3, type: 'hexagon' } })
+    runtime.generate('dfs').finish()
+    const encoded = await encodeMazeFile({
+      appearance,
+      pointPreferences: {
+        ...pointPreferences,
+        generateManualStart: { x: 0, y: 2 },
+        solveManualEnd: { x: 4, y: 2 },
+        solveManualStart: { x: 0, y: 2 },
+      },
+      maze: { algorithm: 'dfs', cols: 5, end: { x: 4, y: 2 }, rows: 5, start: { x: 0, y: 2 } },
+      runtime,
+      shape: null,
+      solve: { algorithm: 'bfs', head: null, path: [], status: 'idle', visited: {} },
+    })
+    const loaded = await decodeMazeFile(encoded)
+
+    expect(loaded.runtime.grid).toMatchObject({ layout: 'hexagon', orientation: 'flat', size: 3, type: 'hexagon' })
+    expect(openedEdgeIds(loaded.runtime).sort()).toEqual(openedEdgeIds(runtime).sort())
   })
 
   it('preserves triangle links when the runtime edge array order changes', async () => {

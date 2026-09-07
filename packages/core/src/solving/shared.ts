@@ -1,6 +1,6 @@
 import type { CellId, GridCell, MazeContext, MazePatch, MazePoint, MazeSolvingStep } from '../types'
 import { getLinkedNeighbors } from '../graph'
-import { pointToCellId, TriangleCell } from '../types'
+import { HexCell, pointToCellId, TriangleCell } from '../types'
 
 export function getSolveStartAndEndCells(
   context: MazeContext<GridCell>,
@@ -78,6 +78,11 @@ export function getOpenNeighbors(context: MazeContext<GridCell>, current: GridCe
 }
 
 export function estimateCellDistance(cell: GridCell, end: GridCell): number {
+  if (cell instanceof HexCell && end instanceof HexCell) {
+    const dq = cell.q - end.q
+    const dr = cell.r - end.r
+    return Math.max(Math.abs(dq), Math.abs(dr), Math.abs(dq + dr))
+  }
   if (cell instanceof TriangleCell && end instanceof TriangleCell) {
     const triangleHeight = Math.sqrt(3) / 2
     const center = triangleCenter(cell, triangleHeight)

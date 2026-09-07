@@ -235,12 +235,20 @@ export function findShapeCellAtPixel(
   }
 
   if (topology.type === 'hexagon') {
-    for (let row = 0; row < rows; row += 1) {
-      for (let col = 0; col < cols; col += 1) {
-        const polygon = getShapeCellPolygon(pixelMask, col, row, cols, rows, topology)
-        if (polygon && isPointInPolygon(bitmapX, bitmapY, polygon))
-          return { x: col, y: row }
-      }
+    const bounds = getHexWorldBounds(cols, rows, topology)
+    const worldX = bounds.minX + (bitmapX / pixelMask.width) * bounds.width
+    const worldY = bounds.minY + (bitmapY / pixelMask.height) * bounds.height
+    const axial = topology.orientation === 'pointy'
+      ? { q: worldX - worldY / (HEX_RADIUS * 3), r: worldY / (HEX_RADIUS * 1.5) }
+      : { q: worldX / (HEX_RADIUS * 1.5), r: worldY - worldX / (HEX_RADIUS * 3) }
+    const rounded = roundHexAxial(axial.q, axial.r)
+    for (const offset of [{ q: 0, r: 0 }, ...getHexNeighborOffsets()]) {
+      const cell = hexCellFromAxial(rounded.q + offset.q, rounded.r + offset.r, rows, topology)
+      if (!cell || !isShapeCellCoordinate(cell.x, cell.y, cols, rows, topology))
+        continue
+      const polygon = getShapeCellPolygon(pixelMask, cell.x, cell.y, cols, rows, topology)
+      if (polygon && isPointInPolygon(bitmapX, bitmapY, polygon))
+        return cell
     }
     return null
   }
@@ -791,6 +799,31 @@ function hexCellFromAxial(q: number, r: number, rows: number, topology: Extract<
   return topology.orientation === 'pointy'
     ? { x: q + Math.floor((r - (r & 1)) / 2), y: r }
     : { x: q, y: r + Math.floor((q - (q & 1)) / 2) }
+}
+
+function getHexNeighborOffsets(): Array<{ q: number, r: number }> {
+  return [
+    { q: 1, r: 0 },
+    { q: 1, r: -1 },
+    { q: 0, r: -1 },
+    { q: -1, r: 0 },
+    { q: -1, r: 1 },
+    { q: 0, r: 1 },
+  ]
+}
+
+function roundHexAxial(q: number, r: number): { q: number, r: number } {
+  let roundedQ = Math.round(q)
+  let roundedR = Math.round(r)
+  const roundedS = Math.round(-q - r)
+  const qError = Math.abs(roundedQ - q)
+  const rError = Math.abs(roundedR - r)
+  const sError = Math.abs(roundedS + q + r)
+  if (qError > rError && qError > sError)
+    roundedQ = -roundedR - roundedS
+  else if (rError > sError)
+    roundedR = -roundedQ - roundedS
+  return { q: roundedQ, r: roundedR }
 }
 
 function getHexWorldPolygon(col: number, row: number, cols: number, rows: number, topology: Extract<ShapeGridTopology, { type: 'hexagon' }>): PixelPoint[] {

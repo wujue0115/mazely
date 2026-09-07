@@ -1,4 +1,4 @@
-import type { GridCell, Maze, MazeEdge, TriangleGrid } from 'mazely'
+import type { GridCell, HexGrid, Maze, MazeEdge, TriangleGrid } from 'mazely'
 import type { AppliedShape } from './controllers/shape-editor'
 import type { CustomFloodTheme, FloodThemeSelection } from './flood'
 import type {
@@ -32,17 +32,23 @@ const CODEC_NONE = 0
 const CODEC_GZIP = 1
 const TOPOLOGY_SQUARE = 0
 const TOPOLOGY_TRIANGLE = 1
+const TOPOLOGY_HEXAGON = 2
 // Each chunk owns its schema so a future patch can migrate one concern without
 // changing the entire container format.
 const META_SCHEMA_VERSION = 1
 const SQUARE_TOPOLOGY_SCHEMA_VERSION = 1
 const TRIANGLE_TOPOLOGY_SCHEMA_VERSION = 1
+const HEXAGON_TOPOLOGY_SCHEMA_VERSION = 1
 const LINKS_SCHEMA_VERSION = 1
 const STATE_SCHEMA_VERSION = 1
 const STYLE_SCHEMA_VERSION = 1
 const CELL_COLORS_SCHEMA_VERSION = 1
 const TRIANGLE_LAYOUT_TRIANGLE = 0
 const TRIANGLE_LAYOUT_RECTANGLE = 1
+const HEXAGON_LAYOUT_RECTANGLE = 0
+const HEXAGON_LAYOUT_HEXAGON = 1
+const HEXAGON_ORIENTATION_POINTY = 0
+const HEXAGON_ORIENTATION_FLAT = 1
 const MAX_UNCOMPRESSED_SIZE = 64 * 1024 * 1024
 
 const CHUNK_META = 1
@@ -122,18 +128,20 @@ interface MazeFileMeta {
 
 interface DecodedTopology {
   cols: number
-  layout?: 'triangle' | 'rectangle'
+  layout?: 'triangle' | 'rectangle' | 'hexagon'
   mask: boolean[][] | null
+  orientation?: 'pointy' | 'flat'
   rows: number
   size?: number
-  type: 'square' | 'triangle'
+  type: 'square' | 'triangle' | 'hexagon'
 }
 
 interface LinkTopology {
   cols: number
-  layout?: 'triangle' | 'rectangle'
+  layout?: 'triangle' | 'rectangle' | 'hexagon'
+  orientation?: 'pointy' | 'flat'
   rows: number
-  type: 'square' | 'triangle'
+  type: 'square' | 'triangle' | 'hexagon'
 }
 
 interface CanonicalLink {
@@ -284,15 +292,28 @@ export class MazeFileError extends Error {
 }
 
 function encodeTopology(runtime: Maze): Uint8Array {
-  if (runtime.grid.type === 'hexagon') {
-    throw new MazeFileError('Hexagonal mazes cannot be saved until the Studio hex topology codec is available.')
-  }
   const { rows, cols } = runtime.grid
   const active = new Set(runtime.grid.cells.map(cell => slotFromCell(cell, cols)))
   const writer = new ByteWriter()
 
   let expectedActiveCells: number
-  if (runtime.grid.type === 'triangle') {
+  if (runtime.grid.type === 'hexagon') {
+    const grid = runtime.grid as HexGrid
+    writer.u8(TOPOLOGY_HEXAGON)
+    writer.u8(HEXAGON_TOPOLOGY_SCHEMA_VERSION)
+    writer.u8(grid.layout === 'hexagon' ? HEXAGON_LAYOUT_HEXAGON : HEXAGON_LAYOUT_RECTANGLE)
+    writer.u8(grid.orientation === 'flat' ? HEXAGON_ORIENTATION_FLAT : HEXAGON_ORIENTATION_POINTY)
+    if (grid.layout === 'hexagon') {
+      writer.varint(grid.size!)
+      expectedActiveCells = 3 * grid.size! * (grid.size! - 1) + 1
+    }
+    else {
+      writer.varint(rows)
+      writer.varint(cols)
+      expectedActiveCells = rows * cols
+    }
+  }
+  else if (runtime.grid.type === 'triangle') {
     const grid = runtime.grid as TriangleGrid
     writer.u8(TOPOLOGY_TRIANGLE)
     writer.u8(TRIANGLE_TOPOLOGY_SCHEMA_VERSION)
@@ -327,19 +348,20 @@ function encodeTopology(runtime: Maze): Uint8Array {
 function decodeTopology(bytes: Uint8Array): DecodedTopology {
   const reader = new ByteReader(bytes)
   const topology = reader.u8()
-  if (topology !== TOPOLOGY_SQUARE && topology !== TOPOLOGY_TRIANGLE) {
+  if (topology !== TOPOLOGY_SQUARE && topology !== TOPOLOGY_TRIANGLE && topology !== TOPOLOGY_HEXAGON) {
     throw new MazeFileError(`Unsupported maze topology codec ${topology}.`)
   }
   const schemaVersion = reader.u8()
   const expectedSchemaVersion = topology === TOPOLOGY_TRIANGLE
     ? TRIANGLE_TOPOLOGY_SCHEMA_VERSION
-    : SQUARE_TOPOLOGY_SCHEMA_VERSION
+    : topology === TOPOLOGY_HEXAGON ? HEXAGON_TOPOLOGY_SCHEMA_VERSION : SQUARE_TOPOLOGY_SCHEMA_VERSION
   if (schemaVersion !== expectedSchemaVersion) {
     throw new MazeFileError(`Unsupported topology schema ${schemaVersion} for codec ${topology}.`)
   }
 
   let type: DecodedTopology['type'] = 'square'
   let layout: DecodedTopology['layout']
+  let orientation: DecodedTopology['orientation']
   let size: number | undefined
   let rows: number
   let cols: number
@@ -361,16 +383,40 @@ function decodeTopology(bytes: Uint8Array): DecodedTopology {
       throw new MazeFileError(`Unsupported triangle layout codec ${layoutCodec}.`)
     }
   }
+  else if (topology === TOPOLOGY_HEXAGON) {
+    type = 'hexagon'
+    const layoutCodec = reader.u8()
+    const orientationCodec = reader.u8()
+    orientation = orientationCodec === HEXAGON_ORIENTATION_FLAT
+      ? 'flat'
+      : orientationCodec === HEXAGON_ORIENTATION_POINTY ? 'pointy' : undefined
+    if (!orientation)
+      throw new MazeFileError(`Unsupported hexagon orientation codec ${orientationCodec}.`)
+    if (layoutCodec === HEXAGON_LAYOUT_HEXAGON) {
+      layout = 'hexagon'
+      size = reader.varint()
+      rows = size * 2 - 1
+      cols = rows
+    }
+    else if (layoutCodec === HEXAGON_LAYOUT_RECTANGLE) {
+      layout = 'rectangle'
+      rows = reader.varint()
+      cols = reader.varint()
+    }
+    else {
+      throw new MazeFileError(`Unsupported hexagon layout codec ${layoutCodec}.`)
+    }
+  }
   else {
     rows = reader.varint()
     cols = reader.varint()
   }
 
-  if (layout === 'triangle'
+  if ((layout === 'triangle' || layout === 'hexagon')
     && (size === undefined || size < 1 || size > GRID_DIMENSION_MAX)) {
-    throw new MazeFileError(`Invalid triangle topology size ${size}.`)
+    throw new MazeFileError(`Invalid ${type} topology size ${size}.`)
   }
-  if (layout !== 'triangle'
+  if (layout !== 'triangle' && layout !== 'hexagon'
     && (rows < 1 || cols < 1 || rows > GRID_DIMENSION_MAX || cols > GRID_DIMENSION_MAX)) {
     throw new MazeFileError(`Invalid ${type} topology dimensions ${cols}x${rows}.`)
   }
@@ -384,7 +430,7 @@ function decodeTopology(bytes: Uint8Array): DecodedTopology {
   if (mask && !mask.some(row => row.some(Boolean))) {
     throw new MazeFileError('The topology mask excludes every cell.')
   }
-  return { cols, layout, mask, rows, size, type }
+  return { cols, layout, mask, orientation, rows, size, type }
 }
 
 function encodeLinks(runtime: Maze): Uint8Array {
@@ -465,12 +511,35 @@ const topologyLinkCodecs: Record<LinkTopology['type'], TopologyLinkCodec> = {
       return links
     },
   },
+  hexagon: {
+    enumerateLinks: (topology) => {
+      const links: CanonicalLink[] = []
+      for (let row = 0; row < topology.rows; row += 1) {
+        for (let col = 0; col < topology.cols; col += 1) {
+          if (!isHexSlot(col, row, topology))
+            continue
+          const axial = hexAxialFromSlot(col, row, topology)
+          for (const offset of [{ q: 1, r: 0 }, { q: 0, r: 1 }, { q: -1, r: 1 }]) {
+            const next = hexSlotFromAxial(axial.q + offset.q, axial.r + offset.r, topology)
+            if (next && isHexSlot(next.x, next.y, topology)) {
+              links.push(canonicalLink(
+                pointToSlot({ x: col, y: row }, topology.rows, topology.cols),
+                pointToSlot(next, topology.rows, topology.cols),
+              ))
+            }
+          }
+        }
+      }
+      return links
+    },
+  },
 }
 
 function getRuntimeLinkTopology(runtime: Maze): LinkTopology {
   const { cols, rows, type } = runtime.grid
   if (type === 'hexagon') {
-    throw new MazeFileError('Hexagonal mazes cannot be saved until the Studio hex topology codec is available.')
+    const grid = runtime.grid as HexGrid
+    return { cols, layout: grid.layout, orientation: grid.orientation, rows, type }
   }
   return type === 'triangle'
     ? { cols, layout: (runtime.grid as TriangleGrid).layout, rows, type }
@@ -495,6 +564,35 @@ function canonicalLink(fromSlot: number, toSlot: number): CanonicalLink {
   return fromSlot < toSlot
     ? { fromSlot, toSlot }
     : { fromSlot: toSlot, toSlot: fromSlot }
+}
+
+function hexAxialFromSlot(col: number, row: number, topology: LinkTopology): { q: number, r: number } {
+  if (topology.layout === 'hexagon') {
+    const offset = (topology.rows - 1) / 2
+    return { q: col - offset, r: row - offset }
+  }
+  return topology.orientation === 'flat'
+    ? { q: col, r: row - Math.floor((col - (col & 1)) / 2) }
+    : { q: col - Math.floor((row - (row & 1)) / 2), r: row }
+}
+
+function hexSlotFromAxial(q: number, r: number, topology: LinkTopology): MazePoint | null {
+  if (topology.layout === 'hexagon') {
+    const offset = (topology.rows - 1) / 2
+    return { x: q + offset, y: r + offset }
+  }
+  return topology.orientation === 'flat'
+    ? { x: q, y: r + Math.floor((q - (q & 1)) / 2) }
+    : { x: q + Math.floor((r - (r & 1)) / 2), y: r }
+}
+
+function isHexSlot(col: number, row: number, topology: LinkTopology): boolean {
+  if (col < 0 || row < 0 || col >= topology.cols || row >= topology.rows)
+    return false
+  if (topology.layout !== 'hexagon')
+    return true
+  const { q, r } = hexAxialFromSlot(col, row, topology)
+  return Math.max(Math.abs(q), Math.abs(r), Math.abs(-q - r)) < (topology.rows + 1) / 2
 }
 
 function canonicalLinkKey(fromSlot: number, toSlot: number): string {
@@ -531,31 +629,37 @@ function applyCanonicalLinks(runtime: Maze, topology: DecodedTopology, links: Ui
 }
 
 function createRuntime(topology: DecodedTopology, links: Uint8Array): Maze {
-  const runtime = topology.type === 'triangle'
+  const runtime = topology.type === 'hexagon'
     ? createMaze({
-        grid: topology.layout === 'triangle'
-          ? {
-              layout: 'triangle',
-              mask: topology.mask ?? undefined,
-              size: topology.size!,
-              type: 'triangle',
-            }
-          : {
-              cols: topology.cols,
-              layout: 'rectangle',
-              mask: topology.mask ?? undefined,
-              rows: topology.rows,
-              type: 'triangle',
-            },
+        grid: topology.layout === 'hexagon'
+          ? { layout: 'hexagon', mask: topology.mask ?? undefined, orientation: topology.orientation, size: topology.size!, type: 'hexagon' }
+          : { cols: topology.cols, layout: 'rectangle', mask: topology.mask ?? undefined, orientation: topology.orientation, rows: topology.rows, type: 'hexagon' },
       })
-    : createMaze({
-        grid: {
-          cols: topology.cols,
-          mask: topology.mask ?? undefined,
-          rows: topology.rows,
-          type: 'square',
-        },
-      })
+    : topology.type === 'triangle'
+      ? createMaze({
+          grid: topology.layout === 'triangle'
+            ? {
+                layout: 'triangle',
+                mask: topology.mask ?? undefined,
+                size: topology.size!,
+                type: 'triangle',
+              }
+            : {
+                cols: topology.cols,
+                layout: 'rectangle',
+                mask: topology.mask ?? undefined,
+                rows: topology.rows,
+                type: 'triangle',
+              },
+        })
+      : createMaze({
+          grid: {
+            cols: topology.cols,
+            mask: topology.mask ?? undefined,
+            rows: topology.rows,
+            type: 'square',
+          },
+        })
   applyCanonicalLinks(runtime, topology, links)
   return runtime
 }

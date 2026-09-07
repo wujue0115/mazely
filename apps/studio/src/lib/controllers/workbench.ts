@@ -234,12 +234,15 @@ export function applyShape(nextShape: AppliedShape): void {
     ? app.triangleLayout === 'triangle'
       ? (nextShape.size ?? nextShape.rows)
       : triangleRectangleCellColsToVisualCols(nextShape.cols)
-    : nextShape.cols
+    : app.gridType === 'hexagon' && app.hexLayout === 'hexagon'
+      ? (nextShape.size ?? (nextShape.rows + 1) / 2)
+      : nextShape.cols
   app.mazeHeight = nextShape.rows
   app.hasValidGridDimensions = true
   rebuildMazeForShapeChange()
-  showToast(app.gridType === 'triangle' && app.triangleLayout === 'triangle'
-    ? `Shape applied — triangle size ${nextShape.size ?? nextShape.rows}.`
+  showToast((app.gridType === 'triangle' && app.triangleLayout === 'triangle')
+    || (app.gridType === 'hexagon' && app.hexLayout === 'hexagon')
+    ? `Shape applied — ${app.gridType === 'hexagon' ? 'hexagon' : 'triangle'} size ${nextShape.size ?? nextShape.rows}.`
     : `Shape applied — ${nextShape.cols}×${nextShape.rows} grid.`)
 }
 
