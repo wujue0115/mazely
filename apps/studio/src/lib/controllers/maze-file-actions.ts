@@ -1,10 +1,14 @@
-import type { TriangleGrid } from 'mazely'
+import type { HexGrid, TriangleGrid } from 'mazely'
 import { cellIdToPoint, pointToCellId, traverseGrid } from 'mazely'
 import { app } from '../app-state'
 import { bumpGenerationCacheVersion, bumpSolveCacheVersion } from '../derived'
 import {
   generationSelect,
   gridTypeSelect,
+  hexLayoutField,
+  hexLayoutSelect,
+  hexOrientationField,
+  hexOrientationSelect,
   loadMazeButton,
   loadMazeFileInput,
   saveMazeButton,
@@ -147,6 +151,13 @@ async function loadMazeFile(file: File): Promise<void> {
         : triangleRectangleCellColsToVisualCols(grid.cols)
       app.mazeHeight = grid.layout === 'triangle' ? grid.size! : grid.rows
     }
+    else if (loaded.runtime.grid.type === 'hexagon') {
+      const grid = loaded.runtime.grid as HexGrid
+      app.hexLayout = grid.layout
+      app.hexOrientation = grid.orientation
+      app.mazeWidth = grid.layout === 'hexagon' ? grid.size! : grid.cols
+      app.mazeHeight = grid.layout === 'hexagon' ? grid.size! : grid.rows
+    }
     else {
       app.mazeWidth = loaded.maze.cols
       app.mazeHeight = loaded.maze.rows
@@ -173,6 +184,10 @@ async function loadMazeFile(file: File): Promise<void> {
     gridTypeSelect.value = loaded.runtime.grid.type
     triangleLayoutSelect.value = app.triangleLayout
     triangleLayoutField.classList.toggle('is-hidden', app.gridType !== 'triangle')
+    hexLayoutSelect.value = app.hexLayout
+    hexOrientationSelect.value = app.hexOrientation
+    hexLayoutField.classList.toggle('is-hidden', app.gridType !== 'hexagon')
+    hexOrientationField.classList.toggle('is-hidden', app.gridType !== 'hexagon')
     solvingSelect.value = loaded.solve.algorithm
     useViewportRatioInput.checked = false
     if (loaded.solve.status === 'generated') {

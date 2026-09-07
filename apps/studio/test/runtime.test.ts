@@ -13,6 +13,11 @@ describe('square grid reference lines', () => {
     expect(getViewportRatioRows(100, 0.5, 'square')).toBe(50)
   })
 
+  it('fits rectangular Hex rows using the selected orientation', () => {
+    expect(getViewportRatioRows(100, 0.5, 'hexagon', 'pointy')).toBe(58)
+    expect(getViewportRatioRows(100, 0.5, 'hexagon', 'flat')).toBe(43)
+  })
+
   it('visits each full-grid cell boundary exactly once', () => {
     const runtime = createMaze({ grid: { cols: 2, rows: 2, type: 'square' } })
     const lines = collectLines(runtime)

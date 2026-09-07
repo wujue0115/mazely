@@ -10,6 +10,8 @@ import {
   exportButton,
   generationSelect,
   gridTypeSelect,
+  hexLayoutSelect,
+  hexOrientationSelect,
   loadMazeButton,
   lockGridRatioInput,
   mazeHeightInput,
@@ -83,6 +85,8 @@ export function syncUi(): void {
     || partialSolve
   gridTypeSelect.disabled = app.generating || app.running
   triangleLayoutSelect.disabled = app.generating || app.running || app.gridType !== 'triangle'
+  hexLayoutSelect.disabled = app.generating || app.running || app.gridType !== 'hexagon'
+  hexOrientationSelect.disabled = app.generating || app.running || app.gridType !== 'hexagon'
   shapeUploadButton.disabled = app.generating || app.running
   shapeEditButton.disabled = app.generating || app.running
   view3dButton.disabled = false

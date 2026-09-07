@@ -22,7 +22,7 @@ import {
 } from './flood'
 import { key, parsePointKey } from './point'
 import { DEFAULT_STYLE_THEME, DEFAULT_STYLE_VISIBILITY } from './types'
-import { GRID_DIMENSION_MAX } from './utils'
+import { GRID_DIMENSION_MAX, HEX_OUTER_SIZE_MAX } from './utils'
 
 const MAGIC = new Uint8Array([0x4D, 0x5A, 0x4C, 0x59]) // MZLY
 const HEADER_SIZE = 16
@@ -304,6 +304,9 @@ function encodeTopology(runtime: Maze): Uint8Array {
     writer.u8(grid.layout === 'hexagon' ? HEXAGON_LAYOUT_HEXAGON : HEXAGON_LAYOUT_RECTANGLE)
     writer.u8(grid.orientation === 'flat' ? HEXAGON_ORIENTATION_FLAT : HEXAGON_ORIENTATION_POINTY)
     if (grid.layout === 'hexagon') {
+      if (grid.size! > HEX_OUTER_SIZE_MAX) {
+        throw new MazeFileError(`Hexagon topology size must not exceed ${HEX_OUTER_SIZE_MAX}.`)
+      }
       writer.varint(grid.size!)
       expectedActiveCells = 3 * grid.size! * (grid.size! - 1) + 1
     }
@@ -412,8 +415,9 @@ function decodeTopology(bytes: Uint8Array): DecodedTopology {
     cols = reader.varint()
   }
 
+  const sizeMax = layout === 'hexagon' ? HEX_OUTER_SIZE_MAX : GRID_DIMENSION_MAX
   if ((layout === 'triangle' || layout === 'hexagon')
-    && (size === undefined || size < 1 || size > GRID_DIMENSION_MAX)) {
+    && (size === undefined || size < 1 || size > sizeMax)) {
     throw new MazeFileError(`Invalid ${type} topology size ${size}.`)
   }
   if (layout !== 'triangle' && layout !== 'hexagon'

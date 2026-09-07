@@ -20,6 +20,7 @@ import {
   getContext2d,
   getWheelZoomFactor,
   GRID_DIMENSION_MAX,
+  HEX_OUTER_SIZE_MAX,
   query,
 } from '../utils'
 
@@ -528,6 +529,9 @@ export function initShapeEditor(options: ShapeEditorOptions): ShapeEditorApi {
   }
 
   function getSizeMax(nextTopology: ShapeGridTopology): number {
+    if (nextTopology.type === 'hexagon' && nextTopology.layout === 'hexagon') {
+      return HEX_OUTER_SIZE_MAX
+    }
     return nextTopology.type === 'triangle' && nextTopology.layout === 'rectangle'
       ? TRIANGLE_RECTANGLE_VISUAL_COLS_MAX
       : GRID_DIMENSION_MAX

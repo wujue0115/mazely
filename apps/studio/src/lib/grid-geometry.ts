@@ -1,4 +1,4 @@
-import type { GridCell, Maze, MazeEdge, MazeGridType, MazePoint, TriangleGrid } from 'mazely'
+import type { GridCell, HexOrientation, Maze, MazeEdge, MazeGridType, MazePoint, TriangleGrid } from 'mazely'
 import { HexCell, TriangleCell } from 'mazely'
 
 export interface WorldPoint {
@@ -77,7 +77,16 @@ export function getViewportRatioRows(
   cols: number,
   viewportHeightWidthRatio: number,
   gridType: MazeGridType,
+  hexOrientation: HexOrientation = 'pointy',
 ): number {
+  if (gridType === 'hexagon') {
+    if (hexOrientation === 'flat') {
+      const worldWidth = HEX_RADIUS * (cols * 1.5 + 0.5)
+      return Math.round(viewportHeightWidthRatio * worldWidth - 0.5)
+    }
+    const worldWidth = cols + 0.5
+    return Math.round((viewportHeightWidthRatio * worldWidth / HEX_RADIUS - 0.5) / 1.5)
+  }
   const worldWidth = gridType === 'triangle' ? (cols + 1) / 2 : cols
   const cellHeight = gridType === 'triangle' ? TRIANGLE_HEIGHT : 1
   return Math.round((worldWidth * viewportHeightWidthRatio) / cellHeight)
