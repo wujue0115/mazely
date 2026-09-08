@@ -1,10 +1,10 @@
 ---
-description: Exclude square or triangle grid cells with a boolean mask and generate a connected maze inside an application-defined shape.
+description: Exclude square, triangle, or hexagon grid cells with a boolean mask and generate a connected maze inside an application-defined shape.
 ---
 
 # Generating a Shaped Maze
 
-A mask excludes cells from a square or triangular grid. Use one when the maze
+A mask excludes cells from a square, triangular, or hexagonal grid. Use one when the maze
 should follow a logo, room outline, image silhouette, or another custom shape.
 
 ## Describing the Shape
@@ -65,6 +65,24 @@ triangleMaze.generate('dfs').finish()
 A rectangular triangle layout uses an ordinary `rows × cols` mask. The cells
 are still triangles; `layout` changes only the outer boundary.
 
+Hexagonal grids accept masks indexed by their logical `row` and `col` too. A
+rectangular Hex layout uses an ordinary `rows × cols` mask; an outer Hex layout
+uses its `(2 × size - 1) × (2 × size - 1)` bounding box, where cells outside
+the six-sided boundary are ignored:
+
+```ts
+const hexMaze = createMaze({
+  grid: {
+    type: 'hexagon',
+    layout: 'rectangle',
+    orientation: 'pointy',
+    rows: 6,
+    cols: 8,
+    mask: hexMask,
+  },
+})
+```
+
 ## Keeping Active Cells Connected
 
 Every active cell must be reachable from every other active cell through a
@@ -79,13 +97,13 @@ const disconnectedMask = [
 
 Diagonal contact does not connect square cells. Triangle cells have at most
 three neighbors: left, right, and one vertical neighbor determined by their
-orientation. Generation validates connectivity using the selected grid's
+orientation. Hex cells have up to six neighbors. Generation validates connectivity using the selected grid's
 actual edges and rejects a disconnected mask before changing edge state.
 
 Applications that create square-grid masks from images can run a
 four-directional flood fill first to provide more specific feedback. A
-triangle-grid image converter must instead use triangle-cell coverage and
-triangle adjacency. Mazely still performs its own connectivity validation.
+triangle- or hex-grid image converter must instead use its cell coverage and
+topology adjacency. Mazely still performs its own connectivity validation.
 
 ## Choosing Valid Start and End Points
 
@@ -107,7 +125,8 @@ A point outside the grid or on an excluded cell throws a `RangeError`.
 ## Understanding the Topology
 
 A mask removes cells but does not change their topology. Use `type: 'square'`
-for four-sided cells or `type: 'triangle'` for alternating three-sided cells;
+for four-sided cells, `type: 'triangle'` for alternating three-sided cells, or
+`type: 'hexagon'` for six-sided cells;
 the mask is interpreted using that grid's neighbor and edge rules.
 
 To persist a masked maze, store the mask next to the serialized topology. See
