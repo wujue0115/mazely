@@ -28,8 +28,8 @@
 
 <br>
 
-Mazely is a renderer-agnostic TypeScript toolkit for generating, solving, and
-editing mazes. Its platform-independent core exposes algorithm progress as
+Mazely is a TypeScript library for generating, solving, and editing mazes. Its
+core exposes algorithm progress as
 steps. Applications can run an algorithm to completion or consume its progress
 incrementally to build their own visualizations, teaching tools, games, and
 renderers.

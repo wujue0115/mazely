@@ -83,8 +83,7 @@ hex.generate('dfs').finish()
 ```
 
 Each applied step exposes a `payload` describing the carve/expand direction
-(`from`/`to` cell IDs). Applications may use it as renderer input; the package
-does not provide rendering or animation scheduling:
+(`from`/`to` cell IDs), which can drive progress-aware application UI:
 
 ```ts
 const step = generation.steps[generation.index - 1]
