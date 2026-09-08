@@ -11,7 +11,7 @@ pnpm add mazely
 ## Highlights
 
 - Stable `createMaze()` entry point with the complete public API and types
-- Square and triangular grids with a friendly 21x21 square default
+- Square, triangular, and hexagonal grids with a friendly 21x21 square default
 
 ## Usage
 
@@ -41,6 +41,27 @@ const triangle = createMaze({
 
 triangle.generate('dfs').finish()
 ```
+
+Hexagonal grids use regular six-sided cells. They support rectangular and
+hexagonal outer boundaries, each with `pointy` or `flat` orientation:
+
+```ts
+const hexagon = createMaze({
+  grid: {
+    type: 'hexagon',
+    layout: 'hexagon',
+    size: 10,
+    orientation: 'flat',
+  },
+  seed: 'hexagons',
+})
+
+hexagon.generate('dfs').finish()
+```
+
+Use `{ type: 'hexagon', layout: 'rectangle', rows, cols, orientation }` for a
+rectangular outer boundary. Hexagonal grids support connected masks and every
+built-in generation algorithm.
 
 The package exposes incremental steps but does not provide rendering, animation
 timing, or playback UI. Applications control those concerns with their own

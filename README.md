@@ -38,7 +38,7 @@ renderers.
 
 - Twelve maze generation algorithms and five solving algorithms
 - Deterministic generation with string or numeric seeds
-- Square and triangular grids with custom masks
+- Square, triangular, and hexagonal grids with custom masks
 - Step-by-step execution or immediate completion
 - Transactional maze editing with lifecycle events
 - JSON-safe maze serialization
@@ -178,7 +178,7 @@ triangle.generate('prim').finish()
 `size` is the number of smallest triangles along each side. A grid of size
 `n` contains `n²` cells and has a triangular outer boundary.
 
-Triangle grids currently support Aldous-Broder, Binary Tree, DFS, Eller's,
+Triangle and hexagonal grids support Aldous-Broder, Binary Tree, DFS, Eller's,
 Growing Tree, Hunt-and-Kill, Kruskal, Prim, Random Traversal, Recursive
 Division, Sidewinder, and Wilson generation.
 
@@ -194,6 +194,26 @@ const triangleRectangle = createMaze({
   },
 })
 ```
+
+Hexagonal grids have six neighbors per cell and support rectangular or
+hexagonal outer boundaries. Choose `pointy` or `flat` orientation:
+
+```ts
+const hexagon = createMaze({
+  grid: {
+    type: 'hexagon',
+    layout: 'hexagon',
+    size: 10,
+    orientation: 'pointy',
+  },
+  seed: 'hexagons',
+})
+
+hexagon.generate('dfs').finish()
+```
+
+Use `{ type: 'hexagon', layout: 'rectangle', rows, cols, orientation }` for a
+rectangular boundary. All grid types accept connected cell masks.
 
 ## Algorithms
 

@@ -119,8 +119,10 @@ tree. Generation rejects a disconnected mask before changing the grid.
 
 Read `MAZE_GENERATION_CAPABILITIES[algorithm].supportedGridTypes` when building
 topology-aware controls so they remain aligned with runtime capabilities.
-The graph-based algorithms support hexagonal grids; topology-specific variants
-are only exposed where their directional rule is defined for that topology.
+All built-in generation algorithms support square, triangle, and hexagonal
+grids. Directional generators derive their predecessor or row transition from
+the active topology, so they remain valid for both Hex orientations and outer
+layouts.
 
 Runtime registries and guards are exported as
 `MAZE_GENERATION_ALGORITHMS`, `MAZE_SOLVING_ALGORITHMS`,
