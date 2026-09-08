@@ -62,8 +62,8 @@ triangle.generate('prim').finish()
 ```
 
 Use `{ type: 'triangle', layout: 'rectangle', rows, cols }` for a rectangular
-outer boundary made from triangle cells. Both square and triangle grids accept
-connected cell masks.
+outer boundary made from triangle cells. Square, triangle, and hexagonal grids
+accept connected cell masks.
 
 Hexagonal grids support rectangular and hexagonal outer boundaries, plus
 pointy- or flat-topped orientation:
