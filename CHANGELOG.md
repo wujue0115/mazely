@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added regular Hex grids with rectangular and hexagonal outer layouts,
+  pointy/flat orientation, masks, `HexCell`, `HexGrid`, and `createHexGrid()`.
+- Added Hex support to all built-in generation algorithms, axial A* distance,
+  JSON grid serialization, and the public package exports.
+
+### Fixed
+
+- Kept Hex generation, solving, rendering, and shape bounds stable for large
+  layouts by using topology-aware coordinates instead of expanded point lists.
+
 ## [0.4.0] - 2026-08-31
 
 ### Added
