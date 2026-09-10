@@ -3,6 +3,7 @@ import {
   applySerializedGrid,
   areCellsDirectlyLinked,
   cellIdToPoint,
+  createHexGrid,
   getReachableCellIds,
   GridCell,
   isMazeGenerationAlgorithm,
@@ -32,6 +33,81 @@ function snapshotState(maze: Mazely): string {
 }
 
 describe('@mazely/core', () => {
+  it('creates rectangular and hexagonal hex grids with the expected adjacency', () => {
+    const rectangle = createHexGrid(5, 5)
+    expect(rectangle.type).toBe('hexagon')
+    expect(rectangle.layout).toBe('rectangle')
+    expect(rectangle.orientation).toBe('pointy')
+    expect(rectangle.cells).toHaveLength(25)
+    expect(rectangle.getCell('2:2')?.getNeighbors()).toHaveLength(6)
+
+    const hexagon = createHexGrid(3, { layout: 'hexagon', orientation: 'flat' })
+    expect(hexagon.layout).toBe('hexagon')
+    expect(hexagon.orientation).toBe('flat')
+    expect(hexagon.cells).toHaveLength(19)
+    expect(hexagon.getCell('2:2')?.getNeighbors()).toHaveLength(6)
+  })
+
+  it.each([
+    'aldous-broder',
+    'binary-tree',
+    'dfs',
+    'eller',
+    'growing-tree',
+    'hunt-and-kill',
+    'kruskal',
+    'prim',
+    'recursive-division',
+    'sidewinder',
+    'traversal',
+    'wilson',
+  ] as const)('generates a spanning hex maze with %s', (algorithm) => {
+    const maze = new Mazely({
+      grid: { cols: 5, layout: 'rectangle', rows: 5, type: 'hexagon' },
+      seed: `hex-${algorithm}`,
+    })
+
+    const player = maze.generate(algorithm)
+    player.finish()
+
+    expect(player.done).toBe(true)
+    expect(openedEdgeCount(maze.grid)).toBe(maze.grid.cells.length - 1)
+    expect(getReachableCellIds(maze.grid, maze.grid.cells[0].id).size).toBe(maze.grid.cells.length)
+  })
+
+  it.each(['binary-tree', 'eller', 'recursive-division', 'sidewinder'] as const)(
+    'generates a spanning flat hexagonal-boundary maze with %s',
+    (algorithm) => {
+      const maze = new Mazely({
+        grid: { layout: 'hexagon', orientation: 'flat', size: 4, type: 'hexagon' },
+        seed: `flat-hex-${algorithm}`,
+      })
+
+      maze.generate(algorithm).finish()
+
+      expect(openedEdgeCount(maze.grid)).toBe(maze.grid.cells.length - 1)
+      expect(getReachableCellIds(maze.grid, maze.grid.cells[0].id).size).toBe(maze.grid.cells.length)
+    },
+  )
+
+  it('solves and serializes a hexagonal-boundary maze', () => {
+    const maze = new Mazely({
+      grid: { layout: 'hexagon', orientation: 'flat', size: 3, type: 'hexagon' },
+      seed: 'hex-solve',
+    })
+    maze.generate('dfs').finish()
+    const start = { x: 0, y: 2 }
+    const end = { x: 4, y: 2 }
+    maze.solve('bfs', { end, start }).finish()
+
+    expect(maze.getSolveResult()).toMatchObject({ solved: true })
+    expect(serializeGrid(maze.grid)).toMatchObject({
+      hexLayout: 'hexagon',
+      hexOrientation: 'flat',
+      type: 'hexagon',
+    })
+  })
+
   it('exposes stable algorithm registries and runtime guards', () => {
     expect(MAZE_GENERATION_ALGORITHMS).toContain('hunt-and-kill')
     expect(MAZE_SOLVING_ALGORITHMS).toEqual(['a-star', 'best-first', 'bfs', 'dfs', 'flood'])

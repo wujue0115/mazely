@@ -45,8 +45,8 @@ const result = maze.getSolveResult()
 
 ## Grid Topologies
 
-Create either square cells or alternating up/down triangle cells. Triangle
-grids can use a triangular outer boundary:
+Create square, alternating up/down triangle, or regular hexagonal cells.
+Triangle grids can use a triangular outer boundary:
 
 ```ts
 const triangle = new Mazely({
@@ -62,12 +62,28 @@ triangle.generate('prim').finish()
 ```
 
 Use `{ type: 'triangle', layout: 'rectangle', rows, cols }` for a rectangular
-outer boundary made from triangle cells. Both square and triangle grids accept
-connected cell masks.
+outer boundary made from triangle cells. Square, triangle, and hexagonal grids
+accept connected cell masks.
+
+Hexagonal grids support rectangular and hexagonal outer boundaries, plus
+pointy- or flat-topped orientation:
+
+```ts
+const hex = new Mazely({
+  grid: {
+    type: 'hexagon',
+    layout: 'hexagon',
+    size: 12,
+    orientation: 'pointy',
+  },
+  seed: 'hexagons',
+})
+
+hex.generate('dfs').finish()
+```
 
 Each applied step exposes a `payload` describing the carve/expand direction
-(`from`/`to` cell IDs). Applications may use it as renderer input; the package
-does not provide rendering or animation scheduling:
+(`from`/`to` cell IDs), which can drive progress-aware application UI:
 
 ```ts
 const step = generation.steps[generation.index - 1]
@@ -100,9 +116,12 @@ maze.solve('flood', {
 All generation algorithms support connected masks and finish with a spanning
 tree. Generation rejects a disconnected mask before changing the grid.
 
-All built-in generation algorithms support both square and triangle grids.
 Read `MAZE_GENERATION_CAPABILITIES[algorithm].supportedGridTypes` when building
 topology-aware controls so they remain aligned with runtime capabilities.
+All built-in generation algorithms support square, triangle, and hexagonal
+grids. Directional generators derive their predecessor or row transition from
+the active topology, so they remain valid for both Hex orientations and outer
+layouts.
 
 Runtime registries and guards are exported as
 `MAZE_GENERATION_ALGORITHMS`, `MAZE_SOLVING_ALGORITHMS`,

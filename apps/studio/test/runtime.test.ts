@@ -1,7 +1,7 @@
 import type { Maze } from 'mazely'
 import { createMaze } from 'mazely'
 import { describe, expect, it } from 'vitest'
-import { getCellCenter, getViewportRatioRows, hitTestCell } from '../src/lib/grid-geometry'
+import { getCellCenter, getGridBounds, getOverlayScale, getViewportRatioRows, hitTestCell, TRIANGLE_OVERLAY_SCALE } from '../src/lib/grid-geometry'
 import {
   countGridLines,
   hasOpenCellEdge,
@@ -11,6 +11,11 @@ import {
 describe('square grid reference lines', () => {
   it('fits square rows to the viewport aspect ratio', () => {
     expect(getViewportRatioRows(100, 0.5, 'square')).toBe(50)
+  })
+
+  it('fits rectangular Hex rows using the selected orientation', () => {
+    expect(getViewportRatioRows(100, 0.5, 'hexagon', 'pointy')).toBe(58)
+    expect(getViewportRatioRows(100, 0.5, 'hexagon', 'flat')).toBe(43)
   })
 
   it('visits each full-grid cell boundary exactly once', () => {
@@ -102,6 +107,47 @@ describe('triangle grid reference lines', () => {
     expect(runtime.grid.edges).toHaveLength(13)
     expect(lines).toHaveLength(23)
     expect(new Set(lines).size).toBe(lines.length)
+  })
+})
+
+describe('hexagon grid reference lines', () => {
+  it('matches triangular overlay weight', () => {
+    const runtime = createMaze({ grid: { layout: 'hexagon', size: 2, type: 'hexagon' } })
+    expect(getOverlayScale(runtime)).toBe(TRIANGLE_OVERLAY_SCALE)
+  })
+
+  it.each(['pointy', 'flat'] as const)('renders and hit-tests %s hex cells', (orientation) => {
+    const runtime = createMaze({
+      grid: { cols: 3, layout: 'rectangle', orientation, rows: 3, type: 'hexagon' },
+    })
+    const center = runtime.grid.getCell('1:1')!
+    const lines = collectLines(runtime)
+
+    expect(hitTestCell(runtime, getCellCenter(center))?.id).toBe(center.id)
+    expect(lines).toHaveLength(runtime.grid.cells.length * 6 - runtime.grid.edges.length)
+    expect(new Set(lines).size).toBe(lines.length)
+  })
+
+  it('renders the complete boundary of a hexagonal outer layout', () => {
+    const runtime = createMaze({
+      grid: { layout: 'hexagon', size: 3, type: 'hexagon' },
+    })
+
+    expect(runtime.grid.cells).toHaveLength(19)
+    expect(collectLines(runtime)).toHaveLength(runtime.grid.cells.length * 6 - runtime.grid.edges.length)
+  })
+
+  it('calculates bounds for a large outer layout without expanding every polygon', () => {
+    const runtime = createMaze({
+      grid: { layout: 'hexagon', orientation: 'flat', size: 100, type: 'hexagon' },
+    })
+
+    expect(getGridBounds(runtime)).toMatchObject({
+      height: expect.any(Number),
+      width: expect.any(Number),
+    })
+    const center = runtime.grid.getCell('99:99')!
+    expect(hitTestCell(runtime, getCellCenter(center))?.id).toBe(center.id)
   })
 })
 

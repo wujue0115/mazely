@@ -26,8 +26,8 @@ class RecursiveDivisionAlgorithm implements MazeAlgorithm<GridCell, MazeGenerati
   name = 'recursive-division';
 
   * generate(context: MazeContext<GridCell>): IterableIterator<MazeGenerationStep> {
-    if (context.grid.type === 'triangle') {
-      yield* generateTriangle(context)
+    if (context.grid.type !== 'square') {
+      yield* generateGraph(context)
       return
     }
 
@@ -102,7 +102,12 @@ export function createRecursiveDivisionAlgorithm(): MazeAlgorithm<GridCell, Maze
   return new RecursiveDivisionAlgorithm()
 }
 
-function* generateTriangle(
+/**
+ * Divide any non-square topology by cutting graph edges between two connected
+ * regions.  This avoids inventing orthogonal walls for triangular or hexagonal
+ * cells while retaining exactly one passage at each split.
+ */
+function* generateGraph(
   context: MazeContext<GridCell>,
 ): IterableIterator<MazeGenerationStep> {
   const regions = [[...context.grid.cells]]
@@ -112,7 +117,7 @@ function* generateTriangle(
       continue
     }
 
-    const partition = partitionTriangleRegion(context, region)
+    const partition = partitionGraphRegion(context, region)
     if (!partition) {
       continue
     }
@@ -123,7 +128,7 @@ function* generateTriangle(
   }
 }
 
-function partitionTriangleRegion(
+function partitionGraphRegion(
   context: MazeContext<GridCell>,
   region: GridCell[],
 ): { left: GridCell[], right: GridCell[], wallEdges: WallEdge[] } | null {

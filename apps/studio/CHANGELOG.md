@@ -6,6 +6,22 @@ published `mazely` and `@mazely/core` packages.
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-09-10
+
+### Added
+
+- Added Hex maze generation, solving, editing, SVG export, and WebGL 2D/3D
+  rendering for rectangular and hexagonal outer layouts with pointy/flat
+  orientation.
+- Added all twelve generation algorithms, image-shape masking, and `.maze`
+  save/load support for Hex grids.
+
+### Fixed
+
+- Stabilized large Hex layouts in Shape Editor and camera bounds, improved Hex
+  hit testing and Hunt-and-Kill scan placement, and aligned Hex viewport sizing
+  and topology controls with the active layout and orientation.
+
 ## [0.7.0] - 2026-08-31
 
 ### Added

@@ -7,14 +7,17 @@ class BinaryTreeAlgorithm implements MazeAlgorithm<GridCell, MazeGenerationStep>
 
   * generate(context: MazeContext<GridCell>): IterableIterator<MazeGenerationStep> {
     const cells = [...context.grid.cells].sort((a, b) => a.row - b.row || a.col - b.col)
-    const triangleDepths = context.grid.type === 'triangle'
-      ? getTriangleDepths(context, cells[0])
+    // Non-square grids do not have a universal north/west predecessor.  Build a
+    // deterministic breadth-first backbone instead, so every cell can choose a
+    // predecessor that is an actual edge of the active topology.
+    const topologyDepths = context.grid.type !== 'square'
+      ? getTopologyDepths(context, cells[0])
       : null
 
     for (const cell of cells) {
-      const candidates = triangleDepths
+      const candidates = topologyDepths
         ? context.grid.getNeighbors(cell)
-            .filter(neighbor => triangleDepths.get(neighbor.id) === triangleDepths.get(cell.id)! - 1)
+            .filter(neighbor => topologyDepths.get(neighbor.id) === topologyDepths.get(cell.id)! - 1)
             .slice(0, 2)
         : context.grid.getNeighbors(cell)
             .filter(neighbor => neighbor.row < cell.row || neighbor.col < cell.col)
@@ -35,7 +38,7 @@ export function createBinaryTreeAlgorithm(): MazeAlgorithm<GridCell, MazeGenerat
   return new BinaryTreeAlgorithm()
 }
 
-function getTriangleDepths(context: MazeContext<GridCell>, root: GridCell): Map<string, number> {
+function getTopologyDepths(context: MazeContext<GridCell>, root: GridCell): Map<string, number> {
   const depths = new Map<string, number>([[root.id, 0]])
   const queue = [root]
   for (let index = 0; index < queue.length; index += 1) {

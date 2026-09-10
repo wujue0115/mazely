@@ -18,8 +18,10 @@ Returns a JSON-safe topology value:
 function serializeGrid(grid: MazeGrid): SerializedMaze
 
 interface SerializedMaze {
-  type?: 'square' | 'triangle'
+  type?: 'square' | 'triangle' | 'hexagon'
   triangleLayout?: 'triangle' | 'rectangle'
+  hexLayout?: 'hexagon' | 'rectangle'
+  hexOrientation?: 'pointy' | 'flat'
   size?: number
   rows: number
   cols: number
@@ -69,9 +71,10 @@ grid is modified.
 
 The format preserves:
 
-- grid type and triangle boundary shape
+- grid type and triangle or hexagonal boundary shape
 - rows and columns
-- triangle side size
+- triangle or hexagonal side size
+- hexagonal orientation
 - open and closed internal edges
 
 It does not preserve:

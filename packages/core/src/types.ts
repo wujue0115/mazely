@@ -3,7 +3,7 @@ import type { MazeGenerationAlgorithm, MazeSolvingAlgorithm } from './algorithms
 export type { MazeGenerationAlgorithm, MazeSolvingAlgorithm } from './algorithms'
 
 export type CellId = string
-export type MazeGridType = 'square' | 'triangle'
+export type MazeGridType = 'square' | 'triangle' | 'hexagon'
 
 export interface MazePoint {
   x: number
@@ -143,6 +143,48 @@ export class TriangleCell extends GridCell {
   }
 }
 
+export type HexOrientation = 'pointy' | 'flat'
+export type HexGridLayout = 'rectangle' | 'hexagon'
+
+export type HexDirection = 'e' | 'ne' | 'nw' | 'w' | 'sw' | 'se'
+
+/** A cell in an axial-coordinate hexagonal tiling. */
+export class HexCell extends GridCell {
+  readonly orientation: HexOrientation
+  readonly q: number
+  readonly r: number
+  /** Normalized world-space center assigned by the owning HexGrid. */
+  worldX = 0
+  /** Normalized world-space center assigned by the owning HexGrid. */
+  worldY = 0
+  readonly hexEdges: Record<HexDirection, MazeEdge | null> = {
+    e: null,
+    ne: null,
+    nw: null,
+    se: null,
+    sw: null,
+    w: null,
+  }
+
+  constructor(options: {
+    id: CellId
+    row: number
+    col: number
+    q: number
+    r: number
+    orientation: HexOrientation
+  }) {
+    super(options)
+    this.orientation = options.orientation
+    this.q = options.q
+    this.r = options.r
+  }
+
+  override getEdges(): MazeEdge[] {
+    return Object.values(this.hexEdges).filter(Boolean) as MazeEdge[]
+  }
+}
+
 export interface MazeGrid<Cell extends MazeCell = MazeCell> {
   readonly type: MazeGridType
   readonly rows: number
@@ -277,7 +319,25 @@ export type MazelyTriangleGridOptions
     mask?: readonly (readonly boolean[])[]
   }
 
-export type MazelyGridOptions = MazelySquareGridOptions | MazelyTriangleGridOptions
+export type MazelyHexGridOptions
+  = | {
+    type: 'hexagon'
+    layout: 'rectangle'
+    orientation?: HexOrientation
+    rows: number
+    cols: number
+    mask?: readonly (readonly boolean[])[]
+  }
+  | {
+    type: 'hexagon'
+    layout: 'hexagon'
+    /** Number of cells from the center to each outer side, inclusive. */
+    size: number
+    orientation?: HexOrientation
+    mask?: readonly (readonly boolean[])[]
+  }
+
+export type MazelyGridOptions = MazelySquareGridOptions | MazelyTriangleGridOptions | MazelyHexGridOptions
 
 export interface CreateMazeOptions {
   seed?: string | number

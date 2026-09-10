@@ -12,7 +12,7 @@ low-level factory is available for custom runtimes.
 
 ```ts
 interface MazeGrid<Cell extends MazeCell = MazeCell> {
-  readonly type: 'square' | 'triangle'
+  readonly type: 'square' | 'triangle' | 'hexagon'
   readonly rows: number
   readonly cols: number
   readonly cells: Cell[]
@@ -89,10 +89,44 @@ const rectangular = createTriangleGrid(10, 20)
 `TriangleGrid.layout` is `triangle` for the size overload and `rectangle`
 for the rows-and-columns overload.
 
+## `createHexGrid()`
+
+Creates a six-neighbor regular hexagonal tiling. Use rows and columns for a
+rectangular boundary, or a single side size for a hexagonal boundary:
+
+```ts
+function createHexGrid(
+  rows: number,
+  cols: number,
+  options?: { orientation?: 'pointy' | 'flat', mask?: HexGridMask },
+): HexGrid
+
+function createHexGrid(
+  size: number,
+  options?: {
+    layout: 'hexagon'
+    orientation?: 'pointy' | 'flat'
+    mask?: HexGridMask
+  },
+): HexGrid
+```
+
+```ts
+import { createHexGrid } from 'mazely'
+
+const rectangle = createHexGrid(10, 20, { orientation: 'pointy' })
+const hexagon = createHexGrid(10, { layout: 'hexagon', orientation: 'flat' })
+```
+
+`HexGrid` retains logical `row`/`col` coordinates for cell IDs and exposes
+axial `q`/`r` coordinates on each `HexCell`. A size-`n` hexagonal boundary
+contains `3n(n - 1) + 1` cells.
+
 ## Cell IDs and Coordinates
 
 `GridCell` provides the logical `row`, `col`, directional edge references,
-metadata, and base cell methods shared by `SquareCell` and `TriangleCell`.
+metadata, and base cell methods shared by `SquareCell`, `TriangleCell`, and
+`HexCell`.
 
 ```ts
 const cell = maze.grid.getCell('2:4')

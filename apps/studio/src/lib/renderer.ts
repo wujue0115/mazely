@@ -29,7 +29,7 @@ import {
 } from './derived'
 import { canvasWrap, ctx, generationSelect } from './dom'
 import { getFloodDepthColor } from './flood'
-import { getOverlayScale, getSharedBoundary, TRIANGLE_HEIGHT } from './grid-geometry'
+import { getGridBounds, getOverlayScale, getSharedBoundary, TRIANGLE_HEIGHT } from './grid-geometry'
 import { key, parsePointKey } from './point'
 import { hasOpenCellEdge } from './runtime'
 import { FIXED_CELL_SIZE, ZOOM_MAX, ZOOM_MIN } from './types'
@@ -80,8 +80,12 @@ export function getZoomBounds(targetMaze: MazeViewState = getActiveMazeView()): 
     return { fit: 1, max: ZOOM_MAX, min: ZOOM_MIN }
   }
 
-  const mazePixelWidth = (app.gridType === 'triangle' ? (cols + 1) / 2 : cols) * FIXED_CELL_SIZE
-  const mazePixelHeight = (app.gridType === 'triangle' ? rows * TRIANGLE_HEIGHT : rows) * FIXED_CELL_SIZE
+  const runtime = app.generationPreview?.view === targetMaze
+    ? app.generationPreview.runtime
+    : app.mazeRuntime
+  const bounds = runtime?.grid.type === 'hexagon' ? getGridBounds(runtime) : null
+  const mazePixelWidth = (bounds?.width ?? (app.gridType === 'triangle' ? (cols + 1) / 2 : cols)) * FIXED_CELL_SIZE
+  const mazePixelHeight = (bounds?.height ?? (app.gridType === 'triangle' ? rows * TRIANGLE_HEIGHT : rows)) * FIXED_CELL_SIZE
   const rawFitZoom = Math.min(width / mazePixelWidth, height / mazePixelHeight)
   const fitZoom = clamp(rawFitZoom * FOCUS_VIEW_SCALE, FOCUS_ZOOM_MIN, ZOOM_MAX)
 
@@ -457,7 +461,7 @@ function pushEditPreviewOverlays(out: {
     ...getInsetEdgeFillSegment(segment, wallThickness),
     width: wallThickness,
   })
-  if (app.mazeRuntime?.grid.type === 'triangle') {
+  if (app.mazeRuntime?.grid.type !== 'square') {
     return
   }
   pushEdgeBorderSegments(out.borderSegments, segment, wallThickness)
@@ -483,7 +487,7 @@ function getEdgeOutlineSegment(
   from: MazePoint,
   to: MazePoint,
 ): { from: MazePoint, to: MazePoint } {
-  if (app.mazeRuntime?.grid.type === 'triangle') {
+  if (app.mazeRuntime && app.mazeRuntime.grid.type !== 'square') {
     const fromCell = app.mazeRuntime.grid.getCell(`${from.y}:${from.x}`)
     const toCell = app.mazeRuntime.grid.getCell(`${to.y}:${to.x}`)
     const boundary = fromCell && toCell ? getSharedBoundary(fromCell, toCell) : null
@@ -544,7 +548,7 @@ function getInsetEdgeFillSegment(
   line: { from: MazePoint, to: MazePoint },
   wallThickness: number,
 ): { from: MazePoint, to: MazePoint } {
-  if (app.mazeRuntime?.grid.type === 'triangle') {
+  if (app.mazeRuntime?.grid.type !== 'square') {
     const dx = line.to.x - line.from.x
     const dy = line.to.y - line.from.y
     const length = Math.hypot(dx, dy)

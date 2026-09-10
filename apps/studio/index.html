@@ -99,7 +99,7 @@
         <span>Mazely Studio</span>
       </h1>
       <span class="top-nav-sep" aria-hidden="true"></span>
-      <span id="package-version" class="top-nav-version">v0.7.0</span>
+      <span id="package-version" class="top-nav-version">v0.8.0</span>
       <a
         class="top-nav-github"
         href="https://github.com/wujue0115/mazely"
@@ -245,6 +245,7 @@
             <select id="grid-type">
               <option value="square" selected>Square</option>
               <option value="triangle">Triangle</option>
+              <option value="hexagon">Hexagon</option>
             </select>
           </section>
 
@@ -253,6 +254,22 @@
             <select id="triangle-layout">
               <option value="triangle" selected>triangle</option>
               <option value="rectangle">rectangle</option>
+            </select>
+          </section>
+
+          <section id="hex-layout-field" class="field-group is-hidden">
+            <label class="micro-label" for="hex-layout">Grid Layout</label>
+            <select id="hex-layout">
+              <option value="rectangle">rectangle</option>
+              <option value="hexagon" selected>hexagon</option>
+            </select>
+          </section>
+
+          <section id="hex-orientation-field" class="field-group is-hidden">
+            <label class="micro-label" for="hex-orientation">Orientation</label>
+            <select id="hex-orientation">
+              <option value="pointy" selected>pointy top</option>
+              <option value="flat">flat top</option>
             </select>
           </section>
 

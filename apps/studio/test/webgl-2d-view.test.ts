@@ -19,6 +19,16 @@ import {
 } from '../src/lib/webgl-2d-view'
 
 describe('webGL 2D wall rendering', () => {
+  it('builds polygon wall geometry for a hexagonal grid', () => {
+    const runtime = createMaze({
+      grid: { cols: 3, layout: 'rectangle', orientation: 'flat', rows: 3, type: 'hexagon' },
+    })
+    const positions = buildTriangleWallPositions(runtime, 0.1)
+
+    expect(positions.length).toBeGreaterThan(0)
+    expect(positions.length % 9).toBe(0)
+  })
+
   it('does not extend butt-capped path segments past their junctions', () => {
     expect(getOverlaySegmentRenderLength(1, 0.18, 'butt')).toBe(1)
     expect(getOverlaySegmentRenderLength(1, 0.18, 'square')).toBe(1.18)

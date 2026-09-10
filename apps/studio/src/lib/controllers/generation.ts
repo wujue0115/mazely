@@ -1,7 +1,7 @@
 import type { Maze, MazeGenerationStep, StepPlayer, TriangleGrid } from 'mazely'
 import type { MazeGenerationAlgorithm, MazePoint, MazeViewState } from '../maze-types'
 import { cellIdToPoint } from 'mazely'
-import { TRIANGLE_HEIGHT } from '../grid-geometry'
+import { getCellCenter, getCellPolygon, TRIANGLE_HEIGHT } from '../grid-geometry'
 import { key } from '../point'
 
 /**
@@ -181,8 +181,32 @@ export function getHuntScanSegment(
       to: { x: right - 0.5, y: centerY - 0.5 },
     }
   }
+  if (preview.runtime.grid.type === 'hexagon') {
+    const cells = preview.runtime.grid.cells.filter(cell => cell.row === preview.huntScanRow)
+    if (cells.length === 0)
+      return null
+    const centers = cells.map(cell => ({ cell, center: getCellCenter(cell) })).sort((a, b) => a.center.x - b.center.x)
+    const first = centers[0]
+    const last = centers.at(-1)!
+    const firstLeft = Math.min(...getCellPolygon(first.cell).map(point => point.x))
+    const lastRight = Math.max(...getCellPolygon(last.cell).map(point => point.x))
+    return {
+      from: worldPointToOverlayPoint({ x: firstLeft, y: first.center.y }),
+      to: worldPointToOverlayPoint({ x: lastRight, y: last.center.y }),
+    }
+  }
   return {
     from: { x: -0.5, y: preview.huntScanRow },
     to: { x: preview.view.cols - 0.5, y: preview.huntScanRow },
   }
+}
+
+/**
+ * Generation overlays normally carry cell coordinates and the renderer maps
+ * them to cell centers. Hunt scanning uses continuous world positions instead,
+ * so shift them into an intentionally non-cell coordinate before that mapping.
+ */
+function worldPointToOverlayPoint(point: MazePoint): MazePoint {
+  const offset = 0.5 - 1e-6
+  return { x: point.x - offset, y: point.y - offset }
 }

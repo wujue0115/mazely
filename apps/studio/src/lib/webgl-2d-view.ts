@@ -1,5 +1,6 @@
 import type { Maze, MazeEdge } from 'mazely'
 import type { MazePoint } from './maze-types'
+import { HexCell, TriangleCell } from 'mazely'
 import * as THREE from 'three'
 import {
   getCellBoundarySegments,
@@ -8,6 +9,7 @@ import {
   getGridBounds,
   getOverlayScale,
   getPointCenter,
+  HEX_RADIUS,
   TRIANGLE_HEIGHT,
   visitClosedWalls,
 } from './grid-geometry'
@@ -29,6 +31,22 @@ function createTriangleGeometry(): THREE.BufferGeometry {
     0,
   ], 3))
   geometry.setIndex([0, 1, 2])
+  return geometry
+}
+
+function createHexGeometry(): THREE.BufferGeometry {
+  const positions: number[] = [0, 0, 0]
+  for (let index = 0; index < 6; index += 1) {
+    const angle = -Math.PI / 2 + index * Math.PI / 3
+    positions.push(HEX_RADIUS * Math.cos(angle), HEX_RADIUS * Math.sin(angle), 0)
+  }
+  const indices: number[] = []
+  for (let index = 0; index < 6; index += 1) {
+    indices.push(0, index + 1, (index + 1) % 6 + 1)
+  }
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+  geometry.setIndex(indices)
   return geometry
 }
 
@@ -635,6 +653,7 @@ export class Webgl2dMazeView {
   private readonly container: HTMLElement
   private readonly quadGeometry = new THREE.PlaneGeometry(1, 1)
   private readonly triangleGeometry = createTriangleGeometry()
+  private readonly hexGeometry = createHexGeometry()
   private readonly discGeometry = new THREE.CircleGeometry(1, 24)
   private readonly ringGeometry = new THREE.RingGeometry(0.86, 1, 32)
   private readonly cellMaterial = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide })
@@ -730,7 +749,7 @@ export class Webgl2dMazeView {
 
   sync(state: Webgl2dViewState): void {
     this.ensureCellMesh(state.runtime.grid.cells.length, state.runtime.grid.type)
-    this.ensureWallMesh(state.runtime.grid.cells.length * 4)
+    this.ensureWallMesh(state.runtime.grid.cells.length * 6)
     this.syncCamera(state)
     this.syncCellsIfNeeded(state)
     this.syncGrid(state)
@@ -771,7 +790,11 @@ export class Webgl2dMazeView {
       this.mazeGroup.remove(this.cellMesh)
       this.cellMesh.dispose()
     }
-    const geometry = gridType === 'triangle' ? this.triangleGeometry : this.quadGeometry
+    const geometry = gridType === 'triangle'
+      ? this.triangleGeometry
+      : gridType === 'hexagon'
+        ? this.hexGeometry
+        : this.quadGeometry
     this.cellMesh = new THREE.InstancedMesh(geometry, this.cellMaterial, capacity)
     this.cellMesh.frustumCulled = false
     this.mazeGroup.add(this.cellMesh)
@@ -859,8 +882,11 @@ export class Webgl2dMazeView {
     let index = 0
     for (const cell of state.runtime.grid.cells) {
       const center = getCellCenter(cell)
-      if ('orientation' in cell && cell.orientation === 'down') {
+      if (cell instanceof TriangleCell && cell.orientation === 'down') {
         matrix.makeRotationZ(Math.PI)
+      }
+      else if (cell instanceof HexCell && cell.orientation === 'flat') {
+        matrix.makeRotationZ(Math.PI / 2)
       }
       else {
         matrix.identity()
@@ -917,7 +943,7 @@ export class Webgl2dMazeView {
       index += 1
     }
 
-    if (state.runtime.grid.type === 'triangle') {
+    if (state.runtime.grid.type !== 'square') {
       mesh.count = 0
     }
     else {
@@ -929,12 +955,12 @@ export class Webgl2dMazeView {
     this.triangleWallMesh.geometry.dispose()
     this.triangleWallMesh.geometry = new THREE.BufferGeometry()
     this.triangleWallMesh.geometry.setAttribute('position', new THREE.BufferAttribute(
-      state.runtime.grid.type === 'triangle'
+      state.runtime.grid.type !== 'square'
         ? buildTriangleWallPositions(state.runtime, thickness)
         : new Float32Array(),
       3,
     ))
-    this.triangleWallMesh.visible = state.runtime.grid.type === 'triangle'
+    this.triangleWallMesh.visible = state.runtime.grid.type !== 'square'
     mesh.instanceMatrix.needsUpdate = true
   }
 

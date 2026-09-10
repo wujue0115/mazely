@@ -6,8 +6,8 @@ class SidewinderAlgorithm implements MazeAlgorithm<GridCell, MazeGenerationStep>
   name = 'sidewinder';
 
   * generate(context: MazeContext<GridCell>): IterableIterator<MazeGenerationStep> {
-    if (context.grid.type === 'triangle') {
-      yield* generateTriangle(context)
+    if (context.grid.type !== 'square') {
+      yield* generateNonSquare(context)
       return
     }
 
@@ -55,7 +55,8 @@ export function createSidewinderAlgorithm(): MazeAlgorithm<GridCell, MazeGenerat
   return new SidewinderAlgorithm()
 }
 
-function* generateTriangle(
+/** Uses topology neighbors for irregular triangular and hexagonal rows. */
+function* generateNonSquare(
   context: MazeContext<GridCell>,
 ): IterableIterator<MazeGenerationStep> {
   const rows = Array.from({ length: context.grid.rows }, () => [] as GridCell[])

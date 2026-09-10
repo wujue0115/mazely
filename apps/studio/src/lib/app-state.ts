@@ -1,4 +1,4 @@
-import type { Maze, MazeGridType, MazeSolvingStep, StepPlayer, TriangleGridLayout } from 'mazely'
+import type { HexGridLayout, HexOrientation, Maze, MazeGridType, MazeSolvingStep, StepPlayer, TriangleGridLayout } from 'mazely'
 import type { GenerationPreview } from './controllers/generation'
 import type { AppliedShape, ShapeEditorApi } from './controllers/shape-editor'
 import type { CustomFloodTheme, FloodThemeSelection } from './flood'
@@ -32,8 +32,11 @@ export interface AppState {
   activeTab: PanelTab
   gridType: MazeGridType
   triangleLayout: TriangleGridLayout
+  hexLayout: HexGridLayout
+  hexOrientation: HexOrientation
   mazeWidth: number
   mazeHeight: number
+  hasCustomGridDimensions: boolean
   hasValidGridDimensions: boolean
   lockGridRatio: boolean
   useViewportRatio: boolean
@@ -156,6 +159,8 @@ export function createSolidMazeState(
   shape: AppliedShape | null,
   gridType: MazeGridType = 'square',
   triangleLayout: TriangleGridLayout = 'triangle',
+  hexLayout: HexGridLayout = 'hexagon',
+  hexOrientation: HexOrientation = 'pointy',
 ): { maze: MazeViewState, runtime: Maze } {
   const runtime = createMaze({
     grid: gridType === 'triangle'
@@ -168,10 +173,16 @@ export function createSolidMazeState(
             rows: height,
             type: 'triangle',
           }
-      : { cols: width, mask: shape?.cellMask ?? undefined, rows: height, type: 'square' },
+      : gridType === 'hexagon'
+        ? hexLayout === 'hexagon'
+          ? { layout: 'hexagon', mask: shape?.cellMask ?? undefined, orientation: hexOrientation, size: width, type: 'hexagon' }
+          : { cols: width, layout: 'rectangle', mask: shape?.cellMask ?? undefined, orientation: hexOrientation, rows: height, type: 'hexagon' }
+        : { cols: width, mask: shape?.cellMask ?? undefined, rows: height, type: 'square' },
   })
-  const start = shape?.start ?? { x: 0, y: 0 }
-  const end = shape?.end ?? { x: runtime.grid.cols - 1, y: runtime.grid.rows - 1 }
+  const firstCell = runtime.grid.cells[0]
+  const lastCell = runtime.grid.cells.at(-1)!
+  const start = shape?.start ?? { x: firstCell.col, y: firstCell.row }
+  const end = shape?.end ?? { x: lastCell.col, y: lastCell.row }
   return {
     maze: createMazeViewState(runtime.grid.cols, runtime.grid.rows, algorithm, start, end),
     runtime,
@@ -201,6 +212,8 @@ export function initAppState(options: {
     activePointerId: null,
     activeTab: 'generate',
     gridType: 'square',
+    hexLayout: 'hexagon',
+    hexOrientation: 'pointy',
     triangleLayout: 'triangle',
     cachedGenerationFrontierHeads: [],
     cachedGenerationFrontierTrailEdges: new Set<string>(),
@@ -231,6 +244,7 @@ export function initAppState(options: {
     generateManualStart: { ...initialMazeState.maze.start },
     generatePointMode: 'auto',
     hasGeneratedMaze: false,
+    hasCustomGridDimensions: false,
     hasValidGridDimensions: true,
     lastPointerX: 0,
     lastPointerY: 0,

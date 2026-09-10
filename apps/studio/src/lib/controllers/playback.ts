@@ -39,18 +39,29 @@ export function syncLoopSpeed(): void {
 
 export function createStepper(inputMaze: MazeViewState, runtime: Maze): SolveState {
   const algorithm = getSolvingAlgorithm(solvingSelect.value)
+  const firstCell = runtime.grid.cells[0]
+  const lastCell = runtime.grid.cells.at(-1)!
+  const start = runtime.grid.getCell(`${inputMaze.start.y}:${inputMaze.start.x}`)
+    ? inputMaze.start
+    : { x: firstCell.col, y: firstCell.row }
+  const end = runtime.grid.getCell(`${inputMaze.end.y}:${inputMaze.end.x}`)
+    ? inputMaze.end
+    : { x: lastCell.col, y: lastCell.row }
+  if (start !== inputMaze.start || end !== inputMaze.end) {
+    app.maze = { ...app.maze, end: { ...end }, start: { ...start } }
+  }
   app.solveRuntime = runtime
   app.floodDepthByKey = {}
   app.solvePlayer = algorithm === 'flood'
     ? runtime.solve('flood', {
-        start: { ...inputMaze.start },
+        start: { ...start },
       })
     : runtime.solve(algorithm, {
-        end: { ...inputMaze.end },
-        start: { ...inputMaze.start },
+        end: { ...end },
+        start: { ...start },
       })
   bumpSolveCacheVersion()
-  return createInitialSolveState(algorithm, inputMaze.start, inputMaze.end)
+  return createInitialSolveState(algorithm, start, end)
 }
 
 /**
@@ -139,12 +150,21 @@ function createCurrentMaze(): GenerationPreview {
             rows: app.mazeHeight,
             type: 'triangle',
           }
-      : { cols: app.mazeWidth, mask: app.shape?.cellMask, rows: app.mazeHeight, type: 'square' },
+      : app.gridType === 'hexagon'
+        ? app.hexLayout === 'hexagon'
+          ? { layout: 'hexagon', mask: app.shape?.cellMask, orientation: app.hexOrientation, size: app.mazeWidth, type: 'hexagon' }
+          : { cols: app.mazeWidth, layout: 'rectangle', mask: app.shape?.cellMask, orientation: app.hexOrientation, rows: app.mazeHeight, type: 'hexagon' }
+        : { cols: app.mazeWidth, mask: app.shape?.cellMask, rows: app.mazeHeight, type: 'square' },
   })
-  const start = app.generatePointMode === 'manual'
+  const requestedStart = app.generatePointMode === 'manual'
     ? app.generateManualStart
     : app.maze.start
-  const end = app.shape?.end ?? { x: runtime.grid.cols - 1, y: runtime.grid.rows - 1 }
+  const firstCell = runtime.grid.cells[0]
+  const start = runtime.grid.getCell(`${requestedStart.y}:${requestedStart.x}`)
+    ? requestedStart
+    : { x: firstCell.col, y: firstCell.row }
+  const endCell = runtime.grid.cells.at(-1)!
+  const end = app.shape?.end ?? { x: endCell.col, y: endCell.row }
   const player = runtime.generate(generationAlgorithm, { start })
 
   return createGenerationPreview({

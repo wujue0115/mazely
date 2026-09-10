@@ -373,7 +373,7 @@ function getEditTarget(event: PointerEvent): MazeEditTarget | null {
     return { type: 'cell', x: cellX, y: cellY }
   }
 
-  if (runtime.grid.type === 'triangle') {
+  if (runtime.grid.type !== 'square') {
     const candidates = hitCell.getEdges().flatMap((edge) => {
       const otherId = edge.getOther(hitCell)?.id
       const other = otherId ? runtime.grid.getCell(otherId) : undefined

@@ -1,5 +1,6 @@
 import type { Maze } from 'mazely'
 import type { MazePoint } from './maze-types'
+import { HexCell, TriangleCell } from 'mazely'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import {
@@ -7,6 +8,7 @@ import {
   getGridBounds,
   getOverlayScale,
   getPointCenter,
+  HEX_RADIUS,
   TRIANGLE_HEIGHT,
   visitClosedWalls,
 } from './grid-geometry'
@@ -130,6 +132,33 @@ export function createTriangleFloorGeometry(depth = FLOOR_DEPTH): THREE.BufferGe
     3,
     5,
   ])
+  const flatGeometry = geometry.toNonIndexed()
+  geometry.dispose()
+  flatGeometry.computeVertexNormals()
+  return flatGeometry
+}
+
+/** Regular hexagonal floor prism centered on a hex cell's world-space center. */
+export function createHexFloorGeometry(depth = FLOOR_DEPTH): THREE.BufferGeometry {
+  const positions: number[] = [0, 0, 0, 0, -depth, 0]
+  for (let index = 0; index < 6; index += 1) {
+    const angle = -Math.PI / 2 + index * Math.PI / 3
+    positions.push(HEX_RADIUS * Math.cos(angle), 0, HEX_RADIUS * Math.sin(angle))
+  }
+  for (let index = 0; index < 6; index += 1) {
+    const angle = -Math.PI / 2 + index * Math.PI / 3
+    positions.push(HEX_RADIUS * Math.cos(angle), -depth, HEX_RADIUS * Math.sin(angle))
+  }
+  const indices: number[] = []
+  for (let index = 0; index < 6; index += 1) {
+    const next = (index + 1) % 6
+    indices.push(0, 2 + index, 2 + next)
+    indices.push(1, 8 + next, 8 + index)
+    indices.push(2 + index, 8 + index, 8 + next, 2 + index, 8 + next, 2 + next)
+  }
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+  geometry.setIndex(indices)
   const flatGeometry = geometry.toNonIndexed()
   geometry.dispose()
   flatGeometry.computeVertexNormals()
@@ -336,6 +365,7 @@ export class ThreeMazeView {
 
   private readonly boxGeometry = new THREE.BoxGeometry(1, 1, 1)
   private readonly triangleFloorGeometry = createTriangleFloorGeometry()
+  private readonly hexFloorGeometry = createHexFloorGeometry()
   // Overlays mirror the 2D canvas trails: flat unlit lines plus flat marker
   // discs, both instanced so per-step rebuilds stay cheap.
   private readonly overlayLineMaterial = new THREE.MeshBasicMaterial()
@@ -510,9 +540,13 @@ export class ThreeMazeView {
   }
 
   private ensureMeshes(runtime: Maze): void {
-    const wallCapacity = runtime.grid.cells.length * 4
+    const wallCapacity = runtime.grid.cells.length * 6
     const floorCapacity = runtime.grid.cells.length
-    const floorGeometry = runtime.grid.type === 'triangle' ? this.triangleFloorGeometry : this.boxGeometry
+    const floorGeometry = runtime.grid.type === 'triangle'
+      ? this.triangleFloorGeometry
+      : runtime.grid.type === 'hexagon'
+        ? this.hexFloorGeometry
+        : this.boxGeometry
 
     if (!this.wallMesh || this.wallMesh.instanceMatrix.count < wallCapacity) {
       if (this.wallMesh) {
@@ -546,8 +580,17 @@ export class ThreeMazeView {
     for (const cell of state.runtime.grid.cells) {
       const center = getCellCenter(cell)
       if (state.runtime.grid.type === 'triangle') {
-        if ('orientation' in cell && cell.orientation === 'down') {
+        if (cell instanceof TriangleCell && cell.orientation === 'down') {
           matrix.makeRotationY(Math.PI)
+        }
+        else {
+          matrix.identity()
+        }
+        matrix.setPosition(center.x, 0, center.y)
+      }
+      else if (state.runtime.grid.type === 'hexagon') {
+        if (cell instanceof HexCell && cell.orientation === 'flat') {
+          matrix.makeRotationY(-Math.PI / 2)
         }
         else {
           matrix.identity()
@@ -653,7 +696,7 @@ export class ThreeMazeView {
     const matrix = new THREE.Matrix4()
     let index = 0
 
-    if (state.runtime.grid.type === 'triangle') {
+    if (state.runtime.grid.type !== 'square') {
       mesh.count = 0
       this.triangleWallMesh.geometry.dispose()
       this.triangleWallMesh.geometry = buildTriangleWallGeometry(state.runtime, thickness, height)

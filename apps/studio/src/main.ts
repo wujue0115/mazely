@@ -50,9 +50,12 @@ import {
   applyShape,
   clearShape,
   invalidateGenerationPreview,
+  markGridDimensionsCustomized,
   setActiveTab,
   setGeneratePointMode,
   setGridType,
+  setHexLayout,
+  setHexOrientation,
   setSolvePointMode,
   setTriangleLayout,
   syncGridDimensionInputs,
@@ -75,6 +78,8 @@ import {
   generateStartButton,
   generationSelect,
   gridTypeSelect,
+  hexLayoutSelect,
+  hexOrientationSelect,
   lockGridRatioInput,
   mazeHeightInput,
   mazeWidthInput,
@@ -174,12 +179,16 @@ tabEdit.addEventListener('click', () => {
 
 generationSelect.addEventListener('change', invalidateGenerationPreview)
 gridTypeSelect.addEventListener('change', async () => {
-  const gridType = gridTypeSelect.value === 'triangle' ? 'triangle' : 'square'
+  const gridType = gridTypeSelect.value === 'triangle'
+    ? 'triangle'
+    : gridTypeSelect.value === 'hexagon'
+      ? 'hexagon'
+      : 'square'
   if (gridType === app.gridType) {
     return
   }
   const confirmed = await confirmGridReplacement({
-    message: `Changing to a ${gridType === 'triangle' ? 'Triangle' : 'Square'} grid will discard the current maze.`,
+    message: `Changing to a ${gridType === 'triangle' ? 'Triangle' : gridType === 'hexagon' ? 'Hexagon' : 'Square'} grid will discard the current maze.`,
     title: 'Change grid topology?',
   })
   if (!confirmed) {
@@ -203,6 +212,12 @@ triangleLayoutSelect.addEventListener('change', async () => {
   }
   setTriangleLayout(layout)
 })
+hexLayoutSelect.addEventListener('change', () => setHexLayout(
+  hexLayoutSelect.value === 'hexagon' ? 'hexagon' : 'rectangle',
+))
+hexOrientationSelect.addEventListener('change', () => setHexOrientation(
+  hexOrientationSelect.value === 'flat' ? 'flat' : 'pointy',
+))
 solvingSelect.addEventListener('change', () => setSolvePointMode(solvePointsAutoInput.checked))
 generatePointsAutoInput.addEventListener('change', () => setGeneratePointMode(generatePointsAutoInput.checked))
 solvePointsAutoInput.addEventListener('change', () => setSolvePointMode(solvePointsAutoInput.checked))
@@ -210,6 +225,7 @@ generateStartButton.addEventListener('click', () => beginPointSelection('generat
 solveStartButton.addEventListener('click', () => beginPointSelection('solve', 'start'))
 solveEndButton.addEventListener('click', () => beginPointSelection('solve', 'end'))
 mazeWidthInput.addEventListener('input', () => {
+  markGridDimensionsCustomized()
   const changed = applyGridDimensionChange('width')
   if (changed) {
     render()
@@ -219,6 +235,7 @@ mazeHeightInput.addEventListener('input', () => {
   if (app.useViewportRatio) {
     return
   }
+  markGridDimensionsCustomized()
 
   const changed = applyGridDimensionChange('height')
   if (changed) {
@@ -327,7 +344,9 @@ app.shapeEditor = initShapeEditor({
   getDefaultCols: () => 60,
   getGridTopology: () => app.gridType === 'triangle'
     ? { layout: app.triangleLayout, type: 'triangle' }
-    : { type: 'square' },
+    : app.gridType === 'hexagon'
+      ? { layout: app.hexLayout, orientation: app.hexOrientation, type: 'hexagon' }
+      : { type: 'square' },
   onApply: applyShape,
   showToast,
 })
@@ -469,6 +488,20 @@ async function confirmGridReplacement(options: GridReplacementDialogOptions): Pr
 }
 
 async function prepareImageShapeLayout(): Promise<boolean> {
+  if (app.gridType === 'hexagon' && app.hexLayout === 'hexagon') {
+    const confirmed = await confirmGridReplacement({
+      message: 'Image-shaped Hexagon mazes require the rectangular layout. Continuing will discard the current maze.',
+      title: 'Use rectangular Hexagon layout?',
+    })
+    if (!confirmed) {
+      return false
+    }
+
+    hexLayoutSelect.value = 'rectangle'
+    setHexLayout('rectangle')
+    return true
+  }
+
   if (app.gridType !== 'triangle' || app.triangleLayout === 'rectangle') {
     return true
   }

@@ -172,7 +172,7 @@ function buildGridSegments(runtime: Maze): Segment[] {
 }
 
 function buildWalls(runtime: Maze, fill: string, thickness: number): string[] {
-  if (runtime.grid.type === 'triangle') {
+  if (runtime.grid.type !== 'square') {
     const positions = buildTriangleWallPositions(runtime, thickness / FIXED_CELL_SIZE)
     const commands: string[] = []
     for (let offset = 0; offset < positions.length; offset += 9) {
