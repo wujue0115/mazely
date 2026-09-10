@@ -6,6 +6,8 @@ published `mazely` and `@mazely/core` packages.
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-09-10
+
 ### Added
 
 - Added Hex maze generation, solving, editing, SVG export, and WebGL 2D/3D
