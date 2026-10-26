@@ -6,6 +6,30 @@ published `mazely` and `@mazely/core` packages.
 
 ## [Unreleased]
 
+### Added
+
+- Added circular maze generation, solving, editing, 2D/3D rendering, SVG export,
+  and `.maze` save/load support, with a maximum of 128 rings.
+- Added draggable, resizable image crop frames with grid previews and a
+  translucent outside-image overlay.
+- Added Image shape / Current shape modes for square, triangular, and
+  hexagonal image editing, including both Hex orientations and outer layouts.
+  Current shape retains the selected boundary and samples image colors within it.
+
+### Changed
+
+- Circular image uploads always use a circular crop and default to 30 rings,
+  corresponding to a diameter of 60 cell units.
+- Improved large circular maze animation performance with cached geometry,
+  incremental rendering updates, and bounded playback work per frame.
+
+### Fixed
+
+- Preserved full circular grids when sampling images with transparent or
+  removable backgrounds.
+- Preserved triangular side sizes and the selected topology when applying
+  current-shape image crops.
+
 ## [0.8.0] - 2026-09-10
 
 ### Added

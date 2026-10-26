@@ -1,5 +1,6 @@
 import type { HexGridLayout, HexOrientation, TriangleGridLayout } from 'mazely'
 import type { MazePoint } from './maze-types'
+import { buildRingCellCounts } from 'mazely'
 
 /**
  * Pixel-level keep mask over an image: 1 keeps the pixel inside the shape,
@@ -16,6 +17,7 @@ export type CellMask = boolean[][]
 
 export type ShapeGridTopology
   = | { type: 'square' }
+    | { type: 'circular' }
     | { layout: TriangleGridLayout, type: 'triangle' }
     | { layout: HexGridLayout, orientation: HexOrientation, type: 'hexagon' }
 
@@ -42,7 +44,10 @@ const ALPHA_OPAQUE_THRESHOLD = 128
  * fill from the borders, treating pixels close to the border color (within
  * `colorThreshold`, 0-255 per-channel distance) as background.
  */
-export function buildAutoPixelMask(image: ImageData, colorThreshold: number): PixelMask {
+export function buildAutoPixelMask(image: ImageData, colorThreshold: number, topology: ShapeGridTopology = SQUARE_TOPOLOGY): PixelMask {
+  if (topology.type === 'circular') {
+    return { data: new Uint8Array(image.width * image.height).fill(1), width: image.width, height: image.height }
+  }
   if (hasMeaningfulAlpha(image)) {
     return buildAlphaPixelMask(image)
   }
@@ -143,6 +148,9 @@ export function getShapeGridDimensions(
   size: number,
   topology: ShapeGridTopology = SQUARE_TOPOLOGY,
 ): ShapeGridDimensions {
+  if (topology.type === 'circular') {
+    return { cols: circularCounts(size)[size - 1], rows: size }
+  }
   if (topology.type === 'triangle' && topology.layout === 'triangle') {
     return { cols: size * 2 - 1, rows: size }
   }
@@ -173,6 +181,23 @@ export function getShapeCellPolygon(
 ): PixelPoint[] | null {
   if (!isShapeCellCoordinate(col, row, cols, rows, topology)) {
     return null
+  }
+  if (topology.type === 'circular') {
+    const count = circularCounts(rows)[row]
+    const start = col / count * Math.PI * 2
+    const end = (col + 1) / count * Math.PI * 2
+    const scale = Math.min(pixelMask.width, pixelMask.height) / (rows * 2)
+    const divisions = Math.max(8, Math.ceil((end - start) * (row + 1) * scale / 2))
+    const points: PixelPoint[] = []
+    const append = (radius: number, index: number) => {
+      const angle = start + (end - start) * index / divisions
+      points.push({ x: pixelMask.width / 2 + radius * scale * Math.cos(angle), y: pixelMask.height / 2 + radius * scale * Math.sin(angle) })
+    }
+    for (let i = 0; i <= divisions; i += 1) append(row + 1, i)
+    if (row > 0) {
+      for (let i = divisions; i >= 0; i -= 1) append(row, i)
+    }
+    return points
   }
   if (topology.type === 'square') {
     const left = (col * pixelMask.width) / cols
@@ -228,6 +253,17 @@ export function findShapeCellAtPixel(
   rows: number,
   topology: ShapeGridTopology = SQUARE_TOPOLOGY,
 ): MazePoint | null {
+  if (topology.type === 'circular') {
+    const scale = Math.min(pixelMask.width, pixelMask.height) / (rows * 2)
+    const x = (bitmapX - pixelMask.width / 2) / scale
+    const y = (bitmapY - pixelMask.height / 2) / scale
+    const row = Math.floor(Math.hypot(x, y))
+    if (row >= rows)
+      return null
+    const angle = (Math.atan2(y, x) + Math.PI * 2) % (Math.PI * 2)
+    const col = Math.floor(angle / (Math.PI * 2) * circularCounts(rows)[row])
+    return { x: col, y: row }
+  }
   if (topology.type === 'square') {
     const col = Math.floor((bitmapX / pixelMask.width) * cols)
     const row = Math.floor((bitmapY / pixelMask.height) * rows)
@@ -725,6 +761,20 @@ function getShapeCellNeighbors(
   rows: number,
   topology: ShapeGridTopology,
 ): MazePoint[] {
+  if (topology.type === 'circular') {
+    const counts = circularCounts(rows)
+    const count = counts[row]
+    const neighbors: MazePoint[] = []
+    if (count > 1)
+      neighbors.push({ x: (col + count - 1) % count, y: row }, { x: (col + 1) % count, y: row })
+    if (row > 0)
+      neighbors.push({ x: Math.floor(col * counts[row - 1] / count), y: row - 1 })
+    if (row + 1 < rows) {
+      const ratio = counts[row + 1] / count
+      for (let i = 0; i < ratio; i += 1) neighbors.push({ x: col * ratio + i, y: row + 1 })
+    }
+    return neighbors
+  }
   const candidates: MazePoint[] = [
     { x: col - 1, y: row },
     { x: col + 1, y: row },
@@ -761,6 +811,8 @@ function getShapeCellNeighbors(
 }
 
 function getShapeRowCellCount(row: number, cols: number, topology: ShapeGridTopology): number {
+  if (topology.type === 'circular')
+    return circularCounts(row + 1)[row]
   return topology.type === 'triangle' && topology.layout === 'triangle' ? row * 2 + 1 : cols
 }
 
@@ -953,4 +1005,11 @@ export function countMaskCells(mask: CellMask): number {
     }
   }
   return count
+}
+
+let cachedCircularCounts: number[] = []
+function circularCounts(rings: number): number[] {
+  if (cachedCircularCounts.length < rings)
+    cachedCircularCounts = buildRingCellCounts(rings)
+  return cachedCircularCounts
 }

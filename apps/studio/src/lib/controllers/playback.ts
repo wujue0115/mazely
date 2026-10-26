@@ -15,6 +15,7 @@ import {
 import { bumpGenerationCacheVersion, bumpSolveCacheVersion } from '../derived'
 import { generationSelect, solvingSelect, speedRange } from '../dom'
 import { triangleRectangleVisualColsToCellCols } from '../grid-geometry'
+import { advancePlaybackFrame } from '../playback-frame'
 import { key, parsePointKey } from '../point'
 import { render } from '../renderer'
 import { applySolveStepToState, rebuildSolveVisualState } from '../solver-state'
@@ -23,7 +24,7 @@ import {
   advanceGenerationPreview,
   createGenerationPreview,
   isGenerationPreviewDone,
-  rebuildGenerationPreview,
+  rewindGenerationPreview,
 } from './generation'
 import { showToast, syncUi } from './status'
 import { syncStyleEditingVisibility } from './theme-panel'
@@ -140,21 +141,23 @@ function createCurrentMaze(): GenerationPreview {
   const generationAlgorithm = getGenerationAlgorithm(generationSelect.value)
 
   const runtime = createMaze({
-    grid: app.gridType === 'triangle'
-      ? app.triangleLayout === 'triangle'
-        ? { layout: 'triangle', mask: app.shape?.cellMask, size: app.mazeWidth, type: 'triangle' }
-        : {
-            cols: triangleRectangleVisualColsToCellCols(app.mazeWidth),
-            layout: 'rectangle',
-            mask: app.shape?.cellMask,
-            rows: app.mazeHeight,
-            type: 'triangle',
-          }
-      : app.gridType === 'hexagon'
-        ? app.hexLayout === 'hexagon'
-          ? { layout: 'hexagon', mask: app.shape?.cellMask, orientation: app.hexOrientation, size: app.mazeWidth, type: 'hexagon' }
-          : { cols: app.mazeWidth, layout: 'rectangle', mask: app.shape?.cellMask, orientation: app.hexOrientation, rows: app.mazeHeight, type: 'hexagon' }
-        : { cols: app.mazeWidth, mask: app.shape?.cellMask, rows: app.mazeHeight, type: 'square' },
+    grid: app.gridType === 'circular'
+      ? { rings: app.mazeWidth, mask: app.shape?.cellMask, type: 'circular' }
+      : app.gridType === 'triangle'
+        ? app.triangleLayout === 'triangle'
+          ? { layout: 'triangle', mask: app.shape?.cellMask, size: app.mazeWidth, type: 'triangle' }
+          : {
+              cols: triangleRectangleVisualColsToCellCols(app.mazeWidth),
+              layout: 'rectangle',
+              mask: app.shape?.cellMask,
+              rows: app.mazeHeight,
+              type: 'triangle',
+            }
+        : app.gridType === 'hexagon'
+          ? app.hexLayout === 'hexagon'
+            ? { layout: 'hexagon', mask: app.shape?.cellMask, orientation: app.hexOrientation, size: app.mazeWidth, type: 'hexagon' }
+            : { cols: app.mazeWidth, layout: 'rectangle', mask: app.shape?.cellMask, orientation: app.hexOrientation, rows: app.mazeHeight, type: 'hexagon' }
+          : { cols: app.mazeWidth, mask: app.shape?.cellMask, rows: app.mazeHeight, type: 'square' },
   })
   const requestedStart = app.generatePointMode === 'manual'
     ? app.generateManualStart
@@ -262,17 +265,38 @@ function stepGenerateOnce(): void {
 
   ensureGenerationPreview()
 
-  if (!advanceGenerationStep()) {
-    finishGenerationAnimation()
-    return
+  const preview = app.generationPreview!
+  let scheduled = false
+  const advance = (): void => {
+    if (app.generationPreview !== preview || (scheduled && !app.generating))
+      return
+    const frame = advancePlaybackFrame({
+      elapsed: 1,
+      delta: 0,
+      delay: 1,
+      batchSize: 1,
+      done: () => isGenerationAnimationDone(),
+      advance: advanceGenerationStep,
+      isWorkStep: () => preview.player.lastStep?.type === 'generation.yield',
+    })
+    if (isGenerationAnimationDone()) {
+      finishGenerationAnimation()
+      return
+    }
+    if (frame.advanced) {
+      if (scheduled)
+        stopGenerationAnimation()
+      render()
+      return
+    }
+    // A manual Next still advances to one visible step. While Wilson is
+    // planning, continue over animation frames so Pause/input remain usable.
+    scheduled = true
+    app.generating = true
+    syncUi()
+    app.generationFrame = window.requestAnimationFrame(advance)
   }
-
-  if (isGenerationAnimationDone()) {
-    finishGenerationAnimation()
-    return
-  }
-
-  render()
+  advance()
 }
 
 function stepGeneratePreviousOnce(): void {
@@ -285,11 +309,10 @@ function stepGeneratePreviousOnce(): void {
     stopSolveAnimation()
   }
 
-  if (!preview.player.prev()) {
+  if (!rewindGenerationPreview(preview)) {
     return
   }
 
-  rebuildGenerationPreview(preview)
   rebuildGenerationDiscoveredMask(preview)
   if (preview.committed) {
     app.mazeEditVersion += 1
@@ -354,28 +377,19 @@ function generationLoop(timestamp: number): void {
     app.generationLastTimestamp = timestamp
   }
 
-  app.generationElapsed += timestamp - app.generationLastTimestamp
+  const frame = advancePlaybackFrame({
+    elapsed: app.generationElapsed,
+    delta: timestamp - app.generationLastTimestamp,
+    delay: app.stepDelay,
+    batchSize: app.stepBatchSize,
+    done: () => isGenerationAnimationDone(),
+    advance: advanceGenerationStep,
+    isWorkStep: () => app.generationPreview?.player.lastStep?.type === 'generation.yield',
+  })
   app.generationLastTimestamp = timestamp
+  app.generationElapsed = frame.elapsed
 
-  let frameAdvanced = false
-  while (app.generationElapsed >= app.stepDelay && !isGenerationAnimationDone()) {
-    let advanced = false
-    for (let step = 0; step < app.stepBatchSize && !isGenerationAnimationDone(); step += 1) {
-      if (!advanceGenerationStep()) {
-        break
-      }
-      advanced = true
-      frameAdvanced = true
-    }
-
-    if (!advanced) {
-      break
-    }
-
-    app.generationElapsed -= app.stepDelay
-  }
-
-  if (frameAdvanced) {
+  if (frame.advanced) {
     render()
   }
 
@@ -559,28 +573,18 @@ function solveLoop(timestamp: number): void {
     app.solveLastTimestamp = timestamp
   }
 
-  app.solveElapsed += timestamp - app.solveLastTimestamp
+  const frame = advancePlaybackFrame({
+    elapsed: app.solveElapsed,
+    delta: timestamp - app.solveLastTimestamp,
+    delay: app.stepDelay,
+    batchSize: app.stepBatchSize,
+    done: () => app.stepState.status !== 'running',
+    advance: advanceSolveState,
+  })
   app.solveLastTimestamp = timestamp
+  app.solveElapsed = frame.elapsed
 
-  let frameAdvanced = false
-  while (app.solveElapsed >= app.stepDelay && app.stepState.status === 'running') {
-    let advanced = false
-    for (let step = 0; step < app.stepBatchSize && app.stepState.status === 'running'; step += 1) {
-      if (!advanceSolveState()) {
-        break
-      }
-      advanced = true
-      frameAdvanced = true
-    }
-
-    if (!advanced) {
-      break
-    }
-
-    app.solveElapsed -= app.stepDelay
-  }
-
-  if (frameAdvanced) {
+  if (frame.advanced) {
     render()
   }
 

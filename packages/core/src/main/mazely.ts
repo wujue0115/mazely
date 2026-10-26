@@ -39,7 +39,7 @@ import {
   createWilsonAlgorithm,
   withSpanningTreeGuarantee,
 } from '../generation'
-import { createHexGrid, createSquareGrid, createTriangleGrid } from '../grid'
+import { createCircularGrid, createHexGrid, createSquareGrid, createTriangleGrid } from '../grid'
 import {
   createSolveAStarAlgorithm,
   createSolveBestFirstAlgorithm,
@@ -72,22 +72,24 @@ export class Mazely {
   constructor(options: CreateMazeOptions) {
     const { grid: gridOptions } = options
     this.seed = options.seed
-    this.grid = gridOptions.type === 'triangle'
-      ? gridOptions.layout === 'triangle'
-        ? createTriangleGrid(gridOptions.size, gridOptions.mask)
-        : createTriangleGrid(gridOptions.rows, gridOptions.cols, gridOptions.mask)
-      : gridOptions.type === 'hexagon'
-        ? gridOptions.layout === 'hexagon'
-          ? createHexGrid(gridOptions.size, {
-              layout: 'hexagon',
-              mask: gridOptions.mask,
-              orientation: gridOptions.orientation,
-            })
-          : createHexGrid(gridOptions.rows, gridOptions.cols, {
-              mask: gridOptions.mask,
-              orientation: gridOptions.orientation,
-            })
-        : createSquareGrid(gridOptions.rows, gridOptions.cols, gridOptions.mask)
+    this.grid = gridOptions.type === 'circular'
+      ? createCircularGrid(gridOptions.rings, gridOptions.mask)
+      : gridOptions.type === 'triangle'
+        ? gridOptions.layout === 'triangle'
+          ? createTriangleGrid(gridOptions.size, gridOptions.mask)
+          : createTriangleGrid(gridOptions.rows, gridOptions.cols, gridOptions.mask)
+        : gridOptions.type === 'hexagon'
+          ? gridOptions.layout === 'hexagon'
+            ? createHexGrid(gridOptions.size, {
+                layout: 'hexagon',
+                mask: gridOptions.mask,
+                orientation: gridOptions.orientation,
+              })
+            : createHexGrid(gridOptions.rows, gridOptions.cols, {
+                mask: gridOptions.mask,
+                orientation: gridOptions.orientation,
+              })
+          : createSquareGrid(gridOptions.rows, gridOptions.cols, gridOptions.mask)
   }
 
   generate(

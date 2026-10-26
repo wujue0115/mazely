@@ -61,6 +61,11 @@ type MazeGridOptions
     cols: number
     mask?: readonly (readonly boolean[])[]
   }
+  | {
+    type: 'circular'
+    rings: number
+    mask?: readonly (readonly boolean[])[]
+  }
 ```
 
 All dimensions must be positive integers. A triangular boundary's `size` is the number
@@ -68,6 +73,11 @@ of smallest triangles on every outer side and produces `size²` cells within a
 triangular boundary. A rectangular boundary uses `rows` and `cols` for a grid
 made from triangular cells. When provided, `mask` is indexed as
 `mask[row][column]` and must leave at least one active cell.
+
+Circular grids use `rings`, including the single center cell. Their optional
+mask is indexed as `mask[ring][sector]`; omitted entries remove cells. Point coordinates are `{ x: sector, y: ring }`; both are zero-based.
+See [circular grid topology](/api/grid#createcirculargrid) for sector counts and
+cell adjacency.
 
 ## `maze.grid`
 

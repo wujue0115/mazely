@@ -18,11 +18,13 @@ Returns a JSON-safe topology value:
 function serializeGrid(grid: MazeGrid): SerializedMaze
 
 interface SerializedMaze {
-  type?: 'square' | 'triangle' | 'hexagon'
+  type?: 'square' | 'triangle' | 'hexagon' | 'circular'
   triangleLayout?: 'triangle' | 'rectangle'
   hexLayout?: 'hexagon' | 'rectangle'
   hexOrientation?: 'pointy' | 'flat'
   size?: number
+  rings?: number
+  ringCellCounts?: readonly number[]
   rows: number
   cols: number
   openedEdgeIds: string[]
@@ -65,7 +67,20 @@ applySerializedGrid(restoredMaze.grid, data)
 ```
 
 The target dimensions must match. Unknown edge IDs are rejected before the
-grid is modified.
+grid is modified. For circular grids, provided `rings` and `ringCellCounts`
+must also match the target. These checks run before any edges change.
+
+Restore a circular maze using its ring count:
+
+```ts
+const circular = createMaze({
+  grid: { type: 'circular', rings: data.rings! },
+})
+applySerializedGrid(circular.grid, data)
+```
+
+This example assumes `data.type === 'circular'` and data returned by
+`serializeGrid()`.
 
 ## Serialized Scope
 
@@ -75,6 +90,7 @@ The format preserves:
 - rows and columns
 - triangle or hexagonal side size
 - hexagonal orientation
+- circular ring count and per-ring sector counts
 - open and closed internal edges
 
 It does not preserve:

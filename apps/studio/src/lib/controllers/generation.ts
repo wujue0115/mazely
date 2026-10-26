@@ -3,6 +3,7 @@ import type { MazeGenerationAlgorithm, MazePoint, MazeViewState } from '../maze-
 import { cellIdToPoint } from 'mazely'
 import { getCellCenter, getCellPolygon, TRIANGLE_HEIGHT } from '../grid-geometry'
 import { key } from '../point'
+import { getPolarArcSegments } from '../polar-resolution'
 
 /**
  * Live view of an in-progress generation. All fields are derived from the
@@ -69,6 +70,22 @@ export function rebuildGenerationPreview(preview: GenerationPreview): void {
   for (let index = 0; index < preview.player.index; index += 1) {
     applyGenerationStepToPreview(preview, preview.player.steps[index])
   }
+}
+
+/** Undo one visible step, skipping any Wilson planning checkpoints. */
+export function rewindGenerationPreview(preview: GenerationPreview): boolean {
+  let moved = false
+  while (preview.player.index > 0) {
+    const work = preview.player.lastStep?.type === 'generation.yield'
+    if (!preview.player.prev())
+      break
+    moved = true
+    if (!work)
+      break
+  }
+  if (moved)
+    rebuildGenerationPreview(preview)
+  return moved
 }
 
 function applyGenerationStepToPreview(
@@ -170,6 +187,8 @@ export function getHuntScanSegment(
   if (preview?.algorithm !== 'hunt-and-kill' || preview.huntScanRow === null) {
     return null
   }
+  if (preview.runtime.grid.type === 'circular')
+    return null
   if (preview.runtime.grid.type === 'triangle') {
     const grid = preview.runtime.grid as TriangleGrid
     const row = preview.huntScanRow
@@ -199,6 +218,24 @@ export function getHuntScanSegment(
     from: { x: -0.5, y: preview.huntScanRow },
     to: { x: preview.view.cols - 0.5, y: preview.huntScanRow },
   }
+}
+
+/** Polar hunt rows are rings, so their scan indicator follows an annulus. */
+export function getHuntScanSegments(preview: GenerationPreview | null): Array<{ from: MazePoint, to: MazePoint }> {
+  if (preview?.runtime.grid.type !== 'circular') {
+    const segment = getHuntScanSegment(preview)
+    return segment ? [segment] : []
+  }
+  if (preview.algorithm !== 'hunt-and-kill' || preview.huntScanRow === null)
+    return []
+  const radius = preview.huntScanRow + 0.5
+  const origin = preview.runtime.grid.rows
+  const count = Math.max(48, getPolarArcSegments(radius, Math.PI * 2))
+  const point = (index: number) => worldPointToOverlayPoint({
+    x: origin + radius * Math.cos(index / count * Math.PI * 2),
+    y: origin + radius * Math.sin(index / count * Math.PI * 2),
+  })
+  return Array.from({ length: count }, (_, index) => ({ from: point(index), to: point(index + 1) }))
 }
 
 /**

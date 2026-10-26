@@ -1,6 +1,6 @@
 import type { CellId, GridCell, MazeContext, MazePatch, MazePoint, MazeSolvingStep } from '../types'
 import { getLinkedNeighbors } from '../graph'
-import { HexCell, pointToCellId, TriangleCell } from '../types'
+import { CircularCell, HexCell, pointToCellId, TriangleCell } from '../types'
 
 export function getSolveStartAndEndCells(
   context: MazeContext<GridCell>,
@@ -78,6 +78,11 @@ export function getOpenNeighbors(context: MazeContext<GridCell>, current: GridCe
 }
 
 export function estimateCellDistance(cell: GridCell, end: GridCell): number {
+  // One edge changes the ring by at most one. Sector indices cannot estimate
+  // distance because rings split and the first and last sectors are adjacent.
+  if (cell instanceof CircularCell && end instanceof CircularCell) {
+    return Math.abs(cell.ring - end.ring)
+  }
   if (cell instanceof HexCell && end instanceof HexCell) {
     const dq = cell.q - end.q
     const dr = cell.r - end.r

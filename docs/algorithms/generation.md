@@ -14,24 +14,24 @@ between any two cells until the maze is edited.
 
 ## Choosing a Generation Algorithm
 
-| ID                   | Algorithm             | Uses start | Grid types                | Character                                                   |
-| -------------------- | --------------------- | :--------: | ------------------------- | ----------------------------------------------------------- |
-| `aldous-broder`      | Aldous-Broder         |     No     | Square, Triangle, Hexagon | Random walk; unbiased but often slow                        |
-| `binary-tree`        | Binary Tree           |     No     | Square, Triangle, Hexagon | Fast with a strong directional bias                         |
-| `dfs`                | Recursive Backtracker |    Yes     | Square, Triangle, Hexagon | Long corridors and deep branches                            |
-| `eller`              | Eller's               |     No     | Square, Triangle, Hexagon | Row-oriented generation with low working memory             |
-| `growing-tree`       | Growing Tree          |    Yes     | Square, Triangle, Hexagon | Newest-cell strategy; similar character to backtracking     |
-| `hunt-and-kill`      | Hunt-and-Kill         |    Yes     | Square, Triangle, Hexagon | Random walks separated by visible row scans                 |
-| `kruskal`            | Randomized Kruskal    |     No     | Square, Triangle, Hexagon | Joins many small regions into a spanning tree               |
-| `prim`               | Randomized Prim       |    Yes     | Square, Triangle, Hexagon | Expands from a frontier with many short branches            |
-| `recursive-division` | Recursive Division    |     No     | Square, Triangle, Hexagon | Starts open and adds walls recursively                      |
-| `sidewinder`         | Sidewinder            |     No     | Square, Triangle, Hexagon | Horizontal runs with a directional bias                     |
-| `traversal`          | Random Traversal      |    Yes     | Square, Triangle, Hexagon | Chooses a uniformly random edge from the active frontier    |
-| `wilson`             | Wilson's              |     No     | Square, Triangle, Hexagon | Loop-erased random walks; unbiased spanning-tree generation |
+| ID                   | Algorithm             | Uses start | Grid types                          | Character                                                   |
+| -------------------- | --------------------- | :--------: | ----------------------------------- | ----------------------------------------------------------- |
+| `aldous-broder`      | Aldous-Broder         |     No     | Square, Triangle, Hexagon, Circular | Random walk; unbiased but often slow                        |
+| `binary-tree`        | Binary Tree           |     No     | Square, Triangle, Hexagon, Circular | Fast with a strong directional bias                         |
+| `dfs`                | Recursive Backtracker |    Yes     | Square, Triangle, Hexagon, Circular | Long corridors and deep branches                            |
+| `eller`              | Eller's               |     No     | Square, Triangle, Hexagon, Circular | Row-oriented generation with low working memory             |
+| `growing-tree`       | Growing Tree          |    Yes     | Square, Triangle, Hexagon, Circular | Newest-cell strategy; similar character to backtracking     |
+| `hunt-and-kill`      | Hunt-and-Kill         |    Yes     | Square, Triangle, Hexagon, Circular | Random walks separated by visible row scans                 |
+| `kruskal`            | Randomized Kruskal    |     No     | Square, Triangle, Hexagon, Circular | Joins many small regions into a spanning tree               |
+| `prim`               | Randomized Prim       |    Yes     | Square, Triangle, Hexagon, Circular | Expands from a frontier with many short branches            |
+| `recursive-division` | Recursive Division    |     No     | Square, Triangle, Hexagon, Circular | Starts open and adds walls recursively                      |
+| `sidewinder`         | Sidewinder            |     No     | Square, Triangle, Hexagon, Circular | Horizontal runs with a directional bias                     |
+| `traversal`          | Random Traversal      |    Yes     | Square, Triangle, Hexagon, Circular | Chooses a uniformly random edge from the active frontier    |
+| `wilson`             | Wilson's              |     No     | Square, Triangle, Hexagon, Circular | Loop-erased random walks; unbiased spanning-tree generation |
 
 `usesStart` and `supportedGridTypes` are also available at runtime through
 `MAZE_GENERATION_CAPABILITIES`. All built-in generators currently support
-square, triangle, and hexagonal grids. The runtime still validates capability metadata and
+square, triangle, hexagonal, and circular grids. The runtime still validates capability metadata and
 throws before generation begins if a future generator does not support the
 selected grid type.
 
@@ -257,6 +257,11 @@ corridor and the rest of the maze has a strong directional bias.
 maze.generate('sidewinder').finish()
 ```
 
+On circular grids, each ring starts at a seeded random sector and forms
+clockwise runs. Each run opens exactly one inward passage. The final sector
+ends its run instead of reconnecting to the first sector, preventing a full
+circular loop. The center remains a single cell.
+
 It emits `carve` steps and does not use `start`. A masked gap ends the current
 horizontal run.
 
@@ -303,9 +308,13 @@ an unbiased uniform spanning tree.
 maze.generate('wilson').finish()
 ```
 
-Only the final loop-erased path emits `carve`; exploratory random-walk moves
-are not exposed as steps. Wilson chooses its own roots and does not use
-`start`.
+Only the final loop-erased path emits `carve`. Wilson also emits
+`generation.yield` checkpoints after at most 256 planning work units so a
+player can return control to the browser during long random walks. These
+checkpoints have no patches and do not carve or discover cells. They count
+in the player's step history and replay without changing the maze. Studio
+skips their visual redraw and delay, while still applying its frame budget.
+Wilson chooses its own roots and does not use `start`.
 
 **Simplified flow:**
 

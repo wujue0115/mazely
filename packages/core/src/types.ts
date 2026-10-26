@@ -3,7 +3,7 @@ import type { MazeGenerationAlgorithm, MazeSolvingAlgorithm } from './algorithms
 export type { MazeGenerationAlgorithm, MazeSolvingAlgorithm } from './algorithms'
 
 export type CellId = string
-export type MazeGridType = 'square' | 'triangle' | 'hexagon'
+export type MazeGridType = 'square' | 'triangle' | 'hexagon' | 'circular'
 
 export interface MazePoint {
   x: number
@@ -185,6 +185,46 @@ export class HexCell extends GridCell {
   }
 }
 
+/** A cell in a concentric-ring (polar) maze. */
+export class CircularCell extends GridCell {
+  readonly ring: number
+  readonly sectorCount: number
+  readonly innerRadius: number
+  readonly outerRadius: number
+  readonly startAngle: number
+  readonly endAngle: number
+  /** World-space origin of the containing circular grid. */
+  worldX = 0
+  worldY = 0
+  clockwise: MazeEdge | null = null
+  counterclockwise: MazeEdge | null = null
+  inward: MazeEdge | null = null
+  readonly outward: MazeEdge[] = []
+
+  constructor(options: {
+    id: CellId
+    row: number
+    col: number
+    ring: number
+    sectorCount: number
+    innerRadius: number
+    outerRadius: number
+  }) {
+    super(options)
+    this.ring = options.ring
+    this.sectorCount = options.sectorCount
+    this.innerRadius = options.innerRadius
+    this.outerRadius = options.outerRadius
+    this.startAngle = options.col / options.sectorCount * Math.PI * 2
+    this.endAngle = (options.col + 1) / options.sectorCount * Math.PI * 2
+  }
+
+  override getEdges(): MazeEdge[] {
+    return [this.clockwise, this.counterclockwise, this.inward, ...this.outward]
+      .filter(Boolean) as MazeEdge[]
+  }
+}
+
 export interface MazeGrid<Cell extends MazeCell = MazeCell> {
   readonly type: MazeGridType
   readonly rows: number
@@ -260,7 +300,8 @@ export type MazePayloadStep<
 > = MazeStep<Type, Payload> & { payload: Payload }
 
 export type MazeGenerationStep
-  = | MazePayloadStep<'carve', MazeCellTransitionPayload>
+  = | MazeStep<'generation.yield'>
+    | MazePayloadStep<'carve', MazeCellTransitionPayload>
     | MazePayloadStep<'close' | 'open' | 'generation.normalize.close', MazeEdgeCollectionPayload>
     | MazePayloadStep<'hunt-scan', MazeHuntScanPayload>
     | MazePayloadStep<'visit', MazeCellTransitionPayload>
@@ -337,7 +378,15 @@ export type MazelyHexGridOptions
     mask?: readonly (readonly boolean[])[]
   }
 
-export type MazelyGridOptions = MazelySquareGridOptions | MazelyTriangleGridOptions | MazelyHexGridOptions
+export interface MazelyCircularGridOptions {
+  type: 'circular'
+  /** Cell inclusion indexed by ring, then sector. */
+  mask?: readonly (readonly boolean[])[]
+  /** Number of concentric rings, including the center cell. */
+  rings: number
+}
+
+export type MazelyGridOptions = MazelySquareGridOptions | MazelyTriangleGridOptions | MazelyHexGridOptions | MazelyCircularGridOptions
 
 export interface CreateMazeOptions {
   seed?: string | number

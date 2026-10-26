@@ -2,12 +2,14 @@ import type { GridCell, Maze, MazePoint } from 'mazely'
 import type { FloodColorSource } from './flood'
 import type { MazeViewState } from './maze-types'
 import type { StyleTheme, StyleVisibility } from './types'
-import { pointToCellId } from 'mazely'
+import type { Webgl2dPolarPath } from './webgl-2d-view'
+import { CircularCell, pointToCellId } from 'mazely'
 import { getFloodDepthColor } from './flood'
-import { getCellPolygon, getGridBounds, getOverlayScale, getPointCenter, visitClosedWalls, visitGridLines } from './grid-geometry'
+import { getUniqueRouteSegments } from './frontier-routes'
+import { getCellPolygon, getGridBounds, getOverlayScale, getPointCenter, getPolarBoundaries, visitClosedWalls, visitGridLines } from './grid-geometry'
 import { hasOpenCellEdge } from './runtime'
 import { FIXED_CELL_SIZE } from './types'
-import { buildTriangleWallPositions } from './webgl-2d-view'
+import { buildCircularPathGeometry, buildTriangleWallPositions } from './webgl-2d-view'
 
 interface ExportSvgOptions {
   cellColor?: (x: number, y: number) => string
@@ -29,6 +31,7 @@ interface ExportSvgOptions {
 }
 
 export interface ExportSvgOverlayState {
+  polarPaths?: Webgl2dPolarPath[]
   dots: Array<{ color: string, point: MazePoint, radius: number }>
   segments: Array<{
     cap?: 'butt' | 'square'
@@ -109,7 +112,11 @@ export function buildMazeSvg(options: ExportSvgOptions): string {
   }
 
   if (visibleElements.subPath && options.solve?.frontierTrails) {
-    parts.push(...buildPolylineSegments(runtime, options.solve.frontierTrails, theme.subPath, 0.14 * overlayScale))
+    const activeRoute = options.solve.path.length > 0 ? options.solve.path : options.solve.trails[0] ?? []
+    const trails = runtime.grid.type === 'circular'
+      ? getUniqueRouteSegments(options.solve.frontierTrails, activeRoute)
+      : options.solve.frontierTrails
+    parts.push(...buildPolylineSegments(runtime, trails, theme.subPath, 0.14 * overlayScale))
   }
 
   if (visibleElements.path && options.solve) {
@@ -134,6 +141,7 @@ export function buildMazeSvg(options: ExportSvgOptions): string {
   }
 
   if (options.overlays) {
+    parts.push(...buildPolarPaths(runtime, options.overlays.polarPaths ?? []))
     for (const segment of options.overlays.segments) {
       parts.push(overlayLine(runtime, segment))
     }
@@ -172,6 +180,40 @@ function buildGridSegments(runtime: Maze): Segment[] {
 }
 
 function buildWalls(runtime: Maze, fill: string, thickness: number): string[] {
+  if (runtime.grid.type === 'circular') {
+    const seen = new Set<string>()
+    const paths: string[] = []
+    for (const cell of runtime.grid.cells) {
+      if (!(cell instanceof CircularCell))
+        continue
+      for (const boundary of getPolarBoundaries(cell)) {
+        if (boundary.opened)
+          continue
+        const identity = boundary.edge?.id ?? `${cell.id}:${boundary.kind}:${boundary.kind === 'arc' ? `${boundary.radius}:${boundary.startAngle}:${boundary.endAngle}` : `${boundary.from.x}:${boundary.from.y}:${boundary.to.x}:${boundary.to.y}`}`
+        if (seen.has(identity))
+          continue
+        seen.add(identity)
+        if (boundary.kind === 'radial') {
+          paths.push(`M ${formatNumber(boundary.from.x * FIXED_CELL_SIZE)} ${formatNumber(boundary.from.y * FIXED_CELL_SIZE)} L ${formatNumber(boundary.to.x * FIXED_CELL_SIZE)} ${formatNumber(boundary.to.y * FIXED_CELL_SIZE)}`)
+        }
+        else {
+          // SVG arcs with identical endpoints omit the entire circle.
+          if (boundary.endAngle - boundary.startAngle >= Math.PI * 2 - 1e-10) {
+            const cx = boundary.center.x * FIXED_CELL_SIZE
+            const cy = boundary.center.y * FIXED_CELL_SIZE
+            const r = boundary.radius * FIXED_CELL_SIZE
+            paths.push(`M ${formatNumber(cx + r)} ${formatNumber(cy)} A ${formatNumber(r)} ${formatNumber(r)} 0 1 1 ${formatNumber(cx - r)} ${formatNumber(cy)} A ${formatNumber(r)} ${formatNumber(r)} 0 1 1 ${formatNumber(cx + r)} ${formatNumber(cy)}`)
+            continue
+          }
+          const from = { x: boundary.center.x + boundary.radius * Math.cos(boundary.startAngle), y: boundary.center.y + boundary.radius * Math.sin(boundary.startAngle) }
+          const to = { x: boundary.center.x + boundary.radius * Math.cos(boundary.endAngle), y: boundary.center.y + boundary.radius * Math.sin(boundary.endAngle) }
+          const arc = boundary.endAngle - boundary.startAngle > Math.PI ? 1 : 0
+          paths.push(`M ${formatNumber(from.x * FIXED_CELL_SIZE)} ${formatNumber(from.y * FIXED_CELL_SIZE)} A ${formatNumber(boundary.radius * FIXED_CELL_SIZE)} ${formatNumber(boundary.radius * FIXED_CELL_SIZE)} 0 ${arc} 1 ${formatNumber(to.x * FIXED_CELL_SIZE)} ${formatNumber(to.y * FIXED_CELL_SIZE)}`)
+        }
+      }
+    }
+    return paths.length ? [`<path d="${paths.join(' ')}" fill="none" stroke="${escapeXml(fill)}" stroke-width="${formatNumber(thickness)}" stroke-linecap="round" stroke-linejoin="round"/>`] : []
+  }
   if (runtime.grid.type !== 'square') {
     const positions = buildTriangleWallPositions(runtime, thickness / FIXED_CELL_SIZE)
     const commands: string[] = []
@@ -207,7 +249,41 @@ function buildWalls(runtime: Maze, fill: string, thickness: number): string[] {
   return segments.map(segment => line(segment, fill, thickness))
 }
 
+/** Use the same route footprint as playback, including split rings and miters. */
+function buildPolarPaths(runtime: Maze, paths: Webgl2dPolarPath[]): string[] {
+  const groups = new Map<string, Webgl2dPolarPath[]>()
+  for (const path of [...paths].sort((a, b) => Number(a.layer !== 'subpath') - Number(b.layer !== 'subpath'))) {
+    const key = `${path.layer ?? 'path'}:${path.color}`
+    const group = groups.get(key) ?? []
+    group.push(path)
+    groups.set(key, group)
+  }
+  const parts: string[] = []
+  for (const group of groups.values()) {
+    const geometry = buildCircularPathGeometry(runtime, group)
+    const positions = geometry.getAttribute('position')
+    const commands: string[] = []
+    for (let index = 0; index < positions.count; index += 3) {
+      const coordinate = (offset: number) => `${formatNumber(positions.getX(offset) * FIXED_CELL_SIZE)} ${formatNumber(-positions.getY(offset) * FIXED_CELL_SIZE)}`
+      // Normalize winding so overlapping route pieces form a union in SVG,
+      // matching the double-sided triangles drawn by WebGL.
+      const area = (positions.getX(index + 1) - positions.getX(index)) * (positions.getY(index) - positions.getY(index + 2))
+        - (positions.getY(index) - positions.getY(index + 1)) * (positions.getX(index + 2) - positions.getX(index))
+      const middle = area < 0 ? index + 2 : index + 1
+      const last = area < 0 ? index + 1 : index + 2
+      commands.push(`M ${coordinate(index)} L ${coordinate(middle)} L ${coordinate(last)} Z`)
+    }
+    geometry.dispose()
+    if (commands.length > 0)
+      parts.push(`<path d="${commands.join(' ')}" fill="${escapeXml(group[0].color)}"/>`)
+  }
+  return parts
+}
+
 function buildPolylineSegments(runtime: Maze, polylines: MazePoint[][], stroke: string, widthRatio: number): string[] {
+  if (runtime.grid.type === 'circular') {
+    return buildPolarPaths(runtime, polylines.map(points => ({ points, color: stroke, width: widthRatio })))
+  }
   const parts: string[] = []
   for (const points of polylines) {
     if (points.length >= 2) {
@@ -246,7 +322,7 @@ function rect(x: number, y: number, width: number, height: number, fill: string)
 }
 
 function cellShape(cell: GridCell, fill: string): string {
-  if (!('orientation' in cell)) {
+  if (!('orientation' in cell) && !(cell instanceof CircularCell)) {
     return rect(cell.col * FIXED_CELL_SIZE, cell.row * FIXED_CELL_SIZE, FIXED_CELL_SIZE, FIXED_CELL_SIZE, fill)
   }
   const points = getCellPolygon(cell)

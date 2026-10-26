@@ -26,7 +26,7 @@ import {
   solveStartButton,
   solvingSelect,
 } from '../dom'
-import { distanceToSegment, getGridBounds, getSharedBoundary, hitTestCell } from '../grid-geometry'
+import { getGridBounds, getNearestCellEdge, hitTestCell } from '../grid-geometry'
 import { key } from '../point'
 import { render } from '../renderer'
 import { FIXED_CELL_SIZE } from '../types'
@@ -374,19 +374,12 @@ function getEditTarget(event: PointerEvent): MazeEditTarget | null {
   }
 
   if (runtime.grid.type !== 'square') {
-    const candidates = hitCell.getEdges().flatMap((edge) => {
-      const otherId = edge.getOther(hitCell)?.id
-      const other = otherId ? runtime.grid.getCell(otherId) : undefined
-      const boundary = other ? getSharedBoundary(hitCell, other) : null
-      return other && boundary
-        ? [{ boundary, distance: distanceToSegment(point, boundary), other }]
-        : []
-    }).sort((a, b) => a.distance - b.distance)
-    const candidate = candidates[0]
-    return candidate
+    const otherId = getNearestCellEdge(hitCell, point)?.getOther(hitCell)?.id
+    const other = otherId ? runtime.grid.getCell(otherId) : undefined
+    return other
       ? {
           from: { x: cellX, y: cellY },
-          to: { x: candidate.other.col, y: candidate.other.row },
+          to: { x: other.col, y: other.row },
           type: 'edge',
         }
       : null
