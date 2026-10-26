@@ -66,7 +66,8 @@ interface MazeFloodPayload extends MazeCellTransitionPayload {
 
 ```ts
 type MazeGenerationStep
-  = | MazePayloadStep<'carve', MazeCellTransitionPayload>
+  = | MazeStep<'generation.yield'>
+    | MazePayloadStep<'carve', MazeCellTransitionPayload>
     | MazePayloadStep<
       'close' | 'open' | 'generation.normalize.close',
       MazeEdgeCollectionPayload
@@ -77,12 +78,18 @@ type MazeGenerationStep
 
 | Type                         | Payload         | Meaning                                                  |
 | ---------------------------- | --------------- | -------------------------------------------------------- |
+| `generation.yield`           | None            | Cooperative planning checkpoint; no grid changes         |
 | `visit`                      | `{ from?, to }` | Reports a generation cursor visit without carving        |
 | `carve`                      | `{ from, to }`  | Opens the edge from the generated region to another cell |
 | `close`                      | `{ edges }`     | Closes one or more edge IDs                              |
 | `open`                       | `{ edges }`     | Opens one or more edge IDs                               |
 | `hunt-scan`                  | `{ row }`       | Reports a Hunt-and-Kill scan row                         |
 | `generation.normalize.close` | `{ edges }`     | Removes an open edge while normalizing a spanning tree   |
+
+Wilson emits `generation.yield` with empty patches and no payload during long
+planning walks. It counts as a playback step but changes no cells or edges.
+Renderers should retain the current visualization and may yield to their
+scheduler; calling `finish()` still runs synchronously to completion.
 
 Aldous-Broder uses patchless `visit` steps for its initial cursor position and
 for moves into previously visited cells. Reading `payload.to` on every step
@@ -98,20 +105,20 @@ cycles.
 
 ### Built-in Generation Emissions
 
-| Algorithm            | Primary step types   |
-| -------------------- | -------------------- |
-| `aldous-broder`      | `visit`, `carve`     |
-| `binary-tree`        | `carve`              |
-| `dfs`                | `visit`, `carve`     |
-| `eller`              | `carve`              |
-| `growing-tree`       | `carve`              |
-| `hunt-and-kill`      | `carve`, `hunt-scan` |
-| `kruskal`            | `carve`              |
-| `prim`               | `carve`              |
-| `recursive-division` | `close`              |
-| `sidewinder`         | `carve`              |
-| `traversal`          | `carve`              |
-| `wilson`             | `carve`              |
+| Algorithm            | Primary step types          |
+| -------------------- | --------------------------- |
+| `aldous-broder`      | `visit`, `carve`            |
+| `binary-tree`        | `carve`                     |
+| `dfs`                | `visit`, `carve`            |
+| `eller`              | `carve`                     |
+| `growing-tree`       | `carve`                     |
+| `hunt-and-kill`      | `carve`, `hunt-scan`        |
+| `kruskal`            | `carve`                     |
+| `prim`               | `carve`                     |
+| `recursive-division` | `close`                     |
+| `sidewinder`         | `carve`                     |
+| `traversal`          | `carve`                     |
+| `wilson`             | `generation.yield`, `carve` |
 
 The normalization wrapper may add the repair steps described above to any
 row.

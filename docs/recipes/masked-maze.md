@@ -1,10 +1,10 @@
 ---
-description: Exclude square, triangle, or hexagon grid cells with a boolean mask and generate a connected maze inside an application-defined shape.
+description: Exclude square, triangle, hexagon, or circular grid cells with a boolean mask and generate a connected maze inside an application-defined shape.
 ---
 
 # Generating a Shaped Maze
 
-A mask excludes cells from a square, triangular, or hexagonal grid. Use one when the maze
+A mask excludes cells from a square, triangular, hexagonal, or circular grid. Use one when the maze
 should follow a logo, room outline, image silhouette, or another custom shape.
 
 ## Describing the Shape
@@ -83,6 +83,25 @@ const hexMaze = createMaze({
 })
 ```
 
+Circular grids use `mask[ring][sector]`, with a single center cell and variable
+row lengths. Use the ring counts to construct a full mask before removing cells:
+
+```ts
+import { createCircularGrid } from 'mazely'
+
+const rings = 8
+const circularMask = createCircularGrid(rings).ringCellCounts.map(
+  count => Array.from({ length: count }, () => true),
+)
+const circularMaze = createMaze({
+  grid: { type: 'circular', rings, mask: circularMask },
+})
+circularMaze.generate('dfs').finish()
+```
+
+Omitted mask entries remove cells. Keep the remaining cells connected through
+actual circular edges, including inward/outward links at sector splits.
+
 ## Keeping Active Cells Connected
 
 Every active cell must be reachable from every other active cell through a
@@ -126,7 +145,7 @@ A point outside the grid or on an excluded cell throws a `RangeError`.
 
 A mask removes cells but does not change their topology. Use `type: 'square'`
 for four-sided cells, `type: 'triangle'` for alternating three-sided cells, or
-`type: 'hexagon'` for six-sided cells;
+`type: 'hexagon'` for six-sided cells, or `type: 'circular'` for ring sectors;
 the mask is interpreted using that grid's neighbor and edge rules.
 
 To persist a masked maze, store the mask next to the serialized topology. See

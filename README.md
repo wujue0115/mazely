@@ -15,9 +15,9 @@
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/mazely"><img src="https://img.shields.io/badge/npm-mazely-CB3837?logo=npm&logoColor=white" alt="mazely on npm"></a>
-  <a href="https://www.npmjs.com/package/mazely"><img src="https://img.shields.io/npm/v/mazely?label=version" alt="npm version"></a>
-  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT license"></a>
+  <a href="https://www.npmjs.com/package/mazely"><img src="https://img.shields.io/badge/npm-mazely-90F7FF?logo=npm&logoColor=white" alt="mazely on npm"></a>
+  <a href="https://www.npmjs.com/package/mazely"><img src="https://img.shields.io/npm/v/mazely?label=version&color=90F7FF" alt="npm version"></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-90F7FF.svg" alt="MIT license"></a>
 </p>
 
 <p align="center">
@@ -47,7 +47,9 @@ renderers.
 ## Built with Mazely
 
 - [Mazely Studio](https://studio.mazely.dev/) - an interactive maze playground
-  for generating, solving, editing, and visualizing mazes.
+  for generating, solving, editing, and visualizing mazes. Its image editor
+  supports image-shaped masks and draggable current-shape crops with cell-color
+  sampling. See the [image editor guide](docs/guide/image-editor.md).
 - [V-CONF × Mazely](https://v-conf.mazely.dev/) - interactive 3D Vue and Vite
   logo mazes for V-CONF.
 
