@@ -9,6 +9,7 @@ import {
   dimensionGrid,
   generationSelect,
   hexLayoutField,
+  hexLayoutSelect,
   hexOrientationField,
   lockGridRatioInput,
   mazeHeightField,
@@ -27,6 +28,7 @@ import {
   tabPanelSolve,
   tabSolve,
   triangleLayoutField,
+  triangleLayoutSelect,
   useViewportRatioInput,
   viewportRatioToggle,
 } from '../dom'
@@ -230,6 +232,14 @@ export function applyShape(nextShape: AppliedShape): void {
   stopSolveAnimation()
   clearGenerationPreviewState()
 
+  if (nextShape.topology?.type === 'triangle') {
+    app.triangleLayout = nextShape.topology.layout
+    triangleLayoutSelect.value = app.triangleLayout
+  }
+  if (nextShape.topology?.type === 'hexagon') {
+    app.hexLayout = nextShape.topology.layout
+    hexLayoutSelect.value = app.hexLayout
+  }
   app.shape = nextShape
   app.mazeWidth = app.gridType === 'circular'
     ? nextShape.rows
@@ -243,10 +253,12 @@ export function applyShape(nextShape: AppliedShape): void {
   app.mazeHeight = nextShape.rows
   app.hasValidGridDimensions = true
   rebuildMazeForShapeChange()
-  showToast((app.gridType === 'triangle' && app.triangleLayout === 'triangle')
-    || (app.gridType === 'hexagon' && app.hexLayout === 'hexagon')
-    ? `Shape applied — ${app.gridType === 'hexagon' ? 'hexagon' : 'triangle'} size ${nextShape.size ?? nextShape.rows}.`
-    : `Shape applied — ${nextShape.cols}×${nextShape.rows} grid.`)
+  showToast(app.gridType === 'circular'
+    ? `Image colors applied — ${nextShape.rows} rings.`
+    : (app.gridType === 'triangle' && app.triangleLayout === 'triangle')
+      || (app.gridType === 'hexagon' && app.hexLayout === 'hexagon')
+        ? `Shape applied — ${app.gridType === 'hexagon' ? 'hexagon' : 'triangle'} size ${nextShape.size ?? nextShape.rows}.`
+        : `Shape applied — ${nextShape.cols}×${nextShape.rows} grid.`)
 }
 
 export function clearShape(): void {
@@ -297,14 +309,15 @@ function rebuildMazeForShapeChange(): void {
 
 export function syncShapePanel(): void {
   const activeShape = app.shape
+  shapeEditButton.textContent = app.gridType === 'circular' ? 'Edit image' : 'Edit shape'
   shapeUploadButton.classList.remove('is-hidden')
   shapeStatus.textContent = activeShape
     ? app.gridType === 'circular'
-      ? `Shape active — ${activeShape.rows} rings.`
+      ? `Image colors active — ${activeShape.rows} rings.`
       : app.gridType === 'triangle' && app.triangleLayout === 'triangle'
         ? `Shape active — triangle size ${activeShape.size ?? activeShape.rows}.`
         : `Shape active — ${activeShape.cols}×${activeShape.rows} cells.`
-    : 'Full grid — upload an image to shape the maze.'
+    : app.gridType === 'circular' ? 'Full circle — upload an image for colors.' : 'Full grid — upload an image to shape the maze.'
   shapeStatus.classList.toggle('is-shaped', activeShape !== null)
   shapeEditButton.classList.toggle('is-hidden', !app.shapeEditor?.hasSource())
   shapeClearButton.classList.toggle('is-hidden', activeShape === null)

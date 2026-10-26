@@ -1,12 +1,29 @@
 import { createMaze } from 'mazely'
 import { describe, expect, it } from 'vitest'
 import { getPolarBoundaries } from '../src/lib/grid-geometry'
-import { buildCellColors, buildCellMask, findMaskRegions, findShapeCellAtPixel, getShapeGridDimensions, keepLargestMaskRegion, setShapeCellPixels } from '../src/lib/shape-mask'
+import { buildAutoPixelMask, buildCellColors, buildCellMask, findMaskRegions, findShapeCellAtPixel, getShapeGridDimensions, keepLargestMaskRegion, setShapeCellPixels } from '../src/lib/shape-mask'
 import { buildCircularWallGeometry } from '../src/lib/webgl-2d-view'
 
 const topology = { type: 'circular' } as const
 
 describe('circular image shapes', () => {
+  it.each([0, 255])('keeps a full circle when the image background alpha is %i', (alpha) => {
+    const data = new Uint8ClampedArray(20 * 20 * 4)
+    for (let y = 0; y < 20; y += 1) {
+      for (let x = 0; x < 20; x += 1) {
+        const foreground = x >= 8 && x < 12 && y >= 8 && y < 12
+        data.set(foreground ? [255, 0, 0, 255] : [255, 255, 255, alpha], (y * 20 + x) * 4)
+      }
+    }
+    const image = { data, width: 20, height: 20 } as ImageData
+    const pixels = buildAutoPixelMask(image, 32, topology)
+    const mask = buildCellMask(pixels, 12, 3, topology)
+    const runtime = createMaze({ grid: { type: 'circular', rings: 3, mask } })
+    expect(runtime.grid.cells).toHaveLength(19)
+    expect(mask.every(row => row.every(Boolean))).toBe(true)
+    expect(buildAutoPixelMask(image, 32).data[0]).toBe(0)
+  })
+
   it('fits a round grid into a rectangular image and samples all sectors', () => {
     const pixels = { width: 120, height: 100, data: new Uint8Array(12000).fill(1) }
     const dimensions = getShapeGridDimensions(120, 100, 3, topology)

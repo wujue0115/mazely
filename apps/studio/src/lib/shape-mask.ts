@@ -44,7 +44,10 @@ const ALPHA_OPAQUE_THRESHOLD = 128
  * fill from the borders, treating pixels close to the border color (within
  * `colorThreshold`, 0-255 per-channel distance) as background.
  */
-export function buildAutoPixelMask(image: ImageData, colorThreshold: number): PixelMask {
+export function buildAutoPixelMask(image: ImageData, colorThreshold: number, topology: ShapeGridTopology = SQUARE_TOPOLOGY): PixelMask {
+  if (topology.type === 'circular') {
+    return { data: new Uint8Array(image.width * image.height).fill(1), width: image.width, height: image.height }
+  }
   if (hasMeaningfulAlpha(image)) {
     return buildAlphaPixelMask(image)
   }

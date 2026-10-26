@@ -134,7 +134,7 @@ import {
 } from './lib/dom'
 import { buildExportFilename, downloadBlob } from './lib/export-image'
 import { getFrontierRouteSegments } from './lib/frontier-routes'
-import { getOverlayScale } from './lib/grid-geometry'
+import { getGridBounds, getOverlayScale } from './lib/grid-geometry'
 import { shouldConfirmMazeReplacement } from './lib/maze-replacement'
 import { key, parsePointKey } from './lib/point'
 import {
@@ -345,7 +345,13 @@ for (const keyName of Object.keys(visibilityButtonByKey) as StyleKey[]) {
 styleResetButton.addEventListener('click', resetStyleTheme)
 
 app.shapeEditor = initShapeEditor({
-  getDefaultCols: () => 60,
+  getGridAspectRatio: () => {
+    if (!app.mazeRuntime)
+      return 1
+    const bounds = getGridBounds(app.mazeRuntime)
+    return bounds.width / bounds.height
+  },
+  getDefaultCols: () => app.gridType === 'circular' ? 30 : 60,
   getGridTopology: () => app.gridType === 'triangle'
     ? { layout: app.triangleLayout, type: 'triangle' }
     : app.gridType === 'hexagon'
@@ -465,15 +471,8 @@ function getExportSolveFrontierTrails() {
     : getSolveFrontierTrails(heads)
 }
 
-shapeUploadButton.addEventListener('click', async () => {
-  if (await prepareImageShapeLayout()) {
-    shapeFileInput.click()
-  }
-})
-shapeEditButton.addEventListener('click', async () => {
-  if (!(await prepareImageShapeLayout())) {
-    return
-  }
+shapeUploadButton.addEventListener('click', () => shapeFileInput.click())
+shapeEditButton.addEventListener('click', () => {
   if (!app.shapeEditor?.reopen()) {
     shapeFileInput.click()
   }
@@ -491,38 +490,6 @@ interface GridReplacementDialogOptions {
 
 async function confirmGridReplacement(options: GridReplacementDialogOptions): Promise<boolean> {
   return !shouldConfirmMazeReplacement(app) || confirmMazeReplacement(options)
-}
-
-async function prepareImageShapeLayout(): Promise<boolean> {
-  if (app.gridType === 'hexagon' && app.hexLayout === 'hexagon') {
-    const confirmed = await confirmGridReplacement({
-      message: 'Image-shaped Hexagon mazes require the rectangular layout. Continuing will discard the current maze.',
-      title: 'Use rectangular Hexagon layout?',
-    })
-    if (!confirmed) {
-      return false
-    }
-
-    hexLayoutSelect.value = 'rectangle'
-    setHexLayout('rectangle')
-    return true
-  }
-
-  if (app.gridType !== 'triangle' || app.triangleLayout === 'rectangle') {
-    return true
-  }
-
-  const confirmed = await confirmGridReplacement({
-    message: 'Image-shaped Triangle mazes require the rectangular layout. Continuing will discard the current maze.',
-    title: 'Use rectangular Triangle layout?',
-  })
-  if (!confirmed) {
-    return false
-  }
-
-  triangleLayoutSelect.value = 'rectangle'
-  setTriangleLayout('rectangle')
-  return true
 }
 
 railWorkbenchButton.addEventListener('click', () => togglePanel('workbench'))
