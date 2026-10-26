@@ -1,3 +1,5 @@
+export type { CircularGrid } from './circular-grid'
+export { buildRingCellCounts, createCircularGrid } from './circular-grid'
 export type { HexGrid, HexGridMask } from './hex-grid'
 export { createHexGrid } from './hex-grid'
 export type { SerializedMaze } from './serialize'

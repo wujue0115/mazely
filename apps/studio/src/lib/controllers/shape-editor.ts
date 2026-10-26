@@ -1,5 +1,6 @@
 import type { MazePoint } from '../maze-types'
 import type { CellColors, CellMask, PixelMask, ShapeGridTopology } from '../shape-mask'
+import { buildRingCellCounts } from 'mazely'
 import { TRIANGLE_RECTANGLE_VISUAL_COLS_MAX } from '../grid-geometry'
 import {
   buildAutoPixelMask,
@@ -16,6 +17,7 @@ import {
   setShapeCellPixels,
 } from '../shape-mask'
 import {
+  CIRCULAR_RING_MAX,
   clamp,
   getContext2d,
   getWheelZoomFactor,
@@ -529,6 +531,8 @@ export function initShapeEditor(options: ShapeEditorOptions): ShapeEditorApi {
   }
 
   function getSizeMax(nextTopology: ShapeGridTopology): number {
+    if (nextTopology.type === 'circular')
+      return CIRCULAR_RING_MAX
     if (nextTopology.type === 'hexagon' && nextTopology.layout === 'hexagon') {
       return HEX_OUTER_SIZE_MAX
     }
@@ -542,10 +546,12 @@ export function initShapeEditor(options: ShapeEditorOptions): ShapeEditorApi {
     statRegions.textContent = String(regionCount)
     const outerLayout = (topology.type === 'triangle' && topology.layout === 'triangle')
       || (topology.type === 'hexagon' && topology.layout === 'hexagon')
-    sizeLabel.textContent = outerLayout ? 'SIDE SIZE' : 'WIDTH (CELLS)'
-    gridLabel.textContent = outerLayout
-      ? `${topology.type === 'hexagon' ? 'Hexagon' : 'Triangle'} size ${topology.type === 'hexagon' ? (rows + 1) / 2 : rows} · ${cellCount} kept cells`
-      : `${cols} × ${rows} cells`
+    sizeLabel.textContent = topology.type === 'circular' ? 'RINGS' : outerLayout ? 'SIDE SIZE' : 'WIDTH (CELLS)'
+    gridLabel.textContent = topology.type === 'circular'
+      ? `${rows} rings · ${cellCount} kept cells`
+      : outerLayout
+        ? `${topology.type === 'hexagon' ? 'Hexagon' : 'Triangle'} size ${topology.type === 'hexagon' ? (rows + 1) / 2 : rows} · ${cellCount} kept cells`
+        : `${cols} × ${rows} cells`
     meta.textContent = sourceName
       ? `${sourceName} · ${pixelMask?.width ?? 0}×${pixelMask?.height ?? 0}px`
       : ''
@@ -752,6 +758,18 @@ export function initShapeEditor(options: ShapeEditorOptions): ShapeEditorApi {
     const startCol = clamp(target.x - halfBefore, 0, Math.max(0, cols - blockCells))
     const startRow = clamp(target.y - halfBefore, 0, Math.max(0, rows - blockCells))
     const cells: MazePoint[] = []
+    if (topology.type === 'circular') {
+      const counts = buildRingCellCounts(rows)
+      const angle = (target.x + 0.5) / counts[target.y]
+      for (let row = startRow; row <= Math.min(rows - 1, startRow + blockCells - 1); row += 1) {
+        const count = counts[row]
+        const center = Math.floor(angle * count)
+        for (let i = 0; i < Math.min(blockCells, count); i += 1) {
+          cells.push({ x: (center - halfBefore + i + count * blockCells) % count, y: row })
+        }
+      }
+      return cells
+    }
     for (let row = startRow; row <= Math.min(rows - 1, startRow + blockCells - 1); row += 1) {
       for (let col = startCol; col <= Math.min(cols - 1, startCol + blockCells - 1); col += 1) {
         if (getShapeCellPolygon(mask, col, row, cols, rows, topology)) {

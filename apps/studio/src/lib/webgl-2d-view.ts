@@ -2,6 +2,8 @@ import type { Maze, MazeEdge } from 'mazely'
 import type { MazePoint } from './maze-types'
 import { HexCell, TriangleCell } from 'mazely'
 import * as THREE from 'three'
+import { CircularCellGeometry } from './circular-cell-geometry'
+import { CircularWallGeometry } from './circular-wall-geometry'
 import {
   getCellBoundarySegments,
   getCellCenter,
@@ -13,9 +15,14 @@ import {
   TRIANGLE_HEIGHT,
   visitClosedWalls,
 } from './grid-geometry'
+import { getPolarArcSegments } from './polar-resolution'
 import { countGridLines, visitReferenceGridLines } from './runtime'
 import { FIXED_CELL_SIZE } from './types'
 import { getViewportPixelRatio } from './utils'
+
+const CELL_Z = 0
+const WALL_Z = 0.01
+const LINE_Z = 0.02
 
 function createTriangleGeometry(): THREE.BufferGeometry {
   const geometry = new THREE.BufferGeometry()
@@ -50,12 +57,227 @@ function createHexGeometry(): THREE.BufferGeometry {
   return geometry
 }
 
+/** Builds fixed polar wall buffers; call syncVisibility after carving. */
+export function buildCircularWallGeometry(runtime: Maze, thickness: number, z = WALL_Z): CircularWallGeometry {
+  return new CircularWallGeometry(runtime, thickness, undefined, z)
+}
+
+export function buildCircularPathGeometry(runtime: Maze, paths: Webgl2dPolarPath[]): THREE.BufferGeometry {
+  const positions: number[] = []
+  const colors: number[] = []
+  const joins = new Map<string, { color: string, count: number, point: { x: number, y: number }, width: number, z: number }>()
+  const color = new THREE.Color()
+  let pathZ = LINE_Z
+  const triangle = (a: { x: number, y: number }, b: { x: number, y: number }, c: { x: number, y: number }, value: string) => {
+    positions.push(a.x, -a.y, pathZ, b.x, -b.y, pathZ, c.x, -c.y, pathZ)
+    color.set(value)
+    for (let index = 0; index < 3; index += 1) colors.push(color.r, color.g, color.b)
+  }
+  let routeIndex = 0
+  const addJoin = (point: { x: number, y: number }, width: number, value: string) => {
+    const key = `${routeIndex}:${point.x.toFixed(6)}:${point.y.toFixed(6)}`
+    const existing = joins.get(key)
+    joins.set(key, existing
+      ? { ...existing, count: existing.count + 1 }
+      : { color: value, count: 1, point, width, z: pathZ })
+  }
+  const line = (from: { x: number, y: number }, to: { x: number, y: number }, width: number, value: string) => {
+    const dx = to.x - from.x
+    const dy = to.y - from.y
+    const length = Math.hypot(dx, dy)
+    if (length < 1e-6)
+      return
+    const nx = -dy / length * width / 2
+    const ny = dx / length * width / 2
+    const a = { x: from.x + nx, y: from.y + ny }
+    const b = { x: from.x - nx, y: from.y - ny }
+    const c = { x: to.x - nx, y: to.y - ny }
+    const d = { x: to.x + nx, y: to.y + ny }
+    triangle(a, b, c, value)
+    triangle(a, c, d, value)
+    addJoin(from, width, value)
+    addJoin(to, width, value)
+  }
+  const arc = (center: { x: number, y: number }, radius: number, start: number, end: number, width: number, value: string) => {
+    const delta = (end - start + Math.PI * 3) % (Math.PI * 2) - Math.PI
+    if (Math.abs(delta) < 1e-6)
+      return
+    const steps = getPolarArcSegments(radius, delta)
+    const inner = Math.max(0, radius - width / 2)
+    const outer = radius + width / 2
+    const point = (r: number, angle: number) => ({ x: center.x + r * Math.cos(angle), y: center.y + r * Math.sin(angle) })
+    for (let index = 0; index < steps; index += 1) {
+      const a = start + delta * index / steps
+      const b = start + delta * (index + 1) / steps
+      const p1 = point(inner, a)
+      const p2 = point(outer, a)
+      const p3 = point(outer, b)
+      const p4 = point(inner, b)
+      triangle(p1, p2, p3, value)
+      triangle(p1, p3, p4, value)
+    }
+    addJoin({ x: center.x + radius * Math.cos(start), y: center.y + radius * Math.sin(start) }, width, value)
+    addJoin({ x: center.x + radius * Math.cos(end), y: center.y + radius * Math.sin(end) }, width, value)
+  }
+  if (runtime.grid.type !== 'circular')
+    return new THREE.BufferGeometry()
+  type PolarCell = import('mazely').CircularCell
+  interface PolarPort {
+    /** A radial wall is reached on the cell's annular centerline. */
+    kind: 'angular' | 'radial'
+    angle: number
+    radius: number
+  }
+  const centerOf = (cell: PolarCell) => ({ x: cell.worldX, y: cell.worldY })
+  const midpointAngle = (cell: PolarCell) => (cell.startAngle + cell.endAngle) / 2
+  const midpointRadius = (cell: PolarCell) => (cell.innerRadius + cell.outerRadius) / 2
+  const pointAt = (cell: PolarCell, radius: number, angle: number) => ({
+    x: cell.worldX + radius * Math.cos(angle),
+    y: cell.worldY + radius * Math.sin(angle),
+  })
+  const samePoint = (a: { x: number, y: number }, b: { x: number, y: number }) => Math.hypot(a.x - b.x, a.y - b.y) < 1e-6
+  const commonEdge = (left: PolarCell, right: PolarCell): MazeEdge | undefined =>
+    left.getEdges().find(edge => edge.getOther(left)?.id === right.id)
+  const portBetween = (left: PolarCell, right: PolarCell): PolarPort | null => {
+    const edge = commonEdge(left, right)
+    if (!edge)
+      return null
+    if (left.ring === right.ring) {
+      // This doorway lies on a radial wall. Its centerline point is shared by
+      // both cells, rather than either sector's angular midpoint.
+      const angle = left.clockwise === edge ? left.endAngle : left.startAngle
+      return { angle, kind: 'angular', radius: midpointRadius(left) }
+    }
+    // A split or merge doorway is on an annular wall. The selected outer
+    // sector determines its angle; this is what prevents a parent cell from
+    // drawing a false spoke towards a sibling sector.
+    const outer = left.ring > right.ring ? left : right
+    const inner = left.ring < right.ring ? left : right
+    return { angle: midpointAngle(outer), kind: 'radial', radius: inner.outerRadius }
+  }
+  const portPoint = (cell: PolarCell, port: PolarPort) => pointAt(cell, port.radius, port.angle)
+  const throughCell = (
+    cell: PolarCell,
+    from: PolarPort,
+    to: PolarPort,
+    width: number,
+    value: string,
+  ) => {
+    const center = centerOf(cell)
+    const mid = midpointRadius(cell)
+    const fromPoint = portPoint(cell, from)
+    const toPoint = portPoint(cell, to)
+    if (cell.ring === 0) {
+      line(fromPoint, center, width, value)
+      line(center, toPoint, width, value)
+      return
+    }
+    const fromMid = pointAt(cell, mid, from.angle)
+    const toMid = pointAt(cell, mid, to.angle)
+    if (samePoint(fromPoint, toPoint))
+      return
+    if (from.kind === 'angular' && to.kind === 'angular') {
+      arc(center, mid, from.angle, to.angle, width, value)
+      return
+    }
+    if (from.kind === 'radial' && to.kind === 'radial') {
+      if (!samePoint(fromPoint, fromMid))
+        line(fromPoint, fromMid, width, value)
+      if (Math.abs(from.angle - to.angle) > 1e-6)
+        arc(center, mid, from.angle, to.angle, width, value)
+      if (!samePoint(toMid, toPoint))
+        line(toMid, toPoint, width, value)
+      return
+    }
+    if (from.kind === 'angular') {
+      if (Math.abs(from.angle - to.angle) > 1e-6)
+        arc(center, mid, from.angle, to.angle, width, value)
+      if (!samePoint(toMid, toPoint))
+        line(toMid, toPoint, width, value)
+      return
+    }
+    if (!samePoint(fromPoint, fromMid))
+      line(fromPoint, fromMid, width, value)
+    if (Math.abs(from.angle - to.angle) > 1e-6)
+      arc(center, mid, from.angle, to.angle, width, value)
+  }
+  const startOrEnd = (cell: PolarCell, port: PolarPort, atStart: boolean, width: number, value: string) => {
+    const mid = midpointRadius(cell)
+    const centralPort: PolarPort = {
+      angle: cell.ring === 0 ? port.angle : midpointAngle(cell),
+      kind: 'angular',
+      radius: cell.ring === 0 ? 0 : mid,
+    }
+    if (cell.ring === 0) {
+      const center = centerOf(cell)
+      line(center, portPoint(cell, port), width, value)
+      return
+    }
+    if (atStart)
+      throughCell(cell, centralPort, port, width, value)
+    else throughCell(cell, port, centralPort, width, value)
+  }
+  for (const [index, path] of paths.entries()) {
+    routeIndex = index
+    // Keep exploratory trails behind the selected/active route. They may share
+    // a branch point, but must never depth-fight or paint over the main path.
+    pathZ = path.layer === 'subpath' ? LINE_Z - 0.001 : LINE_Z
+    const pathCells = path.points.map(point => runtime.grid.getCell(`${point.y}:${point.x}`))
+    if (pathCells.some(cell => !cell || !('ring' in cell)))
+      continue
+    const cells = pathCells as PolarCell[]
+    if (cells.length < 2)
+      continue
+    const ports = cells.slice(0, -1).map((cell, cellIndex) => portBetween(cell, cells[cellIndex + 1]))
+    if (ports.some(port => !port))
+      continue
+    const resolvedPorts = ports as PolarPort[]
+    startOrEnd(cells[0], resolvedPorts[0], true, path.width, path.color)
+    for (let cellIndex = 1; cellIndex < cells.length - 1; cellIndex += 1) {
+      throughCell(cells[cellIndex], resolvedPorts[cellIndex - 1], resolvedPorts[cellIndex], path.width, path.color)
+    }
+    startOrEnd(cells[cells.length - 1], resolvedPorts[resolvedPorts.length - 1], false, path.width, path.color)
+  }
+  // Polar path joins are crisp radial/tangential square miters. They make a
+  // single continuous route rather than a collection of protruding strokes.
+  const origin = runtime.grid.rows
+  for (const { color: value, count, point: center, width, z } of joins.values()) {
+    if (count < 2)
+      continue
+    pathZ = z
+    if (Math.hypot(center.x - origin, center.y - origin) < 1e-6)
+      continue
+    const angle = Math.atan2(center.y - origin, center.x - origin)
+    const half = width / 2
+    const radial = { x: Math.cos(angle), y: Math.sin(angle) }
+    const tangent = { x: -radial.y, y: radial.x }
+    const point = (r: number, t: number) => ({ x: center.x + radial.x * r + tangent.x * t, y: center.y + radial.y * r + tangent.y * t })
+    const a = point(-half, -half)
+    const b = point(-half, half)
+    const c = point(half, half)
+    const d = point(half, -half)
+    triangle(a, b, c, value)
+    triangle(a, c, d, value)
+  }
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3))
+  return geometry
+}
+
 export interface Webgl2dOverlaySegment {
   from: MazePoint
   to: MazePoint
   color: string
   width: number
   cap?: 'butt' | 'square'
+}
+
+export interface Webgl2dPolarPath {
+  points: MazePoint[]
+  color: string
+  width: number
+  layer?: 'path' | 'subpath'
 }
 
 export interface Webgl2dOverlayDot {
@@ -90,6 +312,7 @@ export interface Webgl2dViewState {
   gridWidth: number
   cellKey: string
   segments: Webgl2dOverlaySegment[]
+  polarPaths: Webgl2dPolarPath[]
   dots: Webgl2dOverlayDot[]
   rings: Webgl2dOverlayRing[]
   hintSegments: Webgl2dOverlaySegment[]
@@ -108,10 +331,7 @@ export interface Webgl2dViewState {
   viewportHeight: number
 }
 
-const CELL_Z = 0
-const WALL_Z = 0.01
 const GRID_Z = WALL_Z + 0.001
-const LINE_Z = 0.02
 const DOT_Z = 0.03
 const HINT_FILL_Z = 0.045
 const HINT_BORDER_Z = 0.055
@@ -657,6 +877,7 @@ export class Webgl2dMazeView {
   private readonly discGeometry = new THREE.CircleGeometry(1, 24)
   private readonly ringGeometry = new THREE.RingGeometry(0.86, 1, 32)
   private readonly cellMaterial = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide })
+  private readonly circularCellMaterial = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide, vertexColors: true })
   private readonly gridMaterial = new THREE.MeshBasicMaterial({
     depthWrite: false,
     opacity: 0.58,
@@ -666,6 +887,7 @@ export class Webgl2dMazeView {
 
   private readonly wallMaterial = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide })
   private readonly overlayLineMaterial = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide })
+  private readonly circularPathMaterial = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide, vertexColors: true })
   private readonly overlayDotMaterial = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide })
   private readonly overlayRingMaterial = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide })
   private readonly hintLineMaterial = new THREE.MeshBasicMaterial({ opacity: 0.28, side: THREE.DoubleSide, transparent: true })
@@ -675,13 +897,16 @@ export class Webgl2dMazeView {
   private readonly startMaterial = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide })
   private readonly endMaterial = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide })
   private readonly triangleWallMesh = new THREE.Mesh(new THREE.BufferGeometry(), this.wallMaterial)
+  private readonly circularWallMesh = new THREE.Mesh(new THREE.BufferGeometry(), this.wallMaterial)
 
   private cellMesh: THREE.InstancedMesh | null = null
+  private circularCellMesh: THREE.Mesh<CircularCellGeometry> | null = null
   private gridMesh: THREE.Mesh | null = null
   private gridRuntime: Maze | null = null
   private gridWidth = 0
   private wallMesh: THREE.InstancedMesh | null = null
   private overlayLineMesh: THREE.InstancedMesh | null = null
+  private readonly circularPathMesh = new THREE.Mesh(new THREE.BufferGeometry(), this.circularPathMaterial)
   private overlayDotMesh: THREE.InstancedMesh | null = null
   private overlayRingMesh: THREE.InstancedMesh | null = null
   private hintLineMesh: THREE.InstancedMesh | null = null
@@ -693,7 +918,9 @@ export class Webgl2dMazeView {
   private cellRuntime: Maze | null = null
   private wallRuntime: Maze | null = null
   private lastWallKey = ''
+  private circularCellRuntime: Maze | null = null
   private lastCellKey = ''
+  private overlayRuntime: Maze | null = null
   private lastOverlayKey = ''
   private cellGridType = ''
   private visible = false
@@ -710,7 +937,7 @@ export class Webgl2dMazeView {
     this.camera.lookAt(0, 0, 0)
     this.scene.add(this.mazeGroup)
     this.triangleWallMesh.frustumCulled = false
-    this.mazeGroup.add(this.triangleWallMesh, this.startMesh, this.endMesh)
+    this.mazeGroup.add(this.triangleWallMesh, this.circularWallMesh, this.circularPathMesh, this.startMesh, this.endMesh)
     this.resize()
   }
 
@@ -748,8 +975,9 @@ export class Webgl2dMazeView {
   }
 
   sync(state: Webgl2dViewState): void {
-    this.ensureCellMesh(state.runtime.grid.cells.length, state.runtime.grid.type)
-    this.ensureWallMesh(state.runtime.grid.cells.length * 6)
+    const cells = state.runtime.grid.type === 'circular' ? 1 : state.runtime.grid.cells.length
+    this.ensureCellMesh(cells, state.runtime.grid.type)
+    this.ensureWallMesh(cells * 6)
     this.syncCamera(state)
     this.syncCellsIfNeeded(state)
     this.syncGrid(state)
@@ -876,6 +1104,29 @@ export class Webgl2dMazeView {
     this.cellRuntime = state.runtime
     this.lastCellKey = state.cellKey
 
+    if (state.runtime.grid.type === 'circular') {
+      this.cellMesh!.visible = false
+      if (!this.circularCellMesh || this.circularCellRuntime !== state.runtime) {
+        if (this.circularCellMesh) {
+          this.mazeGroup.remove(this.circularCellMesh)
+          this.circularCellMesh.geometry.dispose()
+        }
+        this.circularCellMesh = new THREE.Mesh(
+          new CircularCellGeometry(state.runtime.grid.cells, 'xy'),
+          this.circularCellMaterial,
+        )
+        this.circularCellMesh.frustumCulled = false
+        this.mazeGroup.add(this.circularCellMesh)
+        this.circularCellRuntime = state.runtime
+      }
+      this.circularCellMesh.visible = true
+      this.circularCellMesh.geometry.updateColors(state.getCellColor)
+      return
+    }
+    if (this.circularCellMesh)
+      this.circularCellMesh.visible = false
+    this.cellMesh!.visible = true
+
     const mesh = this.cellMesh!
     const matrix = new THREE.Matrix4()
     const color = new THREE.Color()
@@ -908,8 +1159,8 @@ export class Webgl2dMazeView {
     const runtimeState = state.runtime.getState()
     const wallKey = [
       runtimeState.phase,
-      runtimeState.index,
-      runtimeState.done,
+      runtimeState.phase === 'generate' ? runtimeState.index : '',
+      runtimeState.phase === 'generate' ? runtimeState.done : '',
       state.wallThickness,
       state.wallRevision,
       state.wallsVisible,
@@ -926,6 +1177,7 @@ export class Webgl2dMazeView {
     if (!state.wallsVisible) {
       mesh.count = 0
       this.triangleWallMesh.visible = false
+      this.circularWallMesh.visible = false
       this.lastWallKey = wallKey
       return
     }
@@ -937,30 +1189,51 @@ export class Webgl2dMazeView {
       const dy = -(toY - fromY)
       const length = Math.hypot(dx, dy)
       matrix.makeRotationZ(Math.atan2(dy, dx))
+      // Closed-wall segments overlap by one wall width. This is the same
+      // coverage a round stroke gets at a join and prevents sub-pixel gaps at
+      // polar arc/radial junctions without using pointed miter patches.
       matrix.scale(new THREE.Vector3(length + thickness, thickness, 1))
       matrix.setPosition((fromX + toX) / 2, -(fromY + toY) / 2, WALL_Z)
       mesh.setMatrixAt(index, matrix)
       index += 1
     }
 
-    if (state.runtime.grid.type !== 'square') {
+    if (state.runtime.grid.type === 'triangle' || state.runtime.grid.type === 'hexagon') {
       mesh.count = 0
     }
-    else {
+    else if (state.runtime.grid.type !== 'circular') {
       visitClosedWalls(state.runtime, segment =>
         addWall(segment.from.x, segment.from.y, segment.to.x, segment.to.y))
       mesh.count = index
+    }
+    else {
+      mesh.count = 0
+    }
+
+    const circularWallMesh = this.circularWallMesh
+    if (circularWallMesh) {
+      circularWallMesh.visible = state.runtime.grid.type === 'circular'
+      if (circularWallMesh.visible) {
+        const geometry = circularWallMesh.geometry
+        if (geometry instanceof CircularWallGeometry && geometry.runtime === state.runtime && geometry.thickness === thickness) {
+          geometry.syncVisibility()
+        }
+        else {
+          geometry.dispose()
+          circularWallMesh.geometry = buildCircularWallGeometry(state.runtime, thickness)
+        }
+      }
     }
 
     this.triangleWallMesh.geometry.dispose()
     this.triangleWallMesh.geometry = new THREE.BufferGeometry()
     this.triangleWallMesh.geometry.setAttribute('position', new THREE.BufferAttribute(
-      state.runtime.grid.type !== 'square'
+      state.runtime.grid.type === 'triangle' || state.runtime.grid.type === 'hexagon'
         ? buildTriangleWallPositions(state.runtime, thickness)
         : new Float32Array(),
       3,
     ))
-    this.triangleWallMesh.visible = state.runtime.grid.type !== 'square'
+    this.triangleWallMesh.visible = state.runtime.grid.type === 'triangle' || state.runtime.grid.type === 'hexagon'
     mesh.instanceMatrix.needsUpdate = true
   }
 
@@ -984,9 +1257,10 @@ export class Webgl2dMazeView {
   }
 
   private syncOverlaysIfNeeded(state: Webgl2dViewState): void {
-    if (this.lastOverlayKey === state.overlayKey) {
+    if (this.overlayRuntime === state.runtime && this.lastOverlayKey === state.overlayKey) {
       return
     }
+    this.overlayRuntime = state.runtime
     this.lastOverlayKey = state.overlayKey
 
     this.ensureOverlayMeshes(state)
@@ -996,6 +1270,9 @@ export class Webgl2dMazeView {
     const lineMesh = this.overlayLineMesh
     if (lineMesh) {
       let index = 0
+      // Ordered solver/generation routes are removed from `segments` upstream
+      // and drawn by circularPathMesh. Keep the remaining independent overlay
+      // segments (frontiers, edit hints, Kruskal edges) visible in circular mode.
       for (const segment of state.segments) {
         const from = getPointCenter(state.runtime, segment.from)
         const to = getPointCenter(state.runtime, segment.to)
@@ -1020,6 +1297,11 @@ export class Webgl2dMazeView {
         lineMesh.instanceColor.needsUpdate = true
       }
     }
+    this.circularPathMesh.visible = state.runtime.grid.type === 'circular'
+    if (this.circularPathMesh.visible) {
+      this.circularPathMesh.geometry.dispose()
+      this.circularPathMesh.geometry = buildCircularPathGeometry(state.runtime, state.polarPaths)
+    }
 
     const dotMesh = this.overlayDotMesh
     if (dotMesh) {
@@ -1032,6 +1314,9 @@ export class Webgl2dMazeView {
         dotMesh.setColorAt(index, color.set(dot.color))
         index += 1
       }
+      // Square-grid overlays deliberately use square caps. Polar paths turn at
+      // arbitrary angles, so cover every segment endpoint with a disc to make
+      // joins and caps visually round rather than pointed.
       dotMesh.count = index
       dotMesh.instanceMatrix.needsUpdate = true
       if (dotMesh.instanceColor) {

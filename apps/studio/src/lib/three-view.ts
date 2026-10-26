@@ -1,8 +1,11 @@
 import type { Maze } from 'mazely'
 import type { MazePoint } from './maze-types'
+import type { Webgl2dPolarPath } from './webgl-2d-view'
 import { HexCell, TriangleCell } from 'mazely'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
+import { CircularCellGeometry } from './circular-cell-geometry'
+import { CircularWallGeometry } from './circular-wall-geometry'
 import {
   getCellCenter,
   getGridBounds,
@@ -19,7 +22,7 @@ import {
   getMazeScaledWheelZoomStep,
   getViewportPixelRatio,
 } from './utils'
-import { buildTriangleWallPositionChunks } from './webgl-2d-view'
+import { buildCircularPathGeometry, buildTriangleWallPositionChunks } from './webgl-2d-view'
 
 /** Grid-adjacent line segment drawn flat on the floor (2D trail/path lines). */
 export interface ThreeOverlaySegment {
@@ -40,6 +43,8 @@ export interface ThreeOverlayDot {
 
 export interface ThreeViewSyncState {
   runtime: Maze
+  cellKey?: string
+  overlayKey?: string
   /** Wall height in world units (1 unit = one cell). */
   wallHeight: number
   /** Wall thickness in world units. */
@@ -53,6 +58,7 @@ export interface ThreeViewSyncState {
   gridWidth: number
   segments: ThreeOverlaySegment[]
   dots: ThreeOverlayDot[]
+  polarPaths?: Webgl2dPolarPath[]
   start: MazePoint | null
   startColor: string
   end: MazePoint | null
@@ -170,12 +176,13 @@ export function setThreeWallMatrix(
   segment: { from: { x: number, y: number }, to: { x: number, y: number } },
   height: number,
   thickness: number,
+  extendEnds = true,
 ): void {
   const dx = segment.to.x - segment.from.x
   const dz = segment.to.y - segment.from.y
   const length = Math.hypot(dx, dz)
   matrix.makeRotationY(-Math.atan2(dz, dx))
-  matrix.scale(new THREE.Vector3(length + thickness, height, thickness))
+  matrix.scale(new THREE.Vector3(length + (extendEnds ? thickness : 0), height, thickness))
   matrix.setPosition(
     (segment.from.x + segment.to.x) / 2,
     height / 2,
@@ -183,12 +190,14 @@ export function setThreeWallMatrix(
   )
 }
 
-/** Extrudes the exact 2D Triangle wall footprint, preserving every junction cut. */
+/** Extrudes the 2D wall footprint so polygon and polar views share junctions. */
 export function buildTriangleWallGeometry(
   runtime: Maze,
   thickness: number,
   height: number,
 ): THREE.BufferGeometry {
+  if (runtime.grid.type === 'circular')
+    return new CircularWallGeometry(runtime, thickness, height)
   const chunks = buildTriangleWallPositionChunks(runtime, thickness)
     .filter(chunk => chunk.length > 0)
     .map(chunk => getExtrudedTriangleWallChunk(chunk, height))
@@ -356,6 +365,7 @@ export class ThreeMazeView {
 
   private readonly wallMaterial = new THREE.MeshLambertMaterial({ side: THREE.DoubleSide })
   private readonly floorMaterial = new THREE.MeshLambertMaterial()
+  private readonly circularFloorMaterial = new THREE.MeshLambertMaterial({ side: THREE.DoubleSide, vertexColors: true })
   private readonly gridMaterial = new THREE.MeshBasicMaterial({
     depthWrite: false,
     opacity: 0.58,
@@ -375,6 +385,12 @@ export class ThreeMazeView {
 
   private wallMesh: THREE.InstancedMesh | null = null
   private floorMesh: THREE.InstancedMesh | null = null
+  private circularFloorMesh: THREE.Mesh<CircularCellGeometry> | null = null
+  private lastFloorKey = ''
+  private overlayRuntime: Maze | null = null
+  private lastOverlayKey = ''
+  private circularFloorRuntime: Maze | null = null
+  private readonly circularPathMesh = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({ side: THREE.DoubleSide, vertexColors: true }))
   private gridMesh: THREE.Mesh | null = null
   private gridRuntime: Maze | null = null
   private gridWidth = 0
@@ -433,7 +449,9 @@ export class ThreeMazeView {
       new THREE.MeshBasicMaterial(),
     )
     this.triangleWallMesh.frustumCulled = false
-    this.mazeGroup.add(this.triangleWallMesh, this.startMesh, this.endMesh)
+    this.circularPathMesh.rotation.x = -Math.PI / 2
+    this.circularPathMesh.frustumCulled = false
+    this.mazeGroup.add(this.triangleWallMesh, this.circularPathMesh, this.startMesh, this.endMesh)
 
     window.addEventListener('keydown', this.onKeyDown)
     window.addEventListener('keyup', this.onKeyUp)
@@ -540,8 +558,8 @@ export class ThreeMazeView {
   }
 
   private ensureMeshes(runtime: Maze): void {
-    const wallCapacity = runtime.grid.cells.length * 6
-    const floorCapacity = runtime.grid.cells.length
+    const floorCapacity = runtime.grid.type === 'circular' ? 1 : runtime.grid.cells.length
+    const wallCapacity = floorCapacity * 6
     const floorGeometry = runtime.grid.type === 'triangle'
       ? this.triangleFloorGeometry
       : runtime.grid.type === 'hexagon'
@@ -572,7 +590,34 @@ export class ThreeMazeView {
   }
 
   private syncFloor(state: ThreeViewSyncState): void {
+    if (state.runtime.grid.type === 'circular' && this.circularFloorRuntime === state.runtime
+      && state.cellKey !== undefined && this.lastFloorKey === state.cellKey) {
+      return
+    }
+    this.lastFloorKey = state.cellKey ?? ''
     const mesh = this.floorMesh!
+    if (state.runtime.grid.type === 'circular') {
+      mesh.visible = false
+      if (!this.circularFloorMesh || this.circularFloorRuntime !== state.runtime) {
+        if (this.circularFloorMesh) {
+          this.mazeGroup.remove(this.circularFloorMesh)
+          this.circularFloorMesh.geometry.dispose()
+        }
+        this.circularFloorMesh = new THREE.Mesh(
+          new CircularCellGeometry(state.runtime.grid.cells, 'xz'),
+          this.circularFloorMaterial,
+        )
+        this.circularFloorMesh.frustumCulled = false
+        this.mazeGroup.add(this.circularFloorMesh)
+        this.circularFloorRuntime = state.runtime
+      }
+      this.circularFloorMesh.visible = true
+      this.circularFloorMesh.geometry.updateColors(state.getCellColor)
+      return
+    }
+    if (this.circularFloorMesh)
+      this.circularFloorMesh.visible = false
+    mesh.visible = true
     const matrix = new THREE.Matrix4()
     const color = new THREE.Color()
     let index = 0
@@ -679,8 +724,8 @@ export class ThreeMazeView {
     const runtimeState = state.runtime.getState()
     const wallKey = [
       runtimeState.phase,
-      runtimeState.index,
-      runtimeState.done,
+      runtimeState.phase === 'generate' ? runtimeState.index : '',
+      runtimeState.phase === 'generate' ? runtimeState.done : '',
       thickness,
       height,
       state.wallRevision,
@@ -696,15 +741,24 @@ export class ThreeMazeView {
     const matrix = new THREE.Matrix4()
     let index = 0
 
-    if (state.runtime.grid.type !== 'square') {
+    if (state.runtime.grid.type === 'triangle' || state.runtime.grid.type === 'hexagon' || state.runtime.grid.type === 'circular') {
       mesh.count = 0
-      this.triangleWallMesh.geometry.dispose()
-      this.triangleWallMesh.geometry = buildTriangleWallGeometry(state.runtime, thickness, height)
+      const geometry = this.triangleWallMesh.geometry
+      if (geometry instanceof CircularWallGeometry && geometry.runtime === state.runtime
+        && geometry.thickness === thickness && geometry.height === height) {
+        geometry.syncVisibility()
+      }
+      else {
+        geometry.dispose()
+        this.triangleWallMesh.geometry = buildTriangleWallGeometry(state.runtime, thickness, height)
+      }
       this.triangleWallMesh.visible = true
     }
     else {
       this.triangleWallMesh.visible = false
       visitClosedWalls(state.runtime, (segment) => {
+        // Overlap adjacent tessellated arc/radial wall boxes so their thick
+        // cross-sections meet at every polar junction.
         setThreeWallMatrix(matrix, segment, height, thickness)
         mesh.setMatrixAt(index, matrix)
         index += 1
@@ -757,6 +811,17 @@ export class ThreeMazeView {
   }
 
   private syncOverlays(state: ThreeViewSyncState): void {
+    if (this.overlayRuntime === state.runtime && state.overlayKey !== undefined
+      && this.lastOverlayKey === state.overlayKey) {
+      return
+    }
+    this.overlayRuntime = state.runtime
+    this.lastOverlayKey = state.overlayKey ?? ''
+    this.circularPathMesh.visible = state.runtime.grid.type === 'circular'
+    if (this.circularPathMesh.visible) {
+      this.circularPathMesh.geometry.dispose()
+      this.circularPathMesh.geometry = buildCircularPathGeometry(state.runtime, state.polarPaths ?? [])
+    }
     this.ensureOverlayMeshes(state.segments.length, state.dots.length)
 
     const matrix = new THREE.Matrix4()

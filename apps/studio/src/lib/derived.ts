@@ -101,6 +101,16 @@ export function getGenerationFrontierTrailEdges(): Set<string> {
   return edgeKeys
 }
 
+/** Ordered parent routes for every visible generation frontier head. */
+export function getGenerationFrontierTrails(): MazePoint[][] {
+  const preview = app.generationPreview
+  if (!preview || !isGenerationVisibleMultiHeadMode(preview.algorithm)) {
+    return []
+  }
+  return getGenerationFrontierHeads()
+    .map(head => buildTrailPointsFromParentKey(preview.parentByKey, key(head.x, head.y)))
+}
+
 export function getGenerationTrailKeys(): Set<string> {
   if (!app.generationPreview) {
     return new Set<string>()

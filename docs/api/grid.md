@@ -12,7 +12,7 @@ low-level factory is available for custom runtimes.
 
 ```ts
 interface MazeGrid<Cell extends MazeCell = MazeCell> {
-  readonly type: 'square' | 'triangle' | 'hexagon'
+  readonly type: 'square' | 'triangle' | 'hexagon' | 'circular'
   readonly rows: number
   readonly cols: number
   readonly cells: Cell[]
@@ -194,6 +194,40 @@ Returns a `Set<CellId>` containing every cell reachable through open edges.
 ### `areCellsDirectlyLinked(grid, leftId, rightId)`
 
 Returns whether two existing cells share an open edge.
+
+## `createCircularGrid()`
+
+Studio limits circular mazes, image shapes, and `.maze` files to 128 rings to
+bound browser memory use. The core grid API has no Studio-specific ring limit.
+Larger existing `.maze` files are rejected with an explicit error before their
+grid is allocated.
+
+Creates concentric rings around one center cell:
+
+```ts
+import { createCircularGrid } from 'mazely'
+
+const grid = createCircularGrid(12)
+console.log(grid.rings) // 12, including the center
+console.log(grid.ringCellCounts) // sector counts from the center outward
+```
+
+`rings` must be a positive integer. The first annulus has six sectors; outer
+rings split sectors when needed to keep cells balanced. `rows` equals `rings`,
+while `cols` is the largest sector count, rather than the disk's diameter.
+The rendered disk has a radius of `rings` in cell units.
+
+A cell ID is `ring:sector`, with both values zero-based. Maze point coordinates
+use `{ x: sector, y: ring }`. The center is `0:0`. `CircularCell` exposes
+`ring`, `sectorCount`, `innerRadius`, `outerRadius`, `startAngle`, `endAngle`,
+`worldX`, and `worldY`. Angles are in radians; `worldX` and `worldY` locate the
+disk's center. Its `inward`, `outward`, `clockwise`, and `counterclockwise`
+properties reference shared edges. An inner cell can have multiple outward
+edges when the next ring splits its sector.
+
+All built-in generators and solvers support circular grids. Pass an optional second argument, `createCircularGrid(rings, mask)`, to keep
+selected cells. The mask uses `mask[ring][sector]`; omitted entries remove
+cells. Generation requires the kept cells to form one connected region.
 
 ## `traverseGrid(grid, options)`
 

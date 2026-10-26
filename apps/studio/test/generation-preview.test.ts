@@ -6,11 +6,48 @@ import {
   createGenerationPreview,
   getHuntScanSegment,
   rebuildGenerationPreview,
+  rewindGenerationPreview,
   shouldRenderGenerationPreview,
 } from '../src/lib/controllers/generation'
 import { getCellCenter, getCellPolygon, getPointCenter, TRIANGLE_HEIGHT } from '../src/lib/grid-geometry'
 
 describe('generation preview rewind', () => {
+  it('keeps Wilson planning checkpoints out of discovered cells and trails', () => {
+    const runtime = createMaze({ grid: { rings: 8, type: 'circular' }, seed: 42 })
+    const preview = createGenerationPreview({
+      algorithm: 'wilson',
+      runtime,
+      player: runtime.generate('wilson'),
+      view: { algorithm: 'wilson', cols: runtime.grid.cols, rows: 8, start: { x: 0, y: 0 }, end: { x: 0, y: 7 } },
+    })
+    expect(advanceGenerationPreview(preview)).toEqual([])
+    expect(preview.player.lastStep?.type).toBe('generation.yield')
+    expect(preview.discoveredCount).toBe(0)
+    expect(preview.currentHeadKey).toBeNull()
+    expect(preview.parentByKey).toEqual({})
+    preview.player.prev()
+    rebuildGenerationPreview(preview)
+    expect(advanceGenerationPreview(preview)).toEqual([])
+    expect(runtime.grid.edges.some(edge => edge.opened)).toBe(false)
+  })
+
+  it('rewinds the last carved edge when paused on a Wilson planning checkpoint', () => {
+    const runtime = createMaze({ grid: { rings: 20, type: 'circular' }, seed: 42 })
+    const preview = createGenerationPreview({
+      algorithm: 'wilson',
+      runtime,
+      player: runtime.generate('wilson'),
+      view: { algorithm: 'wilson', cols: runtime.grid.cols, rows: 20, start: { x: 0, y: 0 }, end: { x: 0, y: 19 } },
+    })
+    const opened = () => runtime.grid.edges.filter(edge => edge.opened).length
+    do {
+      expect(advanceGenerationPreview(preview)).not.toBeNull()
+    } while (opened() === 0 || preview.player.lastStep?.type !== 'generation.yield')
+    const before = opened()
+    expect(rewindGenerationPreview(preview)).toBe(true)
+    expect(opened()).toBe(before - 1)
+  })
+
   it('restores visual and maze state after stepping backward', () => {
     const preview = createPreview('dfs', 'rewind-generation')
     for (let index = 0; index < 12; index += 1) {

@@ -66,6 +66,7 @@ import {
   getSolveFrontierHeads,
   getSolveFrontierTrails,
   getSolveTrailPoints,
+  getStepParentByKey,
   isSolveMultiHeadMode,
 } from './lib/derived'
 import {
@@ -132,6 +133,7 @@ import {
   workbenchPanel,
 } from './lib/dom'
 import { buildExportFilename, downloadBlob } from './lib/export-image'
+import { getFrontierRouteSegments } from './lib/frontier-routes'
 import { getOverlayScale } from './lib/grid-geometry'
 import { shouldConfirmMazeReplacement } from './lib/maze-replacement'
 import { key, parsePointKey } from './lib/point'
@@ -183,12 +185,14 @@ gridTypeSelect.addEventListener('change', async () => {
     ? 'triangle'
     : gridTypeSelect.value === 'hexagon'
       ? 'hexagon'
-      : 'square'
+      : gridTypeSelect.value === 'circular'
+        ? 'circular'
+        : 'square'
   if (gridType === app.gridType) {
     return
   }
   const confirmed = await confirmGridReplacement({
-    message: `Changing to a ${gridType === 'triangle' ? 'Triangle' : gridType === 'hexagon' ? 'Hexagon' : 'Square'} grid will discard the current maze.`,
+    message: `Changing to a ${gridType === 'triangle' ? 'Triangle' : gridType === 'hexagon' ? 'Hexagon' : gridType === 'circular' ? 'Circular' : 'Square'} grid will discard the current maze.`,
     title: 'Change grid topology?',
   })
   if (!confirmed) {
@@ -346,7 +350,7 @@ app.shapeEditor = initShapeEditor({
     ? { layout: app.triangleLayout, type: 'triangle' }
     : app.gridType === 'hexagon'
       ? { layout: app.hexLayout, orientation: app.hexOrientation, type: 'hexagon' }
-      : { type: 'square' },
+      : app.gridType === 'circular' ? { type: 'circular' } : { type: 'square' },
   onApply: applyShape,
   showToast,
 })
@@ -456,7 +460,9 @@ function getExportSolveFrontierHeads() {
 
 function getExportSolveFrontierTrails() {
   const heads = getExportSolveFrontierHeads()
-  return getSolveFrontierTrails(heads)
+  return app.mazeRuntime?.grid.type === 'circular'
+    ? getFrontierRouteSegments(getStepParentByKey(), heads, getSolveTrailPoints())
+    : getSolveFrontierTrails(heads)
 }
 
 shapeUploadButton.addEventListener('click', async () => {

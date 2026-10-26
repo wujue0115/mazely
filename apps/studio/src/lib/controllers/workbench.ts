@@ -19,6 +19,7 @@ import {
   shapeColorsToggle,
   shapeEditButton,
   shapeStatus,
+  shapeUploadButton,
   tabEdit,
   tabGenerate,
   tabPanelEdit,
@@ -38,7 +39,7 @@ import {
 import { key } from '../point'
 import { fitMazeInView, render } from '../renderer'
 import { getRandomMaskPoint } from '../shape-mask'
-import { clamp, GRID_DIMENSION_MAX, HEX_OUTER_SIZE_MAX, parseGridDimensionOptional } from '../utils'
+import { CIRCULAR_RING_MAX, clamp, GRID_DIMENSION_MAX, HEX_OUTER_SIZE_MAX, parseGridDimensionOptional } from '../utils'
 import { cancelPointSelection, syncPointSelectionUi } from './maze-editor'
 import {
   clearGenerationPreviewState,
@@ -230,13 +231,15 @@ export function applyShape(nextShape: AppliedShape): void {
   clearGenerationPreviewState()
 
   app.shape = nextShape
-  app.mazeWidth = app.gridType === 'triangle'
-    ? app.triangleLayout === 'triangle'
-      ? (nextShape.size ?? nextShape.rows)
-      : triangleRectangleCellColsToVisualCols(nextShape.cols)
-    : app.gridType === 'hexagon' && app.hexLayout === 'hexagon'
-      ? (nextShape.size ?? (nextShape.rows + 1) / 2)
-      : nextShape.cols
+  app.mazeWidth = app.gridType === 'circular'
+    ? nextShape.rows
+    : app.gridType === 'triangle'
+      ? app.triangleLayout === 'triangle'
+        ? (nextShape.size ?? nextShape.rows)
+        : triangleRectangleCellColsToVisualCols(nextShape.cols)
+      : app.gridType === 'hexagon' && app.hexLayout === 'hexagon'
+        ? (nextShape.size ?? (nextShape.rows + 1) / 2)
+        : nextShape.cols
   app.mazeHeight = nextShape.rows
   app.hasValidGridDimensions = true
   rebuildMazeForShapeChange()
@@ -294,10 +297,13 @@ function rebuildMazeForShapeChange(): void {
 
 export function syncShapePanel(): void {
   const activeShape = app.shape
+  shapeUploadButton.classList.remove('is-hidden')
   shapeStatus.textContent = activeShape
-    ? app.gridType === 'triangle' && app.triangleLayout === 'triangle'
-      ? `Shape active — triangle size ${activeShape.size ?? activeShape.rows}.`
-      : `Shape active — ${activeShape.cols}×${activeShape.rows} cells.`
+    ? app.gridType === 'circular'
+      ? `Shape active — ${activeShape.rows} rings.`
+      : app.gridType === 'triangle' && app.triangleLayout === 'triangle'
+        ? `Shape active — triangle size ${activeShape.size ?? activeShape.rows}.`
+        : `Shape active — ${activeShape.cols}×${activeShape.rows} cells.`
     : 'Full grid — upload an image to shape the maze.'
   shapeStatus.classList.toggle('is-shaped', activeShape !== null)
   shapeEditButton.classList.toggle('is-hidden', !app.shapeEditor?.hasSource())
@@ -325,6 +331,9 @@ export function setGridType(gridType: MazeGridType): void {
   triangleLayoutField.classList.toggle('is-hidden', gridType !== 'triangle')
   hexLayoutField.classList.toggle('is-hidden', gridType !== 'hexagon')
   hexOrientationField.classList.toggle('is-hidden', gridType !== 'hexagon')
+  mazeWidthLabel.textContent = gridType === 'circular' ? 'Rings' : 'Width'
+  mazeHeightField.classList.toggle('is-hidden', gridType === 'circular')
+  viewportRatioToggle.classList.toggle('is-hidden', gridType === 'circular')
 
   const selected = getGenerationAlgorithm(generationSelect.value)
   if (!(MAZE_GENERATION_CAPABILITIES[selected].supportedGridTypes as readonly string[]).includes(gridType)) {
@@ -337,7 +346,7 @@ export function setGridType(gridType: MazeGridType): void {
   }
 
   rebuildMazeForShapeChange()
-  showToast(`${gridType === 'triangle' ? 'Triangle' : gridType === 'hexagon' ? 'Hexagon' : 'Square'} grid selected.`)
+  showToast(`${gridType === 'triangle' ? 'Triangle' : gridType === 'hexagon' ? 'Hexagon' : gridType === 'circular' ? 'Circular' : 'Square'} grid selected.`)
 }
 
 export function setTriangleLayout(layout: TriangleGridLayout): void {
@@ -379,7 +388,9 @@ function applyTopologyDefaultDimensions(): void {
   if (app.hasCustomGridDimensions) {
     return
   }
-  const size = app.gridType === 'hexagon' && app.hexLayout === 'hexagon' ? 10 : 20
+  const size = app.gridType === 'hexagon' && app.hexLayout === 'hexagon'
+    ? 10
+    : app.gridType === 'circular' ? 12 : 20
   app.mazeWidth = size
   app.mazeHeight = size
   mazeWidthInput.value = String(size)
@@ -397,22 +408,27 @@ export function setHexOrientation(orientation: HexOrientation): void {
 }
 
 export function syncGridDimensionInputs(changedBy: 'width' | 'height' | 'none' = 'none'): boolean {
-  if ((app.gridType === 'triangle' && app.triangleLayout === 'triangle')
+  if (app.gridType === 'circular'
+    || (app.gridType === 'triangle' && app.triangleLayout === 'triangle')
     || (app.gridType === 'hexagon' && app.hexLayout === 'hexagon')) {
-    const size = app.shape?.size ?? (app.shape ? app.shape.rows : parseGridDimensionOptional(mazeWidthInput.value))
+    const requestedSize = app.shape?.size ?? (app.shape ? app.shape.rows : parseGridDimensionOptional(mazeWidthInput.value))
+    const sizeMax = app.gridType === 'circular' ? CIRCULAR_RING_MAX : app.gridType === 'hexagon' ? HEX_OUTER_SIZE_MAX : GRID_DIMENSION_MAX
+    const size = requestedSize === null ? null : Math.min(requestedSize, sizeMax)
+    if (requestedSize !== null && requestedSize > sizeMax)
+      showToast(`This grid supports up to ${sizeMax} ${app.gridType === 'circular' ? 'rings' : 'cells per side'}.`)
     app.useViewportRatio = false
     app.lockGridRatio = false
     useViewportRatioInput.checked = false
     lockGridRatioInput.checked = false
     mazeWidthInput.disabled = app.shape !== null
-    mazeWidthInput.max = String(app.gridType === 'hexagon' ? HEX_OUTER_SIZE_MAX : GRID_DIMENSION_MAX)
+    mazeWidthInput.max = String(sizeMax)
     useViewportRatioInput.disabled = true
     lockGridRatioInput.disabled = true
     mazeHeightInput.disabled = true
     mazeHeightField.classList.add('is-hidden')
     dimensionGrid.classList.add('is-ratio')
     viewportRatioToggle.classList.add('is-hidden')
-    mazeWidthLabel.textContent = 'SIZE (SIDE)'
+    mazeWidthLabel.textContent = app.gridType === 'circular' ? 'RINGS' : 'SIZE (SIDE)'
     if (size == null) {
       return false
     }
