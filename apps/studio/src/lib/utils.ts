@@ -18,6 +18,8 @@ export function clamp(value: number, min: number, max: number): number {
 }
 
 export const GRID_DIMENSION_MAX = 500
+/** Studio rendering budget; the core circular API remains unrestricted. */
+export const CIRCULAR_RING_MAX = 128
 /** Outer hex uses a `(2 * size - 1)²` bounding grid. */
 export const HEX_OUTER_SIZE_MAX = Math.floor((GRID_DIMENSION_MAX + 1) / 2)
 export const BASE_WHEEL_ZOOM_STEP = 0.06

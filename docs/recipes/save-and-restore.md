@@ -22,7 +22,8 @@ localStorage.setItem('maze', json)
 ```
 
 The serialized value contains the grid type, dimensions, triangle or Hex layout
-and side size when applicable, Hex orientation, and open internal edge IDs.
+and side size when applicable, Hex orientation, circular ring and sector counts,
+and open internal edge IDs.
 
 ## Restoring into a Compatible Grid
 
@@ -36,39 +37,41 @@ import {
 } from 'mazely'
 
 const topology = JSON.parse(localStorage.getItem('maze')!)
-const grid = topology.type === 'hexagon'
-  ? topology.hexLayout === 'hexagon'
-    ? {
-        type: 'hexagon' as const,
-        layout: 'hexagon' as const,
-        size: topology.size,
-        orientation: topology.hexOrientation,
-      }
-    : {
-        type: 'hexagon' as const,
-        layout: 'rectangle' as const,
-        rows: topology.rows,
-        cols: topology.cols,
-        orientation: topology.hexOrientation,
-      }
-  : topology.type === 'triangle'
-    ? topology.triangleLayout === 'triangle'
+const grid = topology.type === 'circular'
+  ? { type: 'circular' as const, rings: topology.rings }
+  : topology.type === 'hexagon'
+    ? topology.hexLayout === 'hexagon'
       ? {
-          type: 'triangle' as const,
-          layout: 'triangle' as const,
+          type: 'hexagon' as const,
+          layout: 'hexagon' as const,
           size: topology.size,
+          orientation: topology.hexOrientation,
         }
       : {
-          type: 'triangle' as const,
+          type: 'hexagon' as const,
           layout: 'rectangle' as const,
           rows: topology.rows,
           cols: topology.cols,
+          orientation: topology.hexOrientation,
         }
-    : {
-        type: 'square' as const,
-        rows: topology.rows,
-        cols: topology.cols,
-      }
+    : topology.type === 'triangle'
+      ? topology.triangleLayout === 'triangle'
+        ? {
+            type: 'triangle' as const,
+            layout: 'triangle' as const,
+            size: topology.size,
+          }
+        : {
+            type: 'triangle' as const,
+            layout: 'rectangle' as const,
+            rows: topology.rows,
+            cols: topology.cols,
+          }
+      : {
+          type: 'square' as const,
+          rows: topology.rows,
+          cols: topology.cols,
+        }
 
 const restoredMaze = createMaze({
   grid,
@@ -120,6 +123,7 @@ Core serialization preserves:
 - rows and columns
 - triangle or Hex layout and side size
 - Hex orientation
+- circular ring count and per-ring sector counts
 - open and closed internal edges
 
 Store these separately when your application needs them:

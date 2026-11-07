@@ -55,7 +55,7 @@ export function createSidewinderAlgorithm(): MazeAlgorithm<GridCell, MazeGenerat
   return new SidewinderAlgorithm()
 }
 
-/** Uses topology neighbors for irregular triangular and hexagonal rows. */
+/** Uses topology neighbors for irregular rows and concentric circular rings. */
 function* generateNonSquare(
   context: MazeContext<GridCell>,
 ): IterableIterator<MazeGenerationStep> {
@@ -65,21 +65,26 @@ function* generateNonSquare(
   }
   rows.forEach(cells => cells.sort((a, b) => a.col - b.col))
 
-  for (const rowCells of rows) {
+  for (const cells of rows) {
+    // Cut each ring at a seeded random seam. Never join the last cell back to
+    // the first: every clockwise run must have exactly one inward passage.
+    const circular = context.grid.type === 'circular'
+    const offset = circular ? context.random.int(0, cells.length - 1) : 0
+    const rowCells = circular ? [...cells.slice(offset), ...cells.slice(0, offset)] : cells
     const previousByCell = new Map(
       rowCells.flatMap((cell) => {
         const previous = previousRowNeighbor(context, cell)
         return previous ? [[cell.id, previous] as const] : []
       }),
     )
-    const hasPreviousAfter = previousCandidatesAfter(rowCells, previousByCell)
+    const hasPreviousAfter = previousCandidatesAfter(rowCells, previousByCell, circular)
     let run: GridCell[] = []
 
     for (let index = 0; index < rowCells.length; index += 1) {
       const cell = rowCells[index]
       run.push(cell)
       const next = rowCells[index + 1]
-      const east = next?.col === cell.col + 1 ? next : undefined
+      const east = next && (circular ? Boolean(edgeBetween(cell, next)) : next.col === cell.col + 1) ? next : undefined
       const previousCandidates = run.filter(runCell => previousByCell.has(runCell.id))
       const mustCloseRun = !east
       const canCloseEarly = previousCandidates.length > 0 && hasPreviousAfter[index]
@@ -117,12 +122,13 @@ function previousRowNeighbor(
 function previousCandidatesAfter(
   rowCells: GridCell[],
   previousByCell: Map<string, GridCell>,
+  circular: boolean,
 ): boolean[] {
   const result = Array.from({ length: rowCells.length }, () => false)
   let found = false
   for (let index = rowCells.length - 1; index >= 0; index -= 1) {
     const next = rowCells[index + 1]
-    if (!next || next.col !== rowCells[index].col + 1) {
+    if (!next || (circular ? !edgeBetween(rowCells[index], next) : next.col !== rowCells[index].col + 1)) {
       found = false
     }
     result[index] = found

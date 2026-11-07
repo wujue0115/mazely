@@ -1,5 +1,7 @@
 import type { Maze } from 'mazely'
-import { createMaze } from 'mazely'
+import { Buffer } from 'node:buffer'
+import { crc32, gunzipSync, gzipSync } from 'node:zlib'
+import { buildRingCellCounts, createMaze } from 'mazely'
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_FLOOD_THEME } from '../src/lib/flood'
 import {
@@ -9,6 +11,7 @@ import {
   MazeFileError,
 } from '../src/lib/maze-file'
 import { DEFAULT_STYLE_THEME, DEFAULT_STYLE_VISIBILITY } from '../src/lib/types'
+import { CIRCULAR_RING_MAX } from '../src/lib/utils'
 
 const appearance = {
   floorTheme: DEFAULT_FLOOD_THEME,
@@ -28,6 +31,138 @@ const pointPreferences = {
 } as const
 
 describe('.maze v1 codec', () => {
+  it.each([false, true])('preserves a topology-only circular mask when regenerating (legacy flag: %s)', async (legacy) => {
+    const runtime = createMaze({ grid: { rings: 3, type: 'circular', mask: [[false], [true], [true]] } })
+    runtime.generate('dfs').finish()
+    const start = { x: 0, y: 1 }
+    const end = { x: 0, y: 2 }
+    let file = await encodeMazeFile({
+      runtime,
+      appearance,
+      shape: null,
+      pointPreferences: { ...pointPreferences, generateManualStart: start, solveManualStart: start, solveManualEnd: end },
+      maze: { algorithm: 'dfs', rows: 3, cols: runtime.grid.cols, start, end },
+      solve: { algorithm: 'bfs', status: 'idle', path: [], head: null, visited: {} },
+    })
+    const payload = gunzipSync(file.subarray(16))
+    expect(payload.toString('latin1')).toContain('"hasShape":true')
+    if (legacy) {
+      // Recreate the old contradictory metadata without altering chunk sizes.
+      const oldPayload = Buffer.from(payload.toString('latin1')
+        .replace('"hasShape":true', '"hasShape":false')
+        .replace('"hasCustomStartAndEndPoints":false', '"hasCustomStartAndEndPoints":true'), 'latin1')
+      expect(oldPayload.length).toBe(payload.length)
+      const compressed = gzipSync(oldPayload)
+      const oldFile = new Uint8Array(16 + compressed.length)
+      oldFile.set(file.subarray(0, 16))
+      new DataView(oldFile.buffer).setUint32(12, crc32(oldPayload), true)
+      oldFile.set(compressed, 16)
+      file = oldFile
+    }
+    const loaded = await decodeMazeFile(file)
+    expect(loaded.shape).not.toBeNull()
+    expect(loaded.shape!.cellMask[0][0]).toBe(false)
+    const regenerated = createMaze({ grid: { rings: loaded.maze.rows, type: 'circular', mask: loaded.shape!.cellMask } })
+    regenerated.generate('dfs').finish()
+    expect(regenerated.grid.cells.map(cell => cell.id)).toEqual(runtime.grid.cells.map(cell => cell.id))
+    regenerated.solve('bfs', { start, end }).finish()
+    expect(regenerated.getSolveResult()?.solved).toBe(true)
+  })
+
+  it('rejects oversized circular saves before enumerating the full topology', async () => {
+    const runtime = createMaze({ grid: { rings: CIRCULAR_RING_MAX + 1, mask: [[true]], type: 'circular' } })
+    await expect(encodeMazeFile({
+      runtime,
+      appearance,
+      pointPreferences,
+      shape: null,
+      maze: { algorithm: 'dfs', rows: runtime.grid.rows, cols: runtime.grid.cols, start: { x: 0, y: 0 }, end: { x: 0, y: 0 } },
+      solve: { algorithm: 'bfs', status: 'idle', path: [], head: null, visited: {} },
+    })).rejects.toThrow('up to 128 rings')
+  })
+
+  it('rejects oversized circular files before requiring links or allocating a grid', async () => {
+    const meta = new Uint8Array([1, ...new TextEncoder().encode(JSON.stringify({ generationAlgorithm: 'dfs', hasCustomStartAndEndPoints: false }))])
+    // A valid header/CRC and topology declaring 129 rings, without LINKS.
+    const topology = [3, 1, 0x81, 0x01, 0]
+    const payload = new Uint8Array([1, meta.length, ...meta, 2, topology.length, ...topology])
+    const file = new Uint8Array(16 + payload.length)
+    file.set([0x4D, 0x5A, 0x4C, 0x59, 1, 0, 0, 0])
+    const header = new DataView(file.buffer)
+    header.setUint32(8, payload.length, true)
+    header.setUint32(12, crc32(payload), true)
+    file.set(payload, 16)
+    await expect(decodeMazeFile(file)).rejects.toThrow('between 1 and 128')
+  })
+
+  it('accepts the Studio circular size boundary with a sparse shape', async () => {
+    const runtime = createMaze({ grid: { rings: CIRCULAR_RING_MAX, mask: [[true]], type: 'circular' } })
+    const encoded = await encodeMazeFile({
+      runtime,
+      appearance,
+      pointPreferences,
+      shape: null,
+      maze: { algorithm: 'dfs', rows: runtime.grid.rows, cols: runtime.grid.cols, start: { x: 0, y: 0 }, end: { x: 0, y: 0 } },
+      solve: { algorithm: 'bfs', status: 'idle', path: [], head: null, visited: {} },
+    })
+    const loaded = await decodeMazeFile(encoded)
+    expect(loaded.runtime.grid.rows).toBe(CIRCULAR_RING_MAX)
+    expect(loaded.runtime.grid.cells).toHaveLength(1)
+  })
+
+  it('round-trips circular image masks, colors, and a removed center', async () => {
+    const counts = buildRingCellCounts(4)
+    const mask = counts.map((count, row) => Array.from({ length: count }, (_, col) => row > 0 && col !== 2))
+    const runtime = createMaze({ grid: { rings: 4, mask, type: 'circular' }, seed: 'masked-circle-file' })
+    runtime.generate('sidewinder').finish()
+    const shape = {
+      cellMask: mask,
+      cellColors: mask.map(row => row.map(active => active ? '#ff0000' : null)),
+      cols: runtime.grid.cols,
+      rows: 4,
+      start: { x: 0, y: 1 },
+      end: { x: 0, y: 3 },
+    }
+    const encoded = await encodeMazeFile({
+      appearance,
+      pointPreferences: { ...pointPreferences, generateManualStart: shape.start, solveManualStart: shape.start, solveManualEnd: shape.end },
+      runtime,
+      shape,
+      maze: { algorithm: 'sidewinder', cols: runtime.grid.cols, rows: 4, start: shape.start, end: shape.end },
+      solve: { algorithm: 'a-star', head: null, path: [], status: 'idle', visited: {} },
+    })
+    const loaded = await decodeMazeFile(encoded)
+    expect(loaded.runtime.grid.cells.map(cell => cell.id)).toEqual(runtime.grid.cells.map(cell => cell.id))
+    expect(loaded.runtime.grid.edges.map(edge => [edge.id, edge.opened])).toEqual(runtime.grid.edges.map(edge => [edge.id, edge.opened]))
+    for (const cell of runtime.grid.cells) {
+      expect(loaded.shape?.cellColors[cell.row][cell.col]).toBe('#ff0000')
+      expect(loaded.shape?.cellMask[cell.row][cell.col]).toBe(true)
+    }
+    expect(loaded.shape?.cellMask[0][0]).toBe(false)
+    expect(loaded.runtime.grid.getCell('0:0')).toBeUndefined()
+  })
+
+  it.each([1, 5, 12])('round-trips circular topology and links with %i rings', async (rings) => {
+    const runtime = createMaze({ grid: { rings, type: 'circular' }, seed: 'circular-file' })
+    runtime.generate('dfs').finish()
+    const last = runtime.grid.cells.at(-1)!
+    const end = { x: last.col, y: last.row }
+    const encoded = await encodeMazeFile({
+      appearance,
+      pointPreferences,
+      runtime,
+      shape: null,
+      maze: { algorithm: 'dfs', cols: runtime.grid.cols, rows: rings, start: { x: 0, y: 0 }, end },
+      solve: { algorithm: 'a-star', head: null, path: [], status: 'idle', visited: {} },
+    })
+    const loaded = await decodeMazeFile(encoded)
+    expect(loaded.runtime.grid.type).toBe('circular')
+    expect(loaded.runtime.grid.cells.map(cell => cell.id)).toEqual(runtime.grid.cells.map(cell => cell.id))
+    expect(loaded.runtime.grid.edges.map(edge => [edge.id, edge.opened])).toEqual(runtime.grid.edges.map(edge => [edge.id, edge.opened]))
+    expect(loaded.maze.end).toEqual(end)
+    expect(loaded.shape).toBeNull()
+  })
+
   it.each([
     {
       expected: 'mazely-20260830090507-square-12x8.maze',

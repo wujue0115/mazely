@@ -223,6 +223,16 @@
       <div class="side-panel-body">
         <section id="tab-panel-generate" class="tab-panel is-active" aria-label="Generate settings">
           <section class="field-group">
+            <label class="micro-label" for="grid-type">Topology</label>
+            <select id="grid-type">
+              <option value="square" selected>Square</option>
+              <option value="triangle">Triangle</option>
+              <option value="hexagon">Hexagon</option>
+              <option value="circular">Circular</option>
+            </select>
+          </section>
+
+          <section class="field-group">
             <label class="micro-label" for="generation-algorithm">Algorithm</label>
             <select id="generation-algorithm">
               <option value="aldous-broder">Aldous-Broder</option>
@@ -233,19 +243,10 @@
               <option value="traversal">Random Traversal</option>
               <option value="kruskal">Randomized Kruskal</option>
               <option value="prim">Randomized Prim</option>
-              <option value="dfs" selected>Recursive Backtracker</option>
+              <option value="dfs" selected>Randomized DFS</option>
               <option value="recursive-division">Recursive Division</option>
               <option value="sidewinder">Sidewinder</option>
               <option value="wilson">Wilson's</option>
-            </select>
-          </section>
-
-          <section class="field-group">
-            <label class="micro-label" for="grid-type">Topology</label>
-            <select id="grid-type">
-              <option value="square" selected>Square</option>
-              <option value="triangle">Triangle</option>
-              <option value="hexagon">Hexagon</option>
             </select>
           </section>
 
@@ -275,7 +276,7 @@
 
           <section class="field-group">
             <div class="field-head">
-              <span class="micro-label">Grid Geometry</span>
+              <span class="micro-label">Grid Size</span>
               <label id="viewport-ratio-toggle" class="micro-check" for="use-viewport-ratio">
                 <input id="use-viewport-ratio" type="checkbox" />
                 <span>Viewport ratio</span>
@@ -885,7 +886,7 @@
       <div id="shape-editor-backdrop" class="shape-editor-backdrop"></div>
       <div class="shape-editor-window">
         <header class="shape-editor-header">
-          <span class="shape-editor-brand">SHAPE STUDIO</span>
+          <span id="shape-editor-title" class="shape-editor-brand">SHAPE STUDIO</span>
           <span id="shape-editor-meta" class="shape-editor-meta"></span>
           <button
             id="shape-zoom-chip"
@@ -906,7 +907,23 @@
           </div>
 
           <aside class="shape-editor-side">
-            <section class="shape-editor-group">
+            <section id="shape-mode-group" class="shape-editor-group">
+              <h2>MODE</h2>
+              <select id="shape-mode-select" aria-label="Image editing mode">
+                <option value="image">Image shape</option>
+                <option value="current">Current shape</option>
+              </select>
+            </section>
+
+            <section id="shape-circle-crop-group" class="shape-editor-group is-hidden">
+              <h2 id="shape-crop-title">CIRCULAR CROP</h2>
+              <p id="shape-crop-hint" class="shape-note">
+                Drag inside the shape to move it. Drag a corner to resize. Scroll to zoom, or hold Space to pan.
+              </p>
+              <button id="shape-circle-reset" class="mini-btn" type="button">Reset circle</button>
+            </section>
+
+            <section id="shape-background-group" class="shape-editor-group">
               <h2>BACKGROUND REMOVAL</h2>
               <p id="shape-alpha-note" class="shape-note is-hidden">
                 Alpha channel detected — transparency defines the shape.
@@ -918,7 +935,7 @@
               </div>
             </section>
 
-            <section class="shape-editor-group">
+            <section id="shape-tools-group" class="shape-editor-group">
               <h2>TOOLS</h2>
               <div class="tab-nav shape-brush-nav animated-tool-nav">
                 <button id="shape-tool-view" class="tab-btn tool-tab-btn" type="button">
@@ -998,7 +1015,7 @@
         <footer class="shape-editor-footer">
           <div class="shape-editor-stats">
             <span class="shape-stat">CELLS <b id="shape-stat-cells">0</b></span>
-            <span class="shape-stat">REGIONS <b id="shape-stat-regions">0</b></span>
+            <span id="shape-regions-stat" class="shape-stat">REGIONS <b id="shape-stat-regions">0</b></span>
             <span id="shape-connectivity" class="shape-connectivity"></span>
           </div>
           <div class="shape-editor-footer-actions">

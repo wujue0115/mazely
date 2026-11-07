@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added circular grids with concentric rings, connected masks, `CircularCell`,
+  `CircularGrid`, `createCircularGrid()`, and per-ring sector counts.
+- Added circular support to all twelve generators, all five solvers, editing,
+  and JSON topology serialization.
+- Added patchless `generation.yield` checkpoints to Wilson planning so
+  applications can schedule long random walks across animation frames.
+
 ## [0.5.0] - 2026-09-10
 
 ### Added

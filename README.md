@@ -15,9 +15,9 @@
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/mazely"><img src="https://img.shields.io/badge/npm-mazely-CB3837?logo=npm&logoColor=white" alt="mazely on npm"></a>
-  <a href="https://www.npmjs.com/package/mazely"><img src="https://img.shields.io/npm/v/mazely?label=version" alt="npm version"></a>
-  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT license"></a>
+  <a href="https://www.npmjs.com/package/mazely"><img src="https://img.shields.io/badge/npm-mazely-90F7FF?logo=npm&logoColor=white" alt="mazely on npm"></a>
+  <a href="https://www.npmjs.com/package/mazely"><img src="https://img.shields.io/npm/v/mazely?label=version&color=90F7FF" alt="npm version"></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-90F7FF.svg" alt="MIT license"></a>
 </p>
 
 <p align="center">
@@ -34,11 +34,15 @@ steps. Applications can run an algorithm to completion or consume its progress
 incrementally to build their own visualizations, teaching tools, games, and
 renderers.
 
+<p align="center">
+  <img src="./assets/readme/logo-maze.gif" width="544" alt="Mazely logo forming into a maze, exploring, and revealing its solution">
+</p>
+
 ## Features
 
 - Twelve maze generation algorithms and five solving algorithms
 - Deterministic generation with string or numeric seeds
-- Square, triangular, and hexagonal grids with custom masks
+- Square, triangular, hexagonal, and circular grids; custom cell masks
 - Step-by-step execution or immediate completion
 - Transactional maze editing with lifecycle events
 - JSON-safe maze serialization
@@ -214,6 +218,27 @@ hexagon.generate('dfs').finish()
 
 Use `{ type: 'hexagon', layout: 'rectangle', rows, cols, orientation }` for a
 rectangular boundary. All grid types accept connected cell masks.
+
+Circular grids use concentric rings, including a single center cell:
+
+```ts
+const circular = createMaze({
+  grid: { type: 'circular', rings: 12 },
+  seed: 'circles',
+})
+
+circular.generate('sidewinder').finish()
+circular.solve('a-star', {
+  start: { x: 0, y: 0 },
+  end: { x: 0, y: 11 },
+}).finish()
+```
+
+All twelve generation algorithms and all five solvers support circular grids.
+Point coordinates use `x` for the sector and `y` for the ring, both zero-based.
+Each ring can have a different sector count, available as `ringCellCounts` on
+`CircularGrid`. Circular masks are indexed as `mask[ring][sector]`; omitted entries remove cells.
+Generation requires the remaining cells to form one connected region.
 
 ## Algorithms
 

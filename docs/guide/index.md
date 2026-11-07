@@ -92,7 +92,9 @@ explicit control over their execution. Common uses include:
 - generated puzzles
 - deterministic fixtures and tests
 
-Mazely supports square, triangular, and hexagonal grids.
+Mazely supports square, triangular, hexagonal, and circular grids. Circular
+grids use `{ type: 'circular', rings: 12, mask }`, where the optional mask is
+indexed by ring and sector.
 
 ## What to Read Next
 

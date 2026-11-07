@@ -8,7 +8,7 @@ with practical defaults plus the complete public API and TypeScript types.
 ## Highlights
 
 - Twelve deterministic generation algorithms and five solving algorithms
-- Square, triangular, and hexagonal grids with connected-cell masks
+- Square, triangular, hexagonal, and circular grids with connected-cell masks
 - Triangular and hexagonal outer layouts, plus pointy/flat Hex orientation
 - Seeded generation, reversible step playback, and transactional editing
 - JSON-safe grid serialization with topology metadata
@@ -80,6 +80,21 @@ hexagon.generate('dfs').finish()
 Use `{ type: 'hexagon', layout: 'rectangle', rows, cols, orientation }` for a
 rectangular Hex boundary. All grid types support connected boolean masks and
 every built-in generation algorithm.
+
+Circular grids use concentric rings around one center cell:
+
+```ts
+const circular = createMaze({
+  grid: { type: 'circular', rings: 12 },
+  seed: 'circles',
+})
+circular.generate('sidewinder').finish()
+```
+
+`rings` includes the center. Coordinates use `{ x: sector, y: ring }`, and
+masks use `mask[ring][sector]`. Each ring's sector count is available through
+`CircularGrid.ringCellCounts`. All built-in generators and solvers support
+circular grids. Serialization retains the ring count and sector counts.
 
 ## Algorithms and Playback
 

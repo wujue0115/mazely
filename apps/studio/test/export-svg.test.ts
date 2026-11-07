@@ -3,8 +3,117 @@ import { describe, expect, it } from 'vitest'
 import { getPointMarkerVisibility, shouldShowFloodVisualization, shouldShowSolveProgress } from '../src/lib/algorithms'
 import { buildMazeSvg } from '../src/lib/export-svg'
 import { DEFAULT_STYLE_THEME, DEFAULT_STYLE_VISIBILITY } from '../src/lib/types'
+import { buildCircularPathGeometry } from '../src/lib/webgl-2d-view'
 
 describe('buildMazeSvg', () => {
+  it.each([
+    [{ x: 5, y: 1 }, { x: 0, y: 1 }],
+    [{ x: 0, y: 2 }, { x: 0, y: 1 }, { x: 1, y: 2 }],
+    [{ x: 0, y: 1 }, { x: 0, y: 0 }, { x: 3, y: 1 }],
+  ])('exports the playback footprint for a circular solve route %j', (...points) => {
+    const runtime = createMaze({ grid: { rings: 5, type: 'circular' } })
+    const route = { points, color: DEFAULT_STYLE_THEME.path, width: 0.18 }
+    const svg = buildMazeSvg({
+      maze: { algorithm: 'dfs', cols: runtime.grid.cols, rows: 5, start: points[0], end: points.at(-1)! },
+      runtime,
+      theme: DEFAULT_STYLE_THEME,
+      visibleElements: DEFAULT_STYLE_VISIBILITY,
+      solve: { heads: [], path: points, trails: [], visited: [] },
+    })
+    expect(svg).not.toContain('<polyline')
+    const d = svg.match(new RegExp(`<path d="([^"]+)" fill="${route.color}"`))![1]
+    const geometry = buildCircularPathGeometry(runtime, [route])
+    expect(d.match(/M /g)).toHaveLength(geometry.getAttribute('position').count / 3)
+    for (const triangle of d.matchAll(/M ([\d.-]+) ([\d.-]+) L ([\d.-]+) ([\d.-]+) L ([\d.-]+) ([\d.-]+) Z/g)) {
+      const [x1, y1, x2, y2, x3, y3] = triangle.slice(1).map(Number)
+      expect((x2 - x1) * (y3 - y1) - (y2 - y1) * (x3 - x1)).toBeGreaterThanOrEqual(-0.002)
+    }
+    geometry.dispose()
+  })
+
+  it('exports shared circular frontier routes once regardless of duplicate heads', () => {
+    const runtime = createMaze({ grid: { rings: 5, type: 'circular' } })
+    const route = [{ x: 0, y: 0 }, { x: 0, y: 1 }, { x: 0, y: 2 }, { x: 0, y: 3 }]
+    const exportRoutes = (count: number) => buildMazeSvg({
+      runtime,
+      theme: DEFAULT_STYLE_THEME,
+      visibleElements: DEFAULT_STYLE_VISIBILITY,
+      maze: { algorithm: 'dfs', cols: runtime.grid.cols, rows: 5, start: route[0], end: route[3] },
+      solve: { heads: [], path: [], visited: [], trails: [], frontierTrails: Array.from({ length: count }, () => route) },
+    })
+    expect(exportRoutes(50)).toBe(exportRoutes(1))
+  })
+
+  it('preserves circular generation routes and draws subpaths behind the active path', () => {
+    const runtime = createMaze({ grid: { rings: 3, type: 'circular' } })
+    const points = [{ x: 0, y: 0 }, { x: 0, y: 1 }]
+    const svg = buildMazeSvg({
+      maze: { algorithm: 'dfs', cols: runtime.grid.cols, rows: 3, start: points[0], end: points[1] },
+      runtime,
+      theme: DEFAULT_STYLE_THEME,
+      visibleElements: DEFAULT_STYLE_VISIBILITY,
+      overlays: { dots: [], segments: [], polarPaths: [
+        { points, color: '#123abc', width: 0.14 },
+        { points, color: '#abcdef', width: 0.14, layer: 'subpath' },
+      ] },
+    })
+    expect(svg).toContain('fill="#123abc"')
+    expect(svg.indexOf('fill="#abcdef"')).toBeLessThan(svg.indexOf('fill="#123abc"'))
+  })
+
+  it('keeps both inner and outer walls around an isolated masked circular cell', () => {
+    const runtime = createMaze({ grid: { rings: 2, mask: [[false], [true]], type: 'circular' } })
+    const svg = buildMazeSvg({
+      maze: { algorithm: 'dfs', cols: runtime.grid.cols, rows: 2, start: { x: 0, y: 1 }, end: { x: 0, y: 1 } },
+      runtime,
+      theme: DEFAULT_STYLE_THEME,
+      visibleElements: DEFAULT_STYLE_VISIBILITY,
+    })
+    const walls = svg.match(new RegExp(`<path d="([^"]+)" fill="none" stroke="${DEFAULT_STYLE_THEME.wall}"`))![1]
+    expect(walls).toContain(' A 20 20 ')
+    expect(walls).toContain(' A 40 40 ')
+    expect(walls.match(/ L /g)).toHaveLength(2)
+  })
+
+  it.each([1, 5])('exports circular bounds and outer arc walls with %i rings', (rings) => {
+    const runtime = createMaze({ grid: { rings, type: 'circular' } })
+    runtime.openAllEdges()
+    const svg = buildMazeSvg({
+      maze: { algorithm: 'dfs', cols: runtime.grid.cols, rows: rings, start: { x: 0, y: 0 }, end: { x: 0, y: 0 } },
+      runtime,
+      theme: DEFAULT_STYLE_THEME,
+      visibleElements: DEFAULT_STYLE_VISIBILITY,
+      pointMarkers: { start: false, end: false },
+    })
+    const diameter = rings * 40 + 4
+    expect(svg).toContain(`viewBox="-2 -2 ${diameter} ${diameter}"`)
+    const walls = svg.match(new RegExp(`<path d="([^"]+)" fill="none" stroke="${DEFAULT_STYLE_THEME.wall}"`))?.[1]
+    expect(walls).toBeDefined()
+    expect(walls).not.toContain(' L ')
+    expect(svg).not.toMatch(/NaN|Infinity/)
+    if (rings === 1) {
+      expect(walls).toBe('M 40 20 A 20 20 0 1 1 0 20 A 20 20 0 1 1 40 20')
+    }
+    else {
+      expect(walls?.match(/ A 100 100 /g)).toHaveLength(24)
+    }
+  })
+
+  it('removes only the opened split arc from circular SVG walls', () => {
+    const runtime = createMaze({ grid: { rings: 3, type: 'circular' } })
+    const exportWalls = () => buildMazeSvg({
+      maze: { algorithm: 'dfs', cols: runtime.grid.cols, rows: 3, start: { x: 0, y: 0 }, end: { x: 0, y: 2 } },
+      runtime,
+      theme: DEFAULT_STYLE_THEME,
+      visibleElements: DEFAULT_STYLE_VISIBILITY,
+    }).match(new RegExp(`<path d="([^"]+)" fill="none" stroke="${DEFAULT_STYLE_THEME.wall}"`))![1]
+    const before = exportWalls().match(/ A 40 40 /g)!.length
+    runtime.setEdgeOpenedBetween({ x: 0, y: 1 }, { x: 0, y: 2 }, true)
+    expect(exportWalls().match(/ A 40 40 /g)).toHaveLength(before - 1)
+    runtime.setEdgeOpenedBetween({ x: 0, y: 1 }, { x: 0, y: 2 }, false)
+    expect(exportWalls().match(/ A 40 40 /g)).toHaveLength(before)
+  })
+
   it('hides a completed flood outside the Solve panel', () => {
     expect(shouldShowFloodVisualization({
       activeTab: 'generate',

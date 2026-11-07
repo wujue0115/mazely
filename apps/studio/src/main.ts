@@ -66,6 +66,7 @@ import {
   getSolveFrontierHeads,
   getSolveFrontierTrails,
   getSolveTrailPoints,
+  getStepParentByKey,
   isSolveMultiHeadMode,
 } from './lib/derived'
 import {
@@ -132,7 +133,8 @@ import {
   workbenchPanel,
 } from './lib/dom'
 import { buildExportFilename, downloadBlob } from './lib/export-image'
-import { getOverlayScale } from './lib/grid-geometry'
+import { getFrontierRouteSegments } from './lib/frontier-routes'
+import { getGridBounds, getOverlayScale } from './lib/grid-geometry'
 import { shouldConfirmMazeReplacement } from './lib/maze-replacement'
 import { key, parsePointKey } from './lib/point'
 import {
@@ -183,12 +185,14 @@ gridTypeSelect.addEventListener('change', async () => {
     ? 'triangle'
     : gridTypeSelect.value === 'hexagon'
       ? 'hexagon'
-      : 'square'
+      : gridTypeSelect.value === 'circular'
+        ? 'circular'
+        : 'square'
   if (gridType === app.gridType) {
     return
   }
   const confirmed = await confirmGridReplacement({
-    message: `Changing to a ${gridType === 'triangle' ? 'Triangle' : gridType === 'hexagon' ? 'Hexagon' : 'Square'} grid will discard the current maze.`,
+    message: `Changing to a ${gridType === 'triangle' ? 'Triangle' : gridType === 'hexagon' ? 'Hexagon' : gridType === 'circular' ? 'Circular' : 'Square'} grid will discard the current maze.`,
     title: 'Change grid topology?',
   })
   if (!confirmed) {
@@ -341,12 +345,18 @@ for (const keyName of Object.keys(visibilityButtonByKey) as StyleKey[]) {
 styleResetButton.addEventListener('click', resetStyleTheme)
 
 app.shapeEditor = initShapeEditor({
-  getDefaultCols: () => 60,
+  getGridAspectRatio: () => {
+    if (!app.mazeRuntime)
+      return 1
+    const bounds = getGridBounds(app.mazeRuntime)
+    return bounds.width / bounds.height
+  },
+  getDefaultCols: () => app.gridType === 'circular' ? 30 : 60,
   getGridTopology: () => app.gridType === 'triangle'
     ? { layout: app.triangleLayout, type: 'triangle' }
     : app.gridType === 'hexagon'
       ? { layout: app.hexLayout, orientation: app.hexOrientation, type: 'hexagon' }
-      : { type: 'square' },
+      : app.gridType === 'circular' ? { type: 'circular' } : { type: 'square' },
   onApply: applyShape,
   showToast,
 })
@@ -456,18 +466,13 @@ function getExportSolveFrontierHeads() {
 
 function getExportSolveFrontierTrails() {
   const heads = getExportSolveFrontierHeads()
-  return getSolveFrontierTrails(heads)
+  return app.mazeRuntime?.grid.type === 'circular'
+    ? getFrontierRouteSegments(getStepParentByKey(), heads, getSolveTrailPoints())
+    : getSolveFrontierTrails(heads)
 }
 
-shapeUploadButton.addEventListener('click', async () => {
-  if (await prepareImageShapeLayout()) {
-    shapeFileInput.click()
-  }
-})
-shapeEditButton.addEventListener('click', async () => {
-  if (!(await prepareImageShapeLayout())) {
-    return
-  }
+shapeUploadButton.addEventListener('click', () => shapeFileInput.click())
+shapeEditButton.addEventListener('click', () => {
   if (!app.shapeEditor?.reopen()) {
     shapeFileInput.click()
   }
@@ -485,38 +490,6 @@ interface GridReplacementDialogOptions {
 
 async function confirmGridReplacement(options: GridReplacementDialogOptions): Promise<boolean> {
   return !shouldConfirmMazeReplacement(app) || confirmMazeReplacement(options)
-}
-
-async function prepareImageShapeLayout(): Promise<boolean> {
-  if (app.gridType === 'hexagon' && app.hexLayout === 'hexagon') {
-    const confirmed = await confirmGridReplacement({
-      message: 'Image-shaped Hexagon mazes require the rectangular layout. Continuing will discard the current maze.',
-      title: 'Use rectangular Hexagon layout?',
-    })
-    if (!confirmed) {
-      return false
-    }
-
-    hexLayoutSelect.value = 'rectangle'
-    setHexLayout('rectangle')
-    return true
-  }
-
-  if (app.gridType !== 'triangle' || app.triangleLayout === 'rectangle') {
-    return true
-  }
-
-  const confirmed = await confirmGridReplacement({
-    message: 'Image-shaped Triangle mazes require the rectangular layout. Continuing will discard the current maze.',
-    title: 'Use rectangular Triangle layout?',
-  })
-  if (!confirmed) {
-    return false
-  }
-
-  triangleLayoutSelect.value = 'rectangle'
-  setTriangleLayout('rectangle')
-  return true
 }
 
 railWorkbenchButton.addEventListener('click', () => togglePanel('workbench'))

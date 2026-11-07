@@ -2,11 +2,21 @@ import type { CellId, GridCell, MazeAlgorithm, MazeContext, MazeGenerationStep }
 import { edgeBetween } from './grid-helpers'
 import { buildCarveStep } from './shared'
 
+const WORK_CHUNK_SIZE = 256
+
 class WilsonAlgorithm implements MazeAlgorithm<GridCell, MazeGenerationStep> {
   name = 'wilson';
 
   * generate(context: MazeContext<GridCell>): IterableIterator<MazeGenerationStep> {
-    const unvisited = new Map<CellId, GridCell>(context.grid.cells.map(cell => [cell.id, cell]))
+    const unvisited = new Map<CellId, GridCell>()
+    let work = 0
+    for (const cell of context.grid.cells) {
+      unvisited.set(cell.id, cell)
+      if (++work >= WORK_CHUNK_SIZE) {
+        work = 0
+        yield { type: 'generation.yield', patches: [] }
+      }
+    }
     if (unvisited.size === 0) {
       return
     }
@@ -15,7 +25,20 @@ class WilsonAlgorithm implements MazeAlgorithm<GridCell, MazeGenerationStep> {
     unvisited.delete(first.id)
 
     while (unvisited.size > 0) {
-      let current = context.random.pick([...unvisited.values()])
+      // Preserve Map order and the seeded random choice without allocating a
+      // copy of all remaining cells for every walk.
+      let target = context.random.int(0, unvisited.size - 1)
+      let current = unvisited.values().next().value!
+      for (const cell of unvisited.values()) {
+        if (target-- === 0) {
+          current = cell
+          break
+        }
+        if (++work >= WORK_CHUNK_SIZE) {
+          work = 0
+          yield { type: 'generation.yield', patches: [] }
+        }
+      }
       const path: GridCell[] = [current]
       const pathIndex = new Map<CellId, number>([[current.id, 0]])
 
@@ -32,6 +55,10 @@ class WilsonAlgorithm implements MazeAlgorithm<GridCell, MazeGenerationStep> {
           for (let index = path.length - 1; index > loopIndex; index -= 1) {
             pathIndex.delete(path[index].id)
             path.pop()
+            if (++work >= WORK_CHUNK_SIZE) {
+              work = 0
+              yield { type: 'generation.yield', patches: [] }
+            }
           }
         }
         else {
@@ -39,6 +66,10 @@ class WilsonAlgorithm implements MazeAlgorithm<GridCell, MazeGenerationStep> {
           pathIndex.set(next.id, path.length - 1)
         }
         current = next
+        if (++work >= WORK_CHUNK_SIZE) {
+          work = 0
+          yield { type: 'generation.yield', patches: [] }
+        }
       }
 
       for (let index = 0; index < path.length - 1; index += 1) {
@@ -52,6 +83,7 @@ class WilsonAlgorithm implements MazeAlgorithm<GridCell, MazeGenerationStep> {
           continue
         }
         unvisited.delete(from.id)
+        work = 0
         yield buildCarveStep(edge, from, to)
       }
     }

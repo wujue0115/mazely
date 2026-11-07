@@ -163,21 +163,23 @@ export function createSolidMazeState(
   hexOrientation: HexOrientation = 'pointy',
 ): { maze: MazeViewState, runtime: Maze } {
   const runtime = createMaze({
-    grid: gridType === 'triangle'
-      ? triangleLayout === 'triangle'
-        ? { layout: 'triangle', mask: shape?.cellMask ?? undefined, size: width, type: 'triangle' }
-        : {
-            cols: triangleRectangleVisualColsToCellCols(width),
-            layout: 'rectangle',
-            mask: shape?.cellMask ?? undefined,
-            rows: height,
-            type: 'triangle',
-          }
-      : gridType === 'hexagon'
-        ? hexLayout === 'hexagon'
-          ? { layout: 'hexagon', mask: shape?.cellMask ?? undefined, orientation: hexOrientation, size: width, type: 'hexagon' }
-          : { cols: width, layout: 'rectangle', mask: shape?.cellMask ?? undefined, orientation: hexOrientation, rows: height, type: 'hexagon' }
-        : { cols: width, mask: shape?.cellMask ?? undefined, rows: height, type: 'square' },
+    grid: gridType === 'circular'
+      ? { rings: width, mask: shape?.cellMask, type: 'circular' }
+      : gridType === 'triangle'
+        ? triangleLayout === 'triangle'
+          ? { layout: 'triangle', mask: shape?.cellMask ?? undefined, size: width, type: 'triangle' }
+          : {
+              cols: triangleRectangleVisualColsToCellCols(width),
+              layout: 'rectangle',
+              mask: shape?.cellMask ?? undefined,
+              rows: height,
+              type: 'triangle',
+            }
+        : gridType === 'hexagon'
+          ? hexLayout === 'hexagon'
+            ? { layout: 'hexagon', mask: shape?.cellMask ?? undefined, orientation: hexOrientation, size: width, type: 'hexagon' }
+            : { cols: width, layout: 'rectangle', mask: shape?.cellMask ?? undefined, orientation: hexOrientation, rows: height, type: 'hexagon' }
+          : { cols: width, mask: shape?.cellMask ?? undefined, rows: height, type: 'square' },
   })
   const firstCell = runtime.grid.cells[0]
   const lastCell = runtime.grid.cells.at(-1)!

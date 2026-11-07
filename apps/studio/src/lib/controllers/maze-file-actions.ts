@@ -158,6 +158,10 @@ async function loadMazeFile(file: File): Promise<void> {
       app.mazeWidth = grid.layout === 'hexagon' ? grid.size! : grid.cols
       app.mazeHeight = grid.layout === 'hexagon' ? grid.size! : grid.rows
     }
+    else if (loaded.runtime.grid.type === 'circular') {
+      app.mazeWidth = loaded.runtime.grid.rows
+      app.mazeHeight = loaded.runtime.grid.rows
+    }
     else {
       app.mazeWidth = loaded.maze.cols
       app.mazeHeight = loaded.maze.rows

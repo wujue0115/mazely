@@ -45,7 +45,7 @@ const result = maze.getSolveResult()
 
 ## Grid Topologies
 
-Create square, alternating up/down triangle, or regular hexagonal cells.
+Create square, alternating up/down triangle, regular hexagonal, or circular cells.
 Triangle grids can use a triangular outer boundary:
 
 ```ts
@@ -62,7 +62,7 @@ triangle.generate('prim').finish()
 ```
 
 Use `{ type: 'triangle', layout: 'rectangle', rows, cols }` for a rectangular
-outer boundary made from triangle cells. Square, triangle, and hexagonal grids
+outer boundary made from triangle cells. Square, triangle, hexagonal, and circular grids
 accept connected cell masks.
 
 Hexagonal grids support rectangular and hexagonal outer boundaries, plus
@@ -94,6 +94,21 @@ generation.progress
 // { index, bufferedSteps, done, totalSteps: number | null }
 ```
 
+Circular grids use concentric rings around one center cell:
+
+```ts
+const circular = new Mazely({
+  grid: { type: 'circular', rings: 12 },
+  seed: 'circles',
+})
+circular.generate('sidewinder').finish()
+```
+
+`rings` includes the center. Coordinates use `{ x: sector, y: ring }`, and
+masks use `mask[ring][sector]`. Each ring's sector count is available through
+`CircularGrid.ringCellCounts`. All built-in generators and solvers support
+circular grids. Serialization retains the ring count and sector counts.
+
 ## Algorithms
 
 Generation: `aldous-broder`, `binary-tree`, `dfs`, `eller`,
@@ -118,7 +133,7 @@ tree. Generation rejects a disconnected mask before changing the grid.
 
 Read `MAZE_GENERATION_CAPABILITIES[algorithm].supportedGridTypes` when building
 topology-aware controls so they remain aligned with runtime capabilities.
-All built-in generation algorithms support square, triangle, and hexagonal
+All built-in generation algorithms support square, triangle, hexagonal, and circular
 grids. Directional generators derive their predecessor or row transition from
 the active topology, so they remain valid for both Hex orientations and outer
 layouts.

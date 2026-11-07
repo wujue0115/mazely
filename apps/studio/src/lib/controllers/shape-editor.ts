@@ -1,5 +1,8 @@
+import type { CircleCropHandle, CropPoint } from '../circle-crop'
 import type { MazePoint } from '../maze-types'
 import type { CellColors, CellMask, PixelMask, ShapeGridTopology } from '../shape-mask'
+import type { ShapeCrop, TopologyCropLayout } from '../topology-crop'
+import { buildRingCellCounts } from 'mazely'
 import { TRIANGLE_RECTANGLE_VISUAL_COLS_MAX } from '../grid-geometry'
 import {
   buildAutoPixelMask,
@@ -15,7 +18,9 @@ import {
   removeSimilarCells,
   setShapeCellPixels,
 } from '../shape-mask'
+import { buildTopologyCropLayout, createShapeCrop, dragShapeCrop, getShapeCropCorners, hitShapeCrop } from '../topology-crop'
 import {
+  CIRCULAR_RING_MAX,
   clamp,
   getContext2d,
   getWheelZoomFactor,
@@ -33,6 +38,7 @@ export interface AppliedShape {
   rows: number
   /** Side size when using a triangular outer layout. */
   size?: number
+  topology?: ShapeGridTopology
   start: MazePoint
   end: MazePoint
 }
@@ -41,6 +47,7 @@ export interface ShapeEditorOptions {
   onApply: (shape: AppliedShape) => void
   getDefaultCols: () => number
   getGridTopology: () => ShapeGridTopology
+  getGridAspectRatio?: () => number
   showToast: (message: string) => void
 }
 
@@ -66,6 +73,15 @@ interface ViewPointer {
 
 export function initShapeEditor(options: ShapeEditorOptions): ShapeEditorApi {
   const editorRoot = query<HTMLElement>('#shape-editor')
+  const modeGroup = query<HTMLElement>('#shape-mode-group')
+  const modeSelect = query<HTMLSelectElement>('#shape-mode-select')
+  const cropTitle = query<HTMLElement>('#shape-crop-title')
+  const shapeCropGroup = query<HTMLElement>('#shape-circle-crop-group')
+  const circleResetButton = query<HTMLButtonElement>('#shape-circle-reset')
+  const editorTitle = query<HTMLElement>('#shape-editor-title')
+  const backgroundGroup = query<HTMLElement>('#shape-background-group')
+  const toolsGroup = query<HTMLElement>('#shape-tools-group')
+  const regionsStat = query<HTMLElement>('#shape-regions-stat')
   const backdrop = query<HTMLElement>('#shape-editor-backdrop')
   const meta = query<HTMLElement>('#shape-editor-meta')
   const closeButton = query<HTMLButtonElement>('#shape-editor-close')
@@ -120,6 +136,14 @@ export function initShapeEditor(options: ShapeEditorOptions): ShapeEditorApi {
   let cols = 60
   let rows = 60
   let topology: ShapeGridTopology = { type: 'square' }
+  let currentShapeAspect = 1
+  let cropMode = false
+  let imageModeSize = 60
+  let cropLayout: TopologyCropLayout | null = null
+  let cropLayoutKey = ''
+  let cropGridPath: Path2D | null = null
+  let shapeCrop: ShapeCrop | null = null
+  let cropDrag: { pointerId: number, handle: CircleCropHandle, crop: ShapeCrop, start: CropPoint, screen: ViewPointer } | null = null
   let painting = false
   let paintPointerId: number | null = null
   let lastPaintX = 0
@@ -155,7 +179,45 @@ export function initShapeEditor(options: ShapeEditorOptions): ShapeEditorApi {
     fileInput.value = ''
   })
 
+  function isCropMode(): boolean {
+    return options.getGridTopology().type === 'circular' || cropMode
+  }
+
+  function getEditorTopology(): ShapeGridTopology {
+    const selected = options.getGridTopology()
+    if (!isCropMode() && selected.type === 'triangle')
+      return { ...selected, layout: 'rectangle' }
+    if (!isCropMode() && selected.type === 'hexagon')
+      return { ...selected, layout: 'rectangle' }
+    return selected
+  }
+
+  modeSelect.addEventListener('change', () => {
+    const before = topology
+    const entering = modeSelect.value === 'current'
+    if (entering) {
+      imageModeSize = size
+      currentShapeAspect = options.getGridAspectRatio?.() ?? 1
+    }
+    cropMode = entering
+    const after = getEditorTopology()
+    if (entering && before.type === 'hexagon' && after.type === 'hexagon' && before.layout !== after.layout) {
+      size = Math.max(4, Math.floor((size + 1) / 2))
+    }
+    if (!entering)
+      size = imageModeSize
+    colsInput.value = String(size)
+    refreshDerivedState()
+    queueRender()
+  })
+
   replaceButton.addEventListener('click', () => fileInput.click())
+  circleResetButton.addEventListener('click', () => {
+    if (!pixelMask)
+      return
+    shapeCrop = createShapeCrop(pixelMask.width, pixelMask.height, cropLayout?.aspect ?? 1)
+    queueRender()
+  })
   closeButton.addEventListener('click', close)
   cancelButton.addEventListener('click', close)
   backdrop.addEventListener('click', close)
@@ -193,6 +255,7 @@ export function initShapeEditor(options: ShapeEditorOptions): ShapeEditorApi {
   })
   window.addEventListener('blur', () => {
     spaceHeld = false
+    cropDrag = null
     syncCanvasCursor()
   })
 
@@ -301,15 +364,27 @@ export function initShapeEditor(options: ShapeEditorOptions): ShapeEditorApi {
     if (!startAndEndPoints) {
       return
     }
+    let colorImage = sourceImageData
+    let colorMask = pixelMask
+    if (isCropMode() && shapeCrop && sourceCanvas) {
+      const cropped = document.createElement('canvas')
+      cropped.width = Math.max(1, Math.round(shapeCrop.width))
+      cropped.height = Math.max(1, Math.round(shapeCrop.height))
+      const croppedContext = getContext2d(cropped)
+      croppedContext.drawImage(sourceCanvas, shapeCrop.x, shapeCrop.y, shapeCrop.width, shapeCrop.height, 0, 0, cropped.width, cropped.height)
+      colorImage = croppedContext.getImageData(0, 0, cropped.width, cropped.height)
+      colorMask = { width: cropped.width, height: cropped.height, data: new Uint8Array(cropped.width * cropped.height).fill(1) }
+    }
     options.onApply({
-      cellColors: buildCellColors(sourceImageData, pixelMask, cellMask, cols, rows, topology),
+      cellColors: buildCellColors(colorImage, colorMask, cellMask, cols, rows, topology),
       cellMask: cellMask.map(line => [...line]),
       cols,
+      topology,
       end: startAndEndPoints.end,
       rows,
       ...((topology.type === 'triangle' && topology.layout === 'triangle')
         || (topology.type === 'hexagon' && topology.layout === 'hexagon')
-        ? { size: (rows + 1) / 2 }
+        ? { size: topology.type === 'triangle' ? rows : (rows + 1) / 2 }
         : {}),
       start: startAndEndPoints.start,
     })
@@ -319,6 +394,28 @@ export function initShapeEditor(options: ShapeEditorOptions): ShapeEditorApi {
   canvas.addEventListener('pointerdown', (event) => {
     if (!pixelMask) {
       return
+    }
+    if (event.pointerType === 'touch' && cropDrag && event.pointerId !== cropDrag.pointerId) {
+      event.preventDefault()
+      canvas.setPointerCapture(event.pointerId)
+      viewPointers.set(cropDrag.pointerId, cropDrag.screen)
+      viewPointers.set(event.pointerId, getCanvasPointer(event))
+      cropDrag = null
+      panning = false
+      startPinchGesture()
+      syncCanvasCursor()
+      return
+    }
+    if (isCropMode() && shapeCrop && event.button === 0 && !spaceHeld && viewPointers.size === 0) {
+      const point = toBitmapPoint(event)
+      const handle = hitShapeCrop(shapeCrop, point, (event.pointerType === 'touch' ? 18 : 10) / viewScale, cropLayout?.outline ?? [])
+      if (handle) {
+        event.preventDefault()
+        canvas.setPointerCapture(event.pointerId)
+        cropDrag = { pointerId: event.pointerId, handle, crop: { ...shapeCrop }, start: point, screen: getCanvasPointer(event) }
+        syncCanvasCursor()
+        return
+      }
     }
     if (event.button === 0 && tool === 'view') {
       event.preventDefault()
@@ -365,6 +462,17 @@ export function initShapeEditor(options: ShapeEditorOptions): ShapeEditorApi {
     paintStroke(point.x, point.y, point.x, point.y)
   })
   canvas.addEventListener('pointermove', (event) => {
+    if (cropDrag?.pointerId === event.pointerId && pixelMask) {
+      event.preventDefault()
+      cropDrag.screen = getCanvasPointer(event)
+      shapeCrop = dragShapeCrop(cropDrag.crop, cropDrag.handle, cropDrag.start, toBitmapPoint(event), pixelMask.width, pixelMask.height)
+      queueRender()
+      return
+    }
+    if (isCropMode() && shapeCrop && !panning) {
+      const handle = hitShapeCrop(shapeCrop, toBitmapPoint(event), 10 / viewScale, cropLayout?.outline ?? [])
+      canvas.style.cursor = spaceHeld ? 'grab' : handle === 'move' ? 'move' : handle === 'nw' || handle === 'se' ? 'nwse-resize' : handle ? 'nesw-resize' : 'grab'
+    }
     const viewPointer = viewPointers.get(event.pointerId)
     if (viewPointer) {
       event.preventDefault()
@@ -409,6 +517,13 @@ export function initShapeEditor(options: ShapeEditorOptions): ShapeEditorApi {
     queueRender()
   })
   const stopPointer = (event: PointerEvent): void => {
+    if (cropDrag?.pointerId === event.pointerId) {
+      cropDrag = null
+      if (canvas.hasPointerCapture(event.pointerId))
+        canvas.releasePointerCapture(event.pointerId)
+      syncCanvasCursor()
+      return
+    }
     if (viewPointers.delete(event.pointerId)) {
       if (canvas.hasPointerCapture(event.pointerId)) {
         canvas.releasePointerCapture(event.pointerId)
@@ -485,10 +600,15 @@ export function initShapeEditor(options: ShapeEditorOptions): ShapeEditorApi {
     sourceName = name
     sourceCanvas = working
     sourceImageData = workingCtx.getImageData(0, 0, width, height)
+    shapeCrop = null
+    cropLayoutKey = ''
     sourceHasAlpha = hasAlphaPixels(sourceImageData)
-    topology = options.getGridTopology()
+    topology = getEditorTopology()
+    currentShapeAspect = options.getGridAspectRatio?.() ?? 1
     const sizeMax = getSizeMax(topology)
-    size = clamp(options.getDefaultCols(), 4, sizeMax)
+    const defaultSize = options.getDefaultCols()
+    imageModeSize = defaultSize
+    size = clamp(topology.type === 'hexagon' && topology.layout === 'hexagon' ? Math.floor((defaultSize + 1) / 2) : defaultSize, 4, sizeMax)
     colsInput.max = String(sizeMax)
     colsInput.value = String(size)
 
@@ -501,7 +621,7 @@ export function initShapeEditor(options: ShapeEditorOptions): ShapeEditorApi {
     if (!sourceImageData) {
       return
     }
-    pixelMask = buildAutoPixelMask(sourceImageData, threshold)
+    pixelMask = buildAutoPixelMask(sourceImageData, threshold, topology)
     onMaskEdited()
   }
 
@@ -515,12 +635,37 @@ export function initShapeEditor(options: ShapeEditorOptions): ShapeEditorApi {
     if (!pixelMask) {
       return
     }
-    topology = options.getGridTopology()
+    topology = getEditorTopology()
     colsInput.max = String(getSizeMax(topology))
-    const dimensions = getShapeGridDimensions(pixelMask.width, pixelMask.height, size, topology)
-    cols = dimensions.cols
-    rows = clamp(dimensions.rows, 1, GRID_DIMENSION_MAX)
-    cellMask = buildCellMask(pixelMask, cols, rows, topology)
+    size = Math.min(size, getSizeMax(topology))
+    colsInput.value = String(size)
+    if (isCropMode()) {
+      const aspect = currentShapeAspect
+      const layoutKey = JSON.stringify([topology, size, aspect])
+      if (cropLayoutKey !== layoutKey) {
+        cropLayout = buildTopologyCropLayout(size, topology, aspect)
+        cropGridPath = new Path2D()
+        for (const segment of cropLayout.segments) {
+          cropGridPath.moveTo(segment.from.x, segment.from.y)
+          cropGridPath.lineTo(segment.to.x, segment.to.y)
+        }
+        cropLayoutKey = layoutKey
+      }
+      const layout = cropLayout!
+      if (!shapeCrop || Math.abs(shapeCrop.width / shapeCrop.height - layout.aspect) > 1e-6) {
+        shapeCrop = createShapeCrop(pixelMask.width, pixelMask.height, layout.aspect)
+      }
+      cols = layout.cols
+      rows = layout.rows
+      cellMask = layout.mask
+      setTool('view')
+    }
+    else {
+      const dimensions = getShapeGridDimensions(pixelMask.width, pixelMask.height, size, topology)
+      cols = dimensions.cols
+      rows = clamp(dimensions.rows, 1, GRID_DIMENSION_MAX)
+      cellMask = buildCellMask(pixelMask, cols, rows, topology)
+    }
     const regions = findMaskRegions(cellMask, topology)
     regionCount = regions.count
     cellCount = regions.cellCount
@@ -529,6 +674,8 @@ export function initShapeEditor(options: ShapeEditorOptions): ShapeEditorApi {
   }
 
   function getSizeMax(nextTopology: ShapeGridTopology): number {
+    if (nextTopology.type === 'circular')
+      return CIRCULAR_RING_MAX
     if (nextTopology.type === 'hexagon' && nextTopology.layout === 'hexagon') {
       return HEX_OUTER_SIZE_MAX
     }
@@ -538,17 +685,40 @@ export function initShapeEditor(options: ShapeEditorOptions): ShapeEditorApi {
   }
 
   function syncFooter(): void {
+    const circular = topology.type === 'circular'
+    const crop = isCropMode()
+    modeGroup.classList.toggle('is-hidden', circular)
+    modeSelect.value = crop ? 'current' : 'image'
+    cropTitle.textContent = circular ? 'CIRCULAR CROP' : 'CURRENT SHAPE CROP'
+    circleResetButton.textContent = circular ? 'Reset circle' : 'Reset selection'
+    editorTitle.textContent = crop ? 'IMAGE COLORS' : 'SHAPE STUDIO'
+    editorRoot.setAttribute('aria-label', crop ? 'Current shape image colors' : 'Shape studio')
+    shapeCropGroup.classList.toggle('is-hidden', !crop)
+    backgroundGroup.classList.toggle('is-hidden', crop)
+    toolsGroup.classList.toggle('is-hidden', crop)
+    regionsStat.classList.toggle('is-hidden', crop)
+    applyButton.textContent = crop ? 'Apply colors' : 'Apply shape'
     statCells.textContent = String(cellCount)
     statRegions.textContent = String(regionCount)
     const outerLayout = (topology.type === 'triangle' && topology.layout === 'triangle')
       || (topology.type === 'hexagon' && topology.layout === 'hexagon')
-    sizeLabel.textContent = outerLayout ? 'SIDE SIZE' : 'WIDTH (CELLS)'
-    gridLabel.textContent = outerLayout
-      ? `${topology.type === 'hexagon' ? 'Hexagon' : 'Triangle'} size ${topology.type === 'hexagon' ? (rows + 1) / 2 : rows} · ${cellCount} kept cells`
-      : `${cols} × ${rows} cells`
+    sizeLabel.textContent = topology.type === 'circular' ? 'RINGS' : outerLayout ? 'SIDE SIZE' : 'WIDTH (CELLS)'
+    gridLabel.textContent = topology.type === 'circular'
+      ? `${rows} rings · ${rows * 2} cells across`
+      : outerLayout
+        ? `${topology.type === 'hexagon' ? 'Hexagon' : 'Triangle'} size ${topology.type === 'hexagon' ? (rows + 1) / 2 : rows} · ${cellCount} kept cells`
+        : `${cols} × ${rows} cells`
     meta.textContent = sourceName
       ? `${sourceName} · ${pixelMask?.width ?? 0}×${pixelMask?.height ?? 0}px`
       : ''
+
+    if (crop) {
+      connectivityLabel.textContent = 'Select the shape area to use for image colors.'
+      connectivityLabel.className = 'shape-connectivity is-ok'
+      keepLargestButton.classList.add('is-hidden')
+      applyButton.disabled = cellCount === 0
+      return
+    }
 
     const tooSmall = cellCount < MIN_SHAPE_CELLS
     const disconnected = regionCount > 1
@@ -574,6 +744,8 @@ export function initShapeEditor(options: ShapeEditorOptions): ShapeEditorApi {
   }
 
   function setTool(nextTool: ShapeTool): void {
+    if (isCropMode())
+      nextTool = 'view'
     tool = nextTool
     viewButton.classList.toggle('is-active', nextTool === 'view')
     brushKeepButton.classList.toggle('is-active', nextTool === 'keep')
@@ -752,6 +924,18 @@ export function initShapeEditor(options: ShapeEditorOptions): ShapeEditorApi {
     const startCol = clamp(target.x - halfBefore, 0, Math.max(0, cols - blockCells))
     const startRow = clamp(target.y - halfBefore, 0, Math.max(0, rows - blockCells))
     const cells: MazePoint[] = []
+    if (topology.type === 'circular') {
+      const counts = buildRingCellCounts(rows)
+      const angle = (target.x + 0.5) / counts[target.y]
+      for (let row = startRow; row <= Math.min(rows - 1, startRow + blockCells - 1); row += 1) {
+        const count = counts[row]
+        const center = Math.floor(angle * count)
+        for (let i = 0; i < Math.min(blockCells, count); i += 1) {
+          cells.push({ x: (center - halfBefore + i + count * blockCells) % count, y: row })
+        }
+      }
+      return cells
+    }
     for (let row = startRow; row <= Math.min(rows - 1, startRow + blockCells - 1); row += 1) {
       for (let col = startCol; col <= Math.min(cols - 1, startCol + blockCells - 1); col += 1) {
         if (getShapeCellPolygon(mask, col, row, cols, rows, topology)) {
@@ -787,6 +971,7 @@ export function initShapeEditor(options: ShapeEditorOptions): ShapeEditorApi {
     editorRoot.classList.add('is-hidden')
     painting = false
     paintPointerId = null
+    cropDrag = null
     panning = false
     panPointerId = null
     spaceHeld = false
@@ -826,7 +1011,7 @@ export function initShapeEditor(options: ShapeEditorOptions): ShapeEditorApi {
   }
 
   function syncCanvasCursor(): void {
-    canvas.style.cursor = panning ? 'grabbing' : spaceHeld || tool === 'view' ? 'grab' : 'crosshair'
+    canvas.style.cursor = cropDrag ? cropDrag.handle === 'move' ? 'move' : cropDrag.handle === 'nw' || cropDrag.handle === 'se' ? 'nwse-resize' : 'nesw-resize' : panning ? 'grabbing' : spaceHeld || tool === 'view' ? 'grab' : 'crosshair'
   }
 
   function queueRender(): void {
@@ -857,10 +1042,57 @@ export function initShapeEditor(options: ShapeEditorOptions): ShapeEditorApi {
     ctx.scale(viewScale, viewScale)
     ctx.imageSmoothingEnabled = viewScale < 2
     ctx.drawImage(sourceCanvas, 0, 0)
+    if (isCropMode() && shapeCrop) {
+      drawShapeCrop()
+      return
+    }
     ctx.drawImage(ensureOverlay(), 0, 0)
 
     drawCellPreview()
     drawBrushCursor()
+  }
+
+  function drawShapeCrop(): void {
+    if (!shapeCrop || !pixelMask || !cropLayout || !cropGridPath)
+      return
+    const { x, y, width, height } = shapeCrop
+    const traceOutline = () => {
+      cropLayout!.outline.forEach((point, index) => {
+        const px = x + point.x * width
+        const py = y + point.y * height
+        if (index === 0)
+          ctx.moveTo(px, py)
+        else ctx.lineTo(px, py)
+      })
+      ctx.closePath()
+    }
+    ctx.beginPath()
+    ctx.rect(0, 0, pixelMask.width, pixelMask.height)
+    traceOutline()
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)'
+    ctx.fill('evenodd')
+    ctx.save()
+    ctx.translate(x, y)
+    ctx.scale(width, height)
+    ctx.strokeStyle = 'rgba(143, 245, 255, 0.5)'
+    ctx.lineWidth = 1 / (viewScale * Math.sqrt(width * height))
+    ctx.stroke(cropGridPath)
+    ctx.restore()
+    ctx.beginPath()
+    traceOutline()
+    ctx.strokeStyle = '#91f7ff'
+    ctx.lineWidth = 1.5 / viewScale
+    ctx.stroke()
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)'
+    ctx.lineWidth = 1 / viewScale
+    ctx.strokeRect(x, y, width, height)
+    const handleSize = 9 / viewScale
+    for (const { point } of getShapeCropCorners(shapeCrop)) {
+      ctx.fillStyle = '#ffffff'
+      ctx.strokeStyle = '#111317'
+      ctx.fillRect(point.x - handleSize / 2, point.y - handleSize / 2, handleSize, handleSize)
+      ctx.strokeRect(point.x - handleSize / 2, point.y - handleSize / 2, handleSize, handleSize)
+    }
   }
 
   /** Overlay bitmap dimming removed pixels; rebuilt only after mask edits. */
@@ -891,14 +1123,14 @@ export function initShapeEditor(options: ShapeEditorOptions): ShapeEditorApi {
     return overlayCanvas
   }
 
-  function drawCellPreview(): void {
+  function drawCellPreview(fill = true, localScale = 1): void {
     if (cellMask.length === 0 || !pixelMask) {
       return
     }
 
     ctx.fillStyle = 'rgba(143, 245, 255, 0.12)'
     ctx.strokeStyle = 'rgba(143, 245, 255, 0.35)'
-    ctx.lineWidth = 1 / viewScale
+    ctx.lineWidth = 1 / (viewScale * localScale)
     for (let row = 0; row < rows; row += 1) {
       for (let col = 0; col < cellMask[row].length; col += 1) {
         if (!cellMask[row][col]) {
@@ -906,7 +1138,7 @@ export function initShapeEditor(options: ShapeEditorOptions): ShapeEditorApi {
         }
         const polygon = getShapeCellPolygon(pixelMask, col, row, cols, rows, topology)
         if (polygon) {
-          drawPolygon(polygon, true)
+          drawPolygon(polygon, fill)
         }
       }
     }
@@ -961,7 +1193,15 @@ export function initShapeEditor(options: ShapeEditorOptions): ShapeEditorApi {
       if (!sourceCanvas) {
         return false
       }
-      refreshDerivedState()
+      const nextTopology = getEditorTopology()
+      if ((topology.type === 'circular') !== (nextTopology.type === 'circular')) {
+        topology = nextTopology
+        clearHistory()
+        rerunAutoMask()
+      }
+      else {
+        refreshDerivedState()
+      }
       open()
       return true
     },

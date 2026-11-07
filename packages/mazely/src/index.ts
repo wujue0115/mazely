@@ -21,6 +21,7 @@ import { Mazely as MazelyRuntime } from '@mazely/core'
 
 export type {
   CellId,
+  CircularGrid,
   GrowingTreeStrategy,
   HexDirection,
   HexGrid,
@@ -39,6 +40,7 @@ export type {
   MazeGrid,
   MazeGridType,
   MazeHuntScanPayload,
+  MazelyCircularGridOptions,
   MazelyEventHandler,
   MazelyEventName,
   MazelyEventPayload,
@@ -80,9 +82,12 @@ export {
   applySerializedGrid,
   areCellsDirectlyLinked,
   assertGridConnected,
+  buildRingCellCounts,
   cellIdToPoint,
+  CircularCell,
   createAldousBroderAlgorithm,
   createBinaryTreeAlgorithm,
+  createCircularGrid,
   createDfsAlgorithm,
   createEllerAlgorithm,
   createGrowingTreeAlgorithm,

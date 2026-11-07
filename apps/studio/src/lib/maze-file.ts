@@ -10,6 +10,8 @@ import type {
 import type { SolveState } from './solver-state'
 import type { PointSelectionMode, StyleTheme, StyleVisibility } from './types'
 import {
+  buildRingCellCounts,
+  createCircularGrid,
   createMaze,
   isMazeGenerationAlgorithm,
   MAZE_SOLVING_ALGORITHMS,
@@ -22,7 +24,7 @@ import {
 } from './flood'
 import { key, parsePointKey } from './point'
 import { DEFAULT_STYLE_THEME, DEFAULT_STYLE_VISIBILITY } from './types'
-import { GRID_DIMENSION_MAX, HEX_OUTER_SIZE_MAX } from './utils'
+import { CIRCULAR_RING_MAX, GRID_DIMENSION_MAX, HEX_OUTER_SIZE_MAX } from './utils'
 
 const MAGIC = new Uint8Array([0x4D, 0x5A, 0x4C, 0x59]) // MZLY
 const HEADER_SIZE = 16
@@ -33,6 +35,7 @@ const CODEC_GZIP = 1
 const TOPOLOGY_SQUARE = 0
 const TOPOLOGY_TRIANGLE = 1
 const TOPOLOGY_HEXAGON = 2
+const TOPOLOGY_CIRCULAR = 3
 // Each chunk owns its schema so a future patch can migrate one concern without
 // changing the entire container format.
 const META_SCHEMA_VERSION = 1
@@ -133,7 +136,7 @@ interface DecodedTopology {
   orientation?: 'pointy' | 'flat'
   rows: number
   size?: number
-  type: 'square' | 'triangle' | 'hexagon'
+  type: 'square' | 'triangle' | 'hexagon' | 'circular'
 }
 
 interface LinkTopology {
@@ -141,7 +144,7 @@ interface LinkTopology {
   layout?: 'triangle' | 'rectangle' | 'hexagon'
   orientation?: 'pointy' | 'flat'
   rows: number
-  type: 'square' | 'triangle' | 'hexagon'
+  type: 'square' | 'triangle' | 'hexagon' | 'circular'
 }
 
 interface CanonicalLink {
@@ -174,7 +177,7 @@ export async function encodeMazeFile(options: MazeFileSaveOptions): Promise<Uint
       generationAlgorithm: options.maze.algorithm,
       hasCustomStartAndEndPoints: options.pointPreferences.generateMode === 'manual'
         || options.pointPreferences.solveMode === 'manual',
-      hasShape: options.shape !== null,
+      hasShape: options.shape !== null || options.runtime.grid.cells.length !== getFullTopologyCellCount(options.runtime),
       pointPreferences: options.pointPreferences,
     } satisfies MazeFileMeta)),
     encodeChunk(CHUNK_TOPOLOGY, topology),
@@ -249,7 +252,7 @@ export async function decodeMazeFile(file: ArrayBuffer | Uint8Array): Promise<Lo
   const appearance = appearanceChunk ? decodeAppearance(appearanceChunk) : null
   const colorsChunk = chunks.get(CHUNK_CELL_COLORS)
   const cellColors = colorsChunk ? decodeCellColors(colorsChunk, topology) : null
-  const hasShape = meta.hasShape ?? (topology.mask !== null || colorsChunk !== undefined)
+  const hasShape = meta.hasShape === true || topology.mask !== null || colorsChunk !== undefined
   const shape = hasShape
     ? {
         cellColors: cellColors ?? createFullCellMask(topology).map(row => row.map(() => null)),
@@ -291,13 +294,32 @@ export class MazeFileError extends Error {
   }
 }
 
+function getFullTopologyCellCount(runtime: Maze): number {
+  const grid = runtime.grid
+  if (grid.type === 'circular')
+    return buildRingCellCounts(grid.rows).reduce((sum, count) => sum + count, 0)
+  if (grid.type === 'triangle' && (grid as TriangleGrid).layout === 'triangle')
+    return (grid as TriangleGrid).size! ** 2
+  if (grid.type === 'hexagon' && (grid as HexGrid).layout === 'hexagon') {
+    const size = (grid as HexGrid).size!
+    return 3 * size * (size - 1) + 1
+  }
+  return grid.rows * grid.cols
+}
+
 function encodeTopology(runtime: Maze): Uint8Array {
   const { rows, cols } = runtime.grid
   const active = new Set(runtime.grid.cells.map(cell => slotFromCell(cell, cols)))
   const writer = new ByteWriter()
 
   let expectedActiveCells: number
-  if (runtime.grid.type === 'hexagon') {
+  if (runtime.grid.type === 'circular') {
+    writer.u8(TOPOLOGY_CIRCULAR)
+    writer.u8(1)
+    writer.varint(rows)
+    expectedActiveCells = buildRingCellCounts(rows).reduce((sum, count) => sum + count, 0)
+  }
+  else if (runtime.grid.type === 'hexagon') {
     const grid = runtime.grid as HexGrid
     writer.u8(TOPOLOGY_HEXAGON)
     writer.u8(HEXAGON_TOPOLOGY_SCHEMA_VERSION)
@@ -351,7 +373,7 @@ function encodeTopology(runtime: Maze): Uint8Array {
 function decodeTopology(bytes: Uint8Array): DecodedTopology {
   const reader = new ByteReader(bytes)
   const topology = reader.u8()
-  if (topology !== TOPOLOGY_SQUARE && topology !== TOPOLOGY_TRIANGLE && topology !== TOPOLOGY_HEXAGON) {
+  if (topology !== TOPOLOGY_SQUARE && topology !== TOPOLOGY_TRIANGLE && topology !== TOPOLOGY_HEXAGON && topology !== TOPOLOGY_CIRCULAR) {
     throw new MazeFileError(`Unsupported maze topology codec ${topology}.`)
   }
   const schemaVersion = reader.u8()
@@ -368,7 +390,14 @@ function decodeTopology(bytes: Uint8Array): DecodedTopology {
   let size: number | undefined
   let rows: number
   let cols: number
-  if (topology === TOPOLOGY_TRIANGLE) {
+  if (topology === TOPOLOGY_CIRCULAR) {
+    type = 'circular'
+    rows = reader.varint()
+    if (rows < 1 || rows > CIRCULAR_RING_MAX)
+      throw new MazeFileError(`Circular ring count must be between 1 and ${CIRCULAR_RING_MAX}; received ${rows}.`)
+    cols = createCircularGrid(rows).cols
+  }
+  else if (topology === TOPOLOGY_TRIANGLE) {
     type = 'triangle'
     const layoutCodec = reader.u8()
     if (layoutCodec === TRIANGLE_LAYOUT_TRIANGLE) {
@@ -420,7 +449,7 @@ function decodeTopology(bytes: Uint8Array): DecodedTopology {
     && (size === undefined || size < 1 || size > sizeMax)) {
     throw new MazeFileError(`Invalid ${type} topology size ${size}.`)
   }
-  if (layout !== 'triangle' && layout !== 'hexagon'
+  if (type !== 'circular' && layout !== 'triangle' && layout !== 'hexagon'
     && (rows < 1 || cols < 1 || rows > GRID_DIMENSION_MAX || cols > GRID_DIMENSION_MAX)) {
     throw new MazeFileError(`Invalid ${type} topology dimensions ${cols}x${rows}.`)
   }
@@ -467,6 +496,15 @@ function encodeLinks(runtime: Maze): Uint8Array {
 }
 
 const topologyLinkCodecs: Record<LinkTopology['type'], TopologyLinkCodec> = {
+  circular: {
+    enumerateLinks(topology) {
+      const grid = createMaze({ grid: { rings: topology.rows, type: 'circular' } }).grid
+      return grid.edges.filter(edge => edge.to).map(edge => canonicalLink(
+        slotFromCell(edge.from as GridCell, topology.cols),
+        slotFromCell(edge.to as GridCell, topology.cols),
+      ))
+    },
+  },
   square: {
     enumerateLinks: (topology) => {
       const links: CanonicalLink[] = []
@@ -541,6 +579,9 @@ const topologyLinkCodecs: Record<LinkTopology['type'], TopologyLinkCodec> = {
 
 function getRuntimeLinkTopology(runtime: Maze): LinkTopology {
   const { cols, rows, type } = runtime.grid
+  if (type === 'circular') {
+    return { cols, rows, type }
+  }
   if (type === 'hexagon') {
     const grid = runtime.grid as HexGrid
     return { cols, layout: grid.layout, orientation: grid.orientation, rows, type }
@@ -633,37 +674,39 @@ function applyCanonicalLinks(runtime: Maze, topology: DecodedTopology, links: Ui
 }
 
 function createRuntime(topology: DecodedTopology, links: Uint8Array): Maze {
-  const runtime = topology.type === 'hexagon'
-    ? createMaze({
-        grid: topology.layout === 'hexagon'
-          ? { layout: 'hexagon', mask: topology.mask ?? undefined, orientation: topology.orientation, size: topology.size!, type: 'hexagon' }
-          : { cols: topology.cols, layout: 'rectangle', mask: topology.mask ?? undefined, orientation: topology.orientation, rows: topology.rows, type: 'hexagon' },
-      })
-    : topology.type === 'triangle'
+  const runtime = topology.type === 'circular'
+    ? createMaze({ grid: { rings: topology.rows, mask: topology.mask ?? undefined, type: 'circular' } })
+    : topology.type === 'hexagon'
       ? createMaze({
-          grid: topology.layout === 'triangle'
-            ? {
-                layout: 'triangle',
-                mask: topology.mask ?? undefined,
-                size: topology.size!,
-                type: 'triangle',
-              }
-            : {
-                cols: topology.cols,
-                layout: 'rectangle',
-                mask: topology.mask ?? undefined,
-                rows: topology.rows,
-                type: 'triangle',
-              },
+          grid: topology.layout === 'hexagon'
+            ? { layout: 'hexagon', mask: topology.mask ?? undefined, orientation: topology.orientation, size: topology.size!, type: 'hexagon' }
+            : { cols: topology.cols, layout: 'rectangle', mask: topology.mask ?? undefined, orientation: topology.orientation, rows: topology.rows, type: 'hexagon' },
         })
-      : createMaze({
-          grid: {
-            cols: topology.cols,
-            mask: topology.mask ?? undefined,
-            rows: topology.rows,
-            type: 'square',
-          },
-        })
+      : topology.type === 'triangle'
+        ? createMaze({
+            grid: topology.layout === 'triangle'
+              ? {
+                  layout: 'triangle',
+                  mask: topology.mask ?? undefined,
+                  size: topology.size!,
+                  type: 'triangle',
+                }
+              : {
+                  cols: topology.cols,
+                  layout: 'rectangle',
+                  mask: topology.mask ?? undefined,
+                  rows: topology.rows,
+                  type: 'triangle',
+                },
+          })
+        : createMaze({
+            grid: {
+              cols: topology.cols,
+              mask: topology.mask ?? undefined,
+              rows: topology.rows,
+              type: 'square',
+            },
+          })
   applyCanonicalLinks(runtime, topology, links)
   return runtime
 }
@@ -994,10 +1037,13 @@ function decodeMeta(bytes: Uint8Array): MazeFileMeta {
 }
 
 function createFullCellMask(topology: DecodedTopology): boolean[][] {
+  const counts = topology.type === 'circular' ? buildRingCellCounts(topology.rows) : []
   return Array.from({ length: topology.rows }, (_, row) => {
-    const cols = topology.type === 'triangle' && topology.layout === 'triangle'
-      ? row * 2 + 1
-      : topology.cols
+    const cols = topology.type === 'circular'
+      ? counts[row]
+      : topology.type === 'triangle' && topology.layout === 'triangle'
+        ? row * 2 + 1
+        : topology.cols
     return Array.from({ length: cols }, () => true)
   })
 }
@@ -1165,6 +1211,9 @@ function isNumberInRange(value: unknown, min: number, max: number): value is num
 }
 
 function assertSaveOptions(options: MazeFileSaveOptions): void {
+  if (options.runtime.grid.type === 'circular' && options.runtime.grid.rows > CIRCULAR_RING_MAX) {
+    throw new MazeFileError(`Studio supports circular mazes up to ${CIRCULAR_RING_MAX} rings.`)
+  }
   if (options.runtime.grid.rows !== options.maze.rows || options.runtime.grid.cols !== options.maze.cols) {
     throw new MazeFileError('The maze view and runtime dimensions do not match.')
   }

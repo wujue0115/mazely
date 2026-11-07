@@ -8,6 +8,10 @@ export interface SerializedMaze {
   hexOrientation?: HexOrientation
   /** Side size for a triangular boundary; omitted for other boundaries. */
   size?: number
+  /** Number of concentric rings for circular grids. */
+  rings?: number
+  /** Stable sector counts for circular grids. */
+  ringCellCounts?: readonly number[]
   rows: number
   cols: number
   openedEdgeIds: string[]
@@ -19,6 +23,8 @@ interface SerializableGrid {
   hexLayout?: HexGridLayout
   orientation?: HexOrientation
   size?: number
+  rings?: number
+  ringCellCounts?: readonly number[]
   rows: number
   cols: number
   edges: MazeEdge[]
@@ -41,6 +47,9 @@ export function serializeGrid(grid: SerializableGrid): SerializedMaze {
           hexLayout: grid.hexLayout,
           hexOrientation: grid.orientation,
         }
+      : {}),
+    ...(grid.type === 'circular'
+      ? { rings: grid.rings, ringCellCounts: grid.ringCellCounts }
       : {}),
     type: grid.type,
   }
@@ -71,6 +80,16 @@ export function applySerializedGrid(grid: SerializableGrid, data: SerializedMaze
     throw new TypeError(
       `Serialized maze is ${data.rows}x${data.cols} but the grid is ${grid.rows}x${grid.cols}.`,
     )
+  }
+  if (grid.type === 'circular' && data.rings !== undefined && grid.rings !== data.rings) {
+    throw new TypeError(`Serialized maze uses ${data.rings} rings but the grid uses ${grid.rings}.`)
+  }
+
+  if (grid.type === 'circular' && data.ringCellCounts !== undefined
+    && (!grid.ringCellCounts
+      || data.ringCellCounts.length !== grid.ringCellCounts.length
+      || data.ringCellCounts.some((count, index) => count !== grid.ringCellCounts![index]))) {
+    throw new TypeError('Serialized circular maze sector counts do not match the target grid.')
   }
 
   const edgesById = new Map(grid.edges.map(edge => [edge.id, edge]))

@@ -2,7 +2,7 @@ import type { Webgl2dViewState } from '../src/lib/webgl-2d-view'
 import { createMaze } from 'mazely'
 import * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
-import { getCellBoundarySegments, getSharedBoundary } from '../src/lib/grid-geometry'
+import { getCellBoundarySegments, getCellPolygon, getPolarBoundaries, getSharedBoundary } from '../src/lib/grid-geometry'
 import {
   buildTriangleWallPositions,
   buildTriangleWallStripPositions,
@@ -19,6 +19,40 @@ import {
 } from '../src/lib/webgl-2d-view'
 
 describe('webGL 2D wall rendering', () => {
+  it('matches fill arc vertices across split circular rings', () => {
+    const runtime = createMaze({ grid: { rings: 5, type: 'circular' } })
+    const parent = runtime.grid.getCell('1:0')!
+    const parentArc = getCellPolygon(parent).filter(point => Math.abs(Math.hypot(point.x - 5, point.y - 5) - 2) < 1e-8)
+    const children = parent.getNeighbors().filter(cell => 'ring' in cell && cell.ring === 2)
+    const childArc = children.flatMap(cell => getCellPolygon(cell)).filter(point => Math.abs(Math.hypot(point.x - 5, point.y - 5) - 2) < 1e-8)
+    expect(children.length).toBe(2)
+    const coordinates = (point: { x: number, y: number }) => `${point.x.toFixed(9)}:${point.y.toFixed(9)}`
+    expect(new Set(parentArc.map(coordinates))).toEqual(new Set(childArc.map(coordinates)))
+  })
+
+  it('uses bounded fan geometry and independently openable arc walls for circular cells', () => {
+    const runtime = createMaze({ grid: { rings: 4, type: 'circular' } })
+    const outer = runtime.grid.getCell('3:0')!
+    const polygon = getCellPolygon(outer)
+    expect(polygon.length).toBeGreaterThan(4)
+    for (const point of polygon) {
+      expect(Math.hypot(point.x - 4, point.y - 4)).toBeLessThanOrEqual(4 + 1e-6)
+    }
+
+    const edge = outer.getEdges().find(candidate => candidate.to !== null)!
+    edge.open()
+    const matching = getCellBoundarySegments(outer).filter(segment => segment.edge === edge)
+    expect(matching.length).toBeGreaterThan(0)
+    expect(matching.every(segment => segment.opened)).toBe(true)
+  })
+
+  it('does not render a false radial seam through the circular center cell', () => {
+    const runtime = createMaze({ grid: { rings: 4, type: 'circular' } })
+    const center = runtime.grid.getCell('0:0')!
+
+    expect(getPolarBoundaries(center).some(boundary => boundary.kind === 'radial')).toBe(false)
+  })
+
   it('builds polygon wall geometry for a hexagonal grid', () => {
     const runtime = createMaze({
       grid: { cols: 3, layout: 'rectangle', orientation: 'flat', rows: 3, type: 'hexagon' },

@@ -2,7 +2,7 @@ import type { Maze } from 'mazely'
 import type { GenerationPreview } from './controllers/generation'
 import type { MazePoint, MazeViewState } from './maze-types'
 import type { ThreeMazeView, ThreeOverlayDot, ThreeOverlaySegment } from './three-view'
-import type { Webgl2dMazeView, Webgl2dOverlayDot, Webgl2dOverlayRing, Webgl2dOverlaySegment } from './webgl-2d-view'
+import type { Webgl2dMazeView, Webgl2dOverlayDot, Webgl2dOverlayRing, Webgl2dOverlaySegment, Webgl2dPolarPath } from './webgl-2d-view'
 import {
   getGenerationAlgorithm,
   getPointMarkerVisibility,
@@ -12,7 +12,7 @@ import {
   shouldShowSolveProgress,
 } from './algorithms'
 import { app } from './app-state'
-import { getHuntScanSegment, shouldRenderGenerationPreview } from './controllers/generation'
+import { getHuntScanSegments, shouldRenderGenerationPreview } from './controllers/generation'
 import { maybeSyncUi, syncUi } from './controllers/status'
 import {
   getGenerationActiveSegmentPoints,
@@ -25,11 +25,13 @@ import {
   getSolveFrontierHeads,
   getSolveFrontierTrailEdges,
   getSolveTrailPoints,
+  getStepParentByKey,
   isSolveMultiHeadMode,
 } from './derived'
 import { canvasWrap, ctx, generationSelect } from './dom'
 import { getFloodDepthColor } from './flood'
-import { getGridBounds, getOverlayScale, getSharedBoundary, TRIANGLE_HEIGHT } from './grid-geometry'
+import { getFrontierRouteSegments } from './frontier-routes'
+import { getGridBounds, getOverlayScale, getSharedBoundaries, getSharedBoundary, TRIANGLE_HEIGHT } from './grid-geometry'
 import { key, parsePointKey } from './point'
 import { hasOpenCellEdge } from './runtime'
 import { FIXED_CELL_SIZE, ZOOM_MAX, ZOOM_MIN } from './types'
@@ -83,7 +85,9 @@ export function getZoomBounds(targetMaze: MazeViewState = getActiveMazeView()): 
   const runtime = app.generationPreview?.view === targetMaze
     ? app.generationPreview.runtime
     : app.mazeRuntime
-  const bounds = runtime?.grid.type === 'hexagon' ? getGridBounds(runtime) : null
+  const bounds = runtime?.grid.type === 'hexagon' || runtime?.grid.type === 'circular'
+    ? getGridBounds(runtime)
+    : null
   const mazePixelWidth = (bounds?.width ?? (app.gridType === 'triangle' ? (cols + 1) / 2 : cols)) * FIXED_CELL_SIZE
   const mazePixelHeight = (bounds?.height ?? (app.gridType === 'triangle' ? rows * TRIANGLE_HEIGHT : rows)) * FIXED_CELL_SIZE
   const rawFitZoom = Math.min(width / mazePixelWidth, height / mazePixelHeight)
@@ -231,6 +235,7 @@ function renderWebgl2dView(
     getWebgl2dCellColor(activeRuntime, preview, pathSet, floodActive, x, y)
 
   const segments: Webgl2dOverlaySegment[] = []
+  const polarPaths: Webgl2dPolarPath[] = []
   const dots: Webgl2dOverlayDot[] = []
   const rings: Webgl2dOverlayRing[] = []
   const hintSegments: Webgl2dOverlaySegment[] = []
@@ -238,6 +243,10 @@ function renderWebgl2dView(
   const hintDots: Webgl2dOverlayDot[] = []
   const hintRings: Webgl2dOverlayRing[] = []
   const pushPolyline = (points: MazePoint[], color: string, width: number): void => {
+    if (activeRuntime.grid.type === 'circular') {
+      polarPaths.push({ color, points, width })
+      return
+    }
     for (let index = 0; index < points.length - 1; index += 1) {
       segments.push({ cap: 'butt', color, from: points[index], to: points[index + 1], width })
     }
@@ -249,6 +258,7 @@ function renderWebgl2dView(
   if (preview) {
     const generationOverlays = getWebgl2dGenerationOverlays(preview)
     segments.push(...generationOverlays.segments)
+    polarPaths.push(...generationOverlays.polarPaths)
     dots.push(...generationOverlays.dots)
   }
 
@@ -263,15 +273,18 @@ function renderWebgl2dView(
         const frontierHeads = getSolveFrontierHeads()
           .filter(point => !activeTrailKeys.has(key(point.x, point.y)))
         if (app.visibleElements.subPath) {
-          for (const edgeKey of getSolveFrontierTrailEdges(frontierHeads)) {
-            const [left, right] = edgeKey.split('>')
-            if (left && right) {
-              segments.push({
-                color: app.styleTheme.subPath,
-                from: parsePointKey(left),
-                to: parsePointKey(right),
-                width: THREE_TRAIL_WIDTH,
-              })
+          if (activeRuntime.grid.type === 'circular') {
+            for (const points of getFrontierRouteSegments(getStepParentByKey(), frontierHeads, activeTrail)) {
+              polarPaths.push({ color: app.styleTheme.subPath, layer: 'subpath', points, width: THREE_TRAIL_WIDTH })
+            }
+          }
+          else {
+            for (const edgeKey of getSolveFrontierTrailEdges(frontierHeads)) {
+              const [left, right] = edgeKey.split('>')
+              if (left && right) {
+                const points = [parsePointKey(left), parsePointKey(right)]
+                segments.push({ color: app.styleTheme.subPath, from: points[0], to: points[1], width: THREE_TRAIL_WIDTH })
+              }
             }
           }
         }
@@ -350,6 +363,7 @@ function renderWebgl2dView(
     runtime: activeRuntime,
     rings,
     segments,
+    polarPaths,
     start: pointMarkers.start ? activeMaze.start : null,
     startColor: app.styleTheme.start,
     viewportHeight,
@@ -455,6 +469,17 @@ function pushEditPreviewOverlays(out: {
     return
   }
 
+  if (app.mazeRuntime?.grid.type === 'circular') {
+    const { from, to } = app.editHoverTarget
+    const left = app.mazeRuntime.grid.getCell(`${from.y}:${from.x}`)
+    const right = app.mazeRuntime.grid.getCell(`${to.y}:${to.x}`)
+    if (left && right) {
+      for (const segment of getSharedBoundaries(left, right)) {
+        out.segments.push({ color: EDIT_HINT_COLOR, ...segment, width: wallThickness })
+      }
+    }
+    return
+  }
   const segment = getEdgeOutlineSegment(app.editHoverTarget.from, app.editHoverTarget.to)
   out.segments.push({
     color: EDIT_HINT_COLOR,
@@ -633,17 +658,26 @@ function renderThreeView(
   }
 
   const segments: ThreeOverlaySegment[] = []
+  const polarPaths: Webgl2dPolarPath[] = []
   const dots: ThreeOverlayDot[] = []
 
   const pushPolyline = (points: MazePoint[], color: string, width: number): void => {
+    if (activeRuntime.grid.type === 'circular') {
+      polarPaths.push({ color, points, width })
+      return
+    }
     for (let index = 0; index < points.length - 1; index += 1) {
       segments.push({ color, from: points[index], to: points[index + 1], width })
     }
   }
-
-  if (preview) {
-    const huntScanSegment = getHuntScanSegment(preview)
-    if (huntScanSegment && app.visibleElements.head) {
+  if (preview && activeRuntime.grid.type === 'circular') {
+    const overlays = getWebgl2dGenerationOverlays(preview)
+    segments.push(...overlays.segments)
+    polarPaths.push(...overlays.polarPaths)
+    dots.push(...overlays.dots)
+  }
+  else if (preview) {
+    for (const huntScanSegment of app.visibleElements.head ? getHuntScanSegments(preview) : []) {
       segments.push({
         color: app.styleTheme.head,
         ...huntScanSegment,
@@ -717,7 +751,12 @@ function renderThreeView(
         const activeTrailKeys = new Set(activeTrail.map(point => key(point.x, point.y)))
         const frontierHeads = getSolveFrontierHeads()
           .filter(point => !activeTrailKeys.has(key(point.x, point.y)))
-        if (app.visibleElements.subPath) {
+        if (app.visibleElements.subPath && activeRuntime.grid.type === 'circular') {
+          for (const points of getFrontierRouteSegments(getStepParentByKey(), frontierHeads, activeTrail)) {
+            polarPaths.push({ color: app.styleTheme.subPath, layer: 'subpath', points, width: THREE_TRAIL_WIDTH })
+          }
+        }
+        else if (app.visibleElements.subPath) {
           for (const edgeKey of getSolveFrontierTrailEdges(frontierHeads)) {
             const [left, right] = edgeKey.split('>')
             if (left && right) {
@@ -767,6 +806,8 @@ function renderThreeView(
   })
 
   app.threeView.sync({
+    cellKey: getWebgl2dCellKey(activeRuntime, previewing),
+    overlayKey: getWebgl2dOverlayKey(activeRuntime, previewing),
     dots,
     end: pointMarkers.end ? activeMaze.end : null,
     endColor: app.styleTheme.end,
@@ -776,6 +817,7 @@ function renderThreeView(
     gridWidth: clamp(app.wallThickness / FIXED_CELL_SIZE, 0.04, 0.4),
     runtime: activeRuntime,
     segments,
+    polarPaths,
     start: pointMarkers.start ? activeMaze.start : null,
     startColor: app.styleTheme.start,
     wallColor: app.styleTheme.wall,
@@ -882,10 +924,15 @@ export function getWebgl2dCellColor(
 export function getWebgl2dGenerationOverlays(
   preview: GenerationPreview,
   scale = 1,
-): { dots: Webgl2dOverlayDot[], segments: Webgl2dOverlaySegment[] } {
+): { dots: Webgl2dOverlayDot[], polarPaths: Webgl2dPolarPath[], segments: Webgl2dOverlaySegment[] } {
   const segments: Webgl2dOverlaySegment[] = []
+  const polarPaths: Webgl2dPolarPath[] = []
   const dots: Webgl2dOverlayDot[] = []
   const pushPolyline = (points: MazePoint[], color: string, width: number): void => {
+    if (preview.runtime.grid.type === 'circular') {
+      polarPaths.push({ color, points, width })
+      return
+    }
     for (let index = 0; index < points.length - 1; index += 1) {
       segments.push({ cap: 'butt', color, from: points[index], to: points[index + 1], width })
     }
@@ -893,9 +940,13 @@ export function getWebgl2dGenerationOverlays(
       dots.push({ color, point: points[index], radius: width / 2 })
     }
   }
+  const pushEdge = (from: MazePoint, to: MazePoint, color: string, width: number): void => {
+    if (preview.runtime.grid.type === 'circular')
+      polarPaths.push({ color, points: [from, to], width })
+    else segments.push({ color, from, to, width })
+  }
 
-  const huntScanSegment = getHuntScanSegment(preview)
-  if (huntScanSegment && app.visibleElements.head) {
+  for (const huntScanSegment of app.visibleElements.head ? getHuntScanSegments(preview) : []) {
     segments.push({
       color: app.styleTheme.head,
       ...huntScanSegment,
@@ -924,15 +975,17 @@ export function getWebgl2dGenerationOverlays(
       : getGenerationFrontierHeads()
 
     if (app.visibleElements.subPath) {
-      for (const edgeKey of getGenerationFrontierTrailEdges()) {
-        const [left, right] = edgeKey.split('>')
-        if (left && right) {
-          segments.push({
-            color: app.styleTheme.subPath,
-            from: parsePointKey(left),
-            to: parsePointKey(right),
-            width: THREE_TRAIL_WIDTH,
-          })
+      if (preview.runtime.grid.type === 'circular') {
+        for (const points of getFrontierRouteSegments(preview.parentByKey, getGenerationFrontierHeads(), activeSegmentPoints)) {
+          polarPaths.push({ color: app.styleTheme.subPath, layer: 'subpath', points, width: THREE_TRAIL_WIDTH })
+        }
+      }
+      else {
+        for (const edgeKey of getGenerationFrontierTrailEdges()) {
+          const [left, right] = edgeKey.split('>')
+          if (left && right) {
+            pushEdge(parsePointKey(left), parsePointKey(right), app.styleTheme.subPath, THREE_TRAIL_WIDTH)
+          }
         }
       }
     }
@@ -965,5 +1018,5 @@ export function getWebgl2dGenerationOverlays(
       dot.radius *= scale
     }
   }
-  return { dots, segments }
+  return { dots, polarPaths, segments }
 }

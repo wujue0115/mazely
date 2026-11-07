@@ -3,6 +3,7 @@ import {
   applySerializedGrid,
   areCellsDirectlyLinked,
   cellIdToPoint,
+  createCircularGrid,
   createHexGrid,
   getReachableCellIds,
   GridCell,
@@ -16,6 +17,7 @@ import {
   traverseGrid,
   TriangleCell,
 } from '../src'
+import { estimateCellDistance } from '../src/solving/shared'
 
 function openedEdgeCount(grid: Mazely['grid']): number {
   return grid.edges.filter(edge => edge.opened).length
@@ -33,6 +35,24 @@ function snapshotState(maze: Mazely): string {
 }
 
 describe('@mazely/core', () => {
+  it('round-trips circular topology and rejects mismatched sector counts before changing edges', () => {
+    const maze = new Mazely({ grid: { rings: 5, type: 'circular' }, seed: 'polar-serialization' })
+    maze.generate('dfs').finish()
+    const data = serializeGrid(maze.grid)
+    const target = createCircularGrid(5)
+    applySerializedGrid(target, data)
+    expect(serializeGrid(target)).toEqual(data)
+
+    for (const counts of [[1, 6], [1, 6, 24, 24, 24]]) {
+      const before = serializeGrid(target)
+      expect(() => applySerializedGrid(target, { ...data, openedEdgeIds: [], ringCellCounts: counts }))
+        .toThrow('sector counts')
+      expect(serializeGrid(target)).toEqual(before)
+    }
+    const { ringCellCounts: _counts, ...legacy } = data
+    expect(() => applySerializedGrid(target, legacy)).not.toThrow()
+  })
+
   it('creates rectangular and hexagonal hex grids with the expected adjacency', () => {
     const rectangle = createHexGrid(5, 5)
     expect(rectangle.type).toBe('hexagon')
@@ -46,6 +66,59 @@ describe('@mazely/core', () => {
     expect(hexagon.orientation).toBe('flat')
     expect(hexagon.cells).toHaveLength(19)
     expect(hexagon.getCell('2:2')?.getNeighbors()).toHaveLength(6)
+  })
+
+  it('keeps circular solver estimates admissible across wraparound and split edges', () => {
+    const grid = createCircularGrid(6)
+    for (const end of grid.cells) {
+      const distances = new Map([[end.id, 0]])
+      const queue = [end]
+      for (let index = 0; index < queue.length; index += 1) {
+        const cell = queue[index]
+        for (const neighbor of grid.getNeighbors(cell)) {
+          if (distances.has(neighbor.id))
+            continue
+          distances.set(neighbor.id, distances.get(cell.id)! + 1)
+          queue.push(neighbor)
+        }
+      }
+      for (const cell of grid.cells) {
+        expect(estimateCellDistance(cell, end)).toBeLessThanOrEqual(distances.get(cell.id)!)
+      }
+    }
+  })
+
+  it('creates a connected circular grid with stable polar adjacency', () => {
+    const grid = createCircularGrid(5)
+    expect(grid.type).toBe('circular')
+    expect(grid.ringCellCounts).toEqual([1, 6, 12, 24, 24])
+    expect(grid.getCell('0:0')?.getNeighbors()).toHaveLength(6)
+    expect(grid.getCell('1:0')?.getNeighbors().map(cell => cell.id)).toContain('0:0')
+    grid.edges.forEach(edge => edge.open())
+    expect(getReachableCellIds(grid, '0:0').size).toBe(grid.cells.length)
+  })
+
+  it.each([
+    'aldous-broder',
+    'binary-tree',
+    'dfs',
+    'eller',
+    'growing-tree',
+    'hunt-and-kill',
+    'kruskal',
+    'prim',
+    'recursive-division',
+    'sidewinder',
+    'traversal',
+    'wilson',
+  ] as const)('generates and solves a circular maze with %s', (algorithm) => {
+    const maze = new Mazely({ grid: { rings: 5, type: 'circular' }, seed: `circular-${algorithm}` })
+    maze.generate(algorithm).finish()
+    expect(openedEdgeCount(maze.grid)).toBe(maze.grid.cells.length - 1)
+    const end = maze.grid.cells.at(-1)!
+    maze.solve('bfs', { end: { x: end.col, y: end.row }, start: { x: 0, y: 0 } }).finish()
+    expect(maze.getSolveResult()?.solved).toBe(true)
+    expect(serializeGrid(maze.grid)).toMatchObject({ rings: 5, type: 'circular' })
   })
 
   it.each([
@@ -171,9 +244,8 @@ describe('@mazely/core', () => {
     })
     expect(player.steps.filter(step => step.type === 'carve')).toHaveLength(15)
 
-    const revisitSteps = player.steps.filter(
-      step => step.type === 'visit' && step.payload.from,
-    )
+    const revisitSteps = player.steps.filter(step => step.type === 'visit')
+      .filter(step => step.payload.from)
     expect(revisitSteps.length).toBeGreaterThan(0)
     for (const step of revisitSteps) {
       const from = maze.grid.getCell(step.payload.from!)

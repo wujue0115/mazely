@@ -1,5 +1,6 @@
 import type { GridCell, HexOrientation, Maze, MazeEdge, MazeGridType, MazePoint, TriangleGrid } from 'mazely'
-import { HexCell, TriangleCell } from 'mazely'
+import { CircularCell, HexCell, TriangleCell } from 'mazely'
+import { getPolarRingDivisions } from './polar-resolution'
 
 export interface WorldPoint {
   x: number
@@ -14,6 +15,40 @@ export interface GridBounds {
 export interface GridSegment {
   from: WorldPoint
   to: WorldPoint
+}
+
+/** Exact polar wall primitive. Renderers may tessellate arcs at their own resolution. */
+export type PolarBoundary
+  = | { kind: 'arc', center: WorldPoint, radius: number, startAngle: number, endAngle: number, edge: MazeEdge | null, opened: boolean }
+    | { kind: 'radial', from: WorldPoint, to: WorldPoint, edge: MazeEdge | null, opened: boolean }
+
+export function getPolarBoundaries(cell: CircularCell): PolarBoundary[] {
+  const center = { x: cell.worldX, y: cell.worldY }
+  const boundaries: PolarBoundary[] = []
+  const addArc = (radius: number, edge: MazeEdge | null, startAngle = cell.startAngle, endAngle = cell.endAngle) =>
+    boundaries.push({ center, edge, endAngle, kind: 'arc', opened: edge?.opened ?? false, radius, startAngle })
+  let angle = cell.startAngle
+  const children = cell.outward.map(edge => ({ edge, cell: edge.getOther(cell) }))
+    .filter((child): child is { edge: MazeEdge, cell: CircularCell } => child.cell instanceof CircularCell)
+    .sort((a, b) => a.cell.startAngle - b.cell.startAngle)
+  for (const child of children) {
+    if (child.cell.startAngle > angle + 1e-10)
+      addArc(cell.outerRadius, null, angle, child.cell.startAngle)
+    addArc(cell.outerRadius, child.edge, child.cell.startAngle, child.cell.endAngle)
+    angle = child.cell.endAngle
+  }
+  if (angle < cell.endAngle - 1e-10)
+    addArc(cell.outerRadius, null, angle, cell.endAngle)
+  if (cell.innerRadius > 0)
+    addArc(cell.innerRadius, cell.inward)
+  const point = (radius: number, angle: number) => ({ x: center.x + radius * Math.cos(angle), y: center.y + radius * Math.sin(angle) })
+  // The center is a disk, not a one-sector wedge. It has no clockwise or
+  // counterclockwise neighbour, so its 0 / 2π seam must never become a wall.
+  if (cell.sectorCount > 1) {
+    boundaries.push({ edge: cell.counterclockwise, from: point(cell.innerRadius, cell.startAngle), kind: 'radial', opened: cell.counterclockwise?.opened ?? false, to: point(cell.outerRadius, cell.startAngle) })
+    boundaries.push({ edge: cell.clockwise, from: point(cell.innerRadius, cell.endAngle), kind: 'radial', opened: cell.clockwise?.opened ?? false, to: point(cell.outerRadius, cell.endAngle) })
+  }
+  return boundaries
 }
 
 export const TRIANGLE_HEIGHT = Math.sqrt(3) / 2
@@ -44,6 +79,10 @@ export function getOverlayScale(runtime: Maze): number {
 }
 
 export function getGridBounds(runtime: Maze): GridBounds {
+  if (runtime.grid.type === 'circular') {
+    const diameter = runtime.grid.rows * 2
+    return { height: diameter, width: diameter }
+  }
   if (runtime.grid.type !== 'hexagon') {
     return runtime.grid.type === 'triangle'
       ? { height: runtime.grid.rows * TRIANGLE_HEIGHT, width: (runtime.grid.cols + 1) / 2 }
@@ -93,6 +132,13 @@ export function getViewportRatioRows(
 }
 
 export function getCellCenter(cell: GridCell): WorldPoint {
+  if (cell instanceof CircularCell) {
+    if (cell.ring === 0)
+      return { x: cell.worldX, y: cell.worldY }
+    const radius = (cell.innerRadius + cell.outerRadius) / 2
+    const angle = (cell.startAngle + cell.endAngle) / 2
+    return { x: cell.worldX + radius * Math.cos(angle), y: cell.worldY + radius * Math.sin(angle) }
+  }
   if (cell instanceof HexCell) {
     return { x: cell.worldX, y: cell.worldY }
   }
@@ -108,10 +154,39 @@ export function getCellCenter(cell: GridCell): WorldPoint {
 
 export function getPointCenter(runtime: Maze, point: MazePoint): WorldPoint {
   const cell = runtime.grid.getCell(`${point.y}:${point.x}`)
-  return cell ? getCellCenter(cell) : { x: point.x + 0.5, y: point.y + 0.5 }
+  if (!cell)
+    return { x: point.x + 0.5, y: point.y + 0.5 }
+  const center = getCellCenter(cell)
+  if (cell instanceof CircularCell) {
+    return center
+  }
+  return center
 }
 
 export function getCellPolygon(cell: GridCell): WorldPoint[] {
+  if (cell instanceof CircularCell) {
+    const points: WorldPoint[] = []
+    const appendArc = (radius: number, reverse: boolean) => {
+      if (radius === 0) {
+        points.push({ x: cell.worldX, y: cell.worldY })
+        return
+      }
+      // All cells sharing a radius use the same angular lattice. Independent
+      // per-cell tessellation leaves different chords at split-ring borders.
+      // Polar sector counts are six times a power of two, so their endpoints
+      // also lie exactly on this lattice.
+      const divisions = getPolarRingDivisions(radius, cell.sectorCount)
+      const first = Math.round(cell.startAngle / (Math.PI * 2) * divisions)
+      const last = Math.round(cell.endAngle / (Math.PI * 2) * divisions)
+      for (let index = 0; index <= last - first; index += 1) {
+        const angle = (reverse ? last - index : first + index) / divisions * Math.PI * 2
+        points.push({ x: cell.worldX + radius * Math.cos(angle), y: cell.worldY + radius * Math.sin(angle) })
+      }
+    }
+    appendArc(cell.outerRadius, false)
+    appendArc(cell.innerRadius, true)
+    return points
+  }
   if (cell instanceof HexCell) {
     const startAngle = cell.orientation === 'pointy' ? -Math.PI / 2 : 0
     return Array.from({ length: 6 }, (_, index) => {
@@ -149,6 +224,29 @@ export function getCellPolygon(cell: GridCell): WorldPoint[] {
 export function getCellBoundarySegments(
   cell: GridCell,
 ): Array<GridSegment & { edge: MazeEdge | null, opened: boolean }> {
+  if (cell instanceof CircularCell) {
+    const segments: Array<GridSegment & { edge: MazeEdge | null, opened: boolean }> = []
+    for (const boundary of getPolarBoundaries(cell)) {
+      if (boundary.kind === 'radial') {
+        segments.push(boundary)
+        continue
+      }
+      const { center, edge, endAngle, opened, radius, startAngle } = boundary
+      const arcSpan = endAngle - startAngle
+      const segmentCount = Math.max(2, Math.ceil(arcSpan / (Math.PI / 24)))
+      for (let index = 0; index < segmentCount; index += 1) {
+        const fromAngle = startAngle + arcSpan * index / segmentCount
+        const toAngle = startAngle + arcSpan * (index + 1) / segmentCount
+        segments.push({
+          edge,
+          from: { x: center.x + radius * Math.cos(fromAngle), y: center.y + radius * Math.sin(fromAngle) },
+          opened,
+          to: { x: center.x + radius * Math.cos(toAngle), y: center.y + radius * Math.sin(toAngle) },
+        })
+      }
+    }
+    return segments
+  }
   const polygon = getCellPolygon(cell)
   if (cell instanceof TriangleCell) {
     const edgeOrder = cell.orientation === 'up'
@@ -209,7 +307,34 @@ export function visitClosedWalls(runtime: Maze, visit: (segment: GridSegment) =>
   }
 }
 
+/** Finds the editable shared wall nearest a world-space pointer. */
+export function getNearestCellEdge(cell: GridCell, point: WorldPoint): MazeEdge | null {
+  let nearest: MazeEdge | null = null
+  let distance = Number.POSITIVE_INFINITY
+  for (const boundary of getCellBoundarySegments(cell)) {
+    if (!boundary.edge || !boundary.edge.getOther(cell))
+      continue
+    const candidateDistance = distanceToSegment(point, boundary)
+    if (candidateDistance < distance) {
+      nearest = boundary.edge
+      distance = candidateDistance
+    }
+  }
+  return nearest
+}
+
 export function hitTestCell(runtime: Maze, point: WorldPoint): GridCell | null {
+  if (runtime.grid.type === 'circular') {
+    const radius = runtime.grid.rows
+    const x = point.x - radius
+    const y = point.y - radius
+    const ring = Math.floor(Math.hypot(x, y))
+    if (ring < 0 || ring >= runtime.grid.rows)
+      return null
+    const count = (runtime.grid as unknown as { ringCellCounts: readonly number[] }).ringCellCounts[ring]
+    const angle = (Math.atan2(y, x) + Math.PI * 2) % (Math.PI * 2)
+    return runtime.grid.getCell(`${ring}:${Math.floor(angle / (Math.PI * 2) * count)}`) ?? null
+  }
   if (runtime.grid.type === 'square') {
     return runtime.grid.getCell(`${Math.floor(point.y)}:${Math.floor(point.x)}`) ?? null
   }
@@ -308,6 +433,12 @@ function roundHexAxial(q: number, r: number): { q: number, r: number } {
 
 function isPointyHex(cell: HexCell): boolean {
   return cell.orientation === 'pointy'
+}
+
+/** Every tessellated part of a shared wall, including complete polar arcs. */
+export function getSharedBoundaries(left: GridCell, right: GridCell): GridSegment[] {
+  const edge = left.getEdges().find(edge => edge.getOther(left)?.id === right.id)
+  return edge ? getCellBoundarySegments(left).filter(segment => segment.edge === edge) : []
 }
 
 export function getSharedBoundary(left: GridCell, right: GridCell): GridSegment | null {
