@@ -11,7 +11,6 @@ const guideSidebar: DefaultTheme.SidebarItem[] = [
       { text: 'Installation', link: '/guide/installation' },
       { text: 'Quick Start', link: '/guide/quick-start' },
       { text: 'Core Concepts', link: '/guide/core-concepts' },
-      { text: 'Studio Image Editor', link: '/guide/image-editor' },
     ],
   },
   {

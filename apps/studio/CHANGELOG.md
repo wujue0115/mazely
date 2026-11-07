@@ -18,12 +18,18 @@ published `mazely` and `@mazely/core` packages.
 
 ### Changed
 
+- Moved Topology before Algorithm in the Generate panel and renamed Grid
+  Geometry to Grid Size.
+
 - Circular image uploads always use a circular crop and default to 30 rings,
   corresponding to a diameter of 60 cell units.
 - Improved large circular maze animation performance with cached geometry,
   incremental rendering updates, and bounded playback work per frame.
 
 ### Fixed
+
+- Automatically recenter and fit the maze after valid grid size changes,
+  including width, height, side size, and circular ring count.
 
 - Preserved full circular grids when sampling images with transparent or
   removable backgrounds.

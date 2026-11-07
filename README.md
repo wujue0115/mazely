@@ -47,9 +47,7 @@ renderers.
 ## Built with Mazely
 
 - [Mazely Studio](https://studio.mazely.dev/) - an interactive maze playground
-  for generating, solving, editing, and visualizing mazes. Its image editor
-  supports image-shaped masks and draggable current-shape crops with cell-color
-  sampling. See the [image editor guide](docs/guide/image-editor.md).
+  for generating, solving, editing, and visualizing mazes.
 - [V-CONF × Mazely](https://v-conf.mazely.dev/) - interactive 3D Vue and Vite
   logo mazes for V-CONF.
 
