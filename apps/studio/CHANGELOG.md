@@ -18,6 +18,8 @@ published `mazely` and `@mazely/core` packages.
 
 ### Changed
 
+- Renamed the Generate panel label from Recursive Backtracker to Randomized DFS
+  to match the `dfs` API ID and describe its randomized neighbor selection.
 - Moved Topology before Algorithm in the Generate panel and renamed Grid
   Geometry to Grid Size.
 

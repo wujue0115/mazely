@@ -14,20 +14,20 @@ between any two cells until the maze is edited.
 
 ## Choosing a Generation Algorithm
 
-| ID                   | Algorithm             | Uses start | Grid types                          | Character                                                   |
-| -------------------- | --------------------- | :--------: | ----------------------------------- | ----------------------------------------------------------- |
-| `aldous-broder`      | Aldous-Broder         |     No     | Square, Triangle, Hexagon, Circular | Random walk; unbiased but often slow                        |
-| `binary-tree`        | Binary Tree           |     No     | Square, Triangle, Hexagon, Circular | Fast with a strong directional bias                         |
-| `dfs`                | Recursive Backtracker |    Yes     | Square, Triangle, Hexagon, Circular | Long corridors and deep branches                            |
-| `eller`              | Eller's               |     No     | Square, Triangle, Hexagon, Circular | Row-oriented generation with low working memory             |
-| `growing-tree`       | Growing Tree          |    Yes     | Square, Triangle, Hexagon, Circular | Newest-cell strategy; similar character to backtracking     |
-| `hunt-and-kill`      | Hunt-and-Kill         |    Yes     | Square, Triangle, Hexagon, Circular | Random walks separated by visible row scans                 |
-| `kruskal`            | Randomized Kruskal    |     No     | Square, Triangle, Hexagon, Circular | Joins many small regions into a spanning tree               |
-| `prim`               | Randomized Prim       |    Yes     | Square, Triangle, Hexagon, Circular | Expands from a frontier with many short branches            |
-| `recursive-division` | Recursive Division    |     No     | Square, Triangle, Hexagon, Circular | Starts open and adds walls recursively                      |
-| `sidewinder`         | Sidewinder            |     No     | Square, Triangle, Hexagon, Circular | Horizontal runs with a directional bias                     |
-| `traversal`          | Random Traversal      |    Yes     | Square, Triangle, Hexagon, Circular | Chooses a uniformly random edge from the active frontier    |
-| `wilson`             | Wilson's              |     No     | Square, Triangle, Hexagon, Circular | Loop-erased random walks; unbiased spanning-tree generation |
+| ID                   | Algorithm          | Uses start | Grid types                          | Character                                                   |
+| -------------------- | ------------------ | :--------: | ----------------------------------- | ----------------------------------------------------------- |
+| `aldous-broder`      | Aldous-Broder      |     No     | Square, Triangle, Hexagon, Circular | Random walk; unbiased but often slow                        |
+| `binary-tree`        | Binary Tree        |     No     | Square, Triangle, Hexagon, Circular | Fast with a strong directional bias                         |
+| `dfs`                | Randomized DFS     |    Yes     | Square, Triangle, Hexagon, Circular | Long corridors and deep branches                            |
+| `eller`              | Eller's            |     No     | Square, Triangle, Hexagon, Circular | Row-oriented generation with low working memory             |
+| `growing-tree`       | Growing Tree       |    Yes     | Square, Triangle, Hexagon, Circular | Newest-cell strategy; similar character to backtracking     |
+| `hunt-and-kill`      | Hunt-and-Kill      |    Yes     | Square, Triangle, Hexagon, Circular | Random walks separated by visible row scans                 |
+| `kruskal`            | Randomized Kruskal |     No     | Square, Triangle, Hexagon, Circular | Joins many small regions into a spanning tree               |
+| `prim`               | Randomized Prim    |    Yes     | Square, Triangle, Hexagon, Circular | Expands from a frontier with many short branches            |
+| `recursive-division` | Recursive Division |     No     | Square, Triangle, Hexagon, Circular | Starts open and adds walls recursively                      |
+| `sidewinder`         | Sidewinder         |     No     | Square, Triangle, Hexagon, Circular | Horizontal runs with a directional bias                     |
+| `traversal`          | Random Traversal   |    Yes     | Square, Triangle, Hexagon, Circular | Chooses a uniformly random edge from the active frontier    |
+| `wilson`             | Wilson's           |     No     | Square, Triangle, Hexagon, Circular | Loop-erased random walks; unbiased spanning-tree generation |
 
 `usesStart` and `supportedGridTypes` are also available at runtime through
 `MAZE_GENERATION_CAPABILITIES`. All built-in generators currently support
@@ -85,11 +85,12 @@ It emits one `carve` for each selected link and does not use `start`.
 3. Choose one candidate at random and open the connecting edge.
 4. Continue until every cell has been processed.
 
-## Recursive Backtracker
+## Randomized DFS
 
-The `dfs` ID selects recursive backtracking implemented iteratively. It is the
-default generation algorithm because it is fast and produces recognizable,
-long passages.
+The `dfs` ID selects depth-first maze generation, implemented iteratively
+with a stack. At each step, it randomly chooses an unvisited neighbor and
+backtracks when it reaches a dead end. It is the default generation algorithm
+because it is fast and produces recognizable, long passages.
 
 ```ts
 maze.generate('dfs', {
