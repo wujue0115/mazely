@@ -34,6 +34,10 @@ steps. Applications can run an algorithm to completion or consume its progress
 incrementally to build their own visualizations, teaching tools, games, and
 renderers.
 
+<p align="center">
+  <img src="./assets/readme/logo-maze.gif" width="544" alt="Mazely logo forming into a maze, exploring, and revealing its solution">
+</p>
+
 ## Features
 
 - Twelve maze generation algorithms and five solving algorithms
