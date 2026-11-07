@@ -596,6 +596,7 @@ export function applyGridDimensionChange(changedBy: 'width' | 'height' | 'none' 
 
   applyGenerationPointPreference()
   syncPointSelectionUi()
+  fitMazeInView(app.maze)
 
   return true
 }
