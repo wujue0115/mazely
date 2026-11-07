@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-07
+
 ### Added
 
 - Added circular grids with concentric rings, connected masks, `CircularCell`,
@@ -86,7 +88,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with ESM output and TypeScript declarations.
 - Added the VitePress documentation site.
 
-[Unreleased]: https://github.com/wujue0115/mazely/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/wujue0115/mazely/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/wujue0115/mazely/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/wujue0115/mazely/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/wujue0115/mazely/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/wujue0115/mazely/compare/v0.2.0...v0.3.0
